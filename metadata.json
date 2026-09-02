@@ -1,0 +1,6 @@
+{
+  "name": "NEXTPROJECT - Centro de Mecanizado Industrial",
+  "description": "Centro de mecanizado industrial de precisión. Fabricación, torno, fresado y reparación de componentes industriales.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
