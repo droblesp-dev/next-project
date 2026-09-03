@@ -7,6 +7,7 @@ import { clientesRouter } from './routes/clientes.routes.js';
 import { solicitudesRouter } from './routes/solicitudes.routes.js';
 import { cotizacionesRouter } from './routes/cotizaciones.routes.js';
 import { ordenesRouter } from './routes/ordenes.routes.js';
+import { analisisIaRouter } from './routes/analisisIa.routes.js';
 
 const app = express();
 
@@ -47,6 +48,7 @@ app.use('/api/clientes', clientesRouter);
 app.use('/api/solicitudes', solicitudesRouter);
 app.use('/api/cotizaciones', cotizacionesRouter);
 app.use('/api/ordenes', ordenesRouter);
+app.use('/api/analisis-ia', analisisIaRouter);
 
 const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   console.error('Error no controlado:', err instanceof Error ? err.message : err);
