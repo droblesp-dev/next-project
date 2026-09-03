@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { Usuario } from '../lib/authClient';
 import BandejaSolicitudes from './BandejaSolicitudes';
 import DetalleSolicitud from './DetalleSolicitud';
+import GestionUsuarios from './GestionUsuarios';
 
 interface AreaPrivadaProps {
   usuario: Usuario;
@@ -12,9 +13,13 @@ interface AreaPrivadaProps {
 
 const ROLES_CON_BANDEJA = ['ADMIN', 'COMERCIAL'];
 
+type Seccion = 'solicitudes' | 'usuarios';
+
 export default function AreaPrivada({ usuario, token, onLogout, onSesionInvalida }: AreaPrivadaProps) {
   const [solicitudSeleccionada, setSolicitudSeleccionada] = useState<string | null>(null);
+  const [seccion, setSeccion] = useState<Seccion>('solicitudes');
   const tieneBandeja = ROLES_CON_BANDEJA.includes(usuario.rol);
+  const esAdmin = usuario.rol === 'ADMIN';
 
   return (
     <div className="bg-background text-on-surface font-body-md antialiased min-h-screen">
@@ -62,11 +67,44 @@ export default function AreaPrivada({ usuario, token, onLogout, onSesionInvalida
                 GESTIÓN
               </h3>
               <h2 className="font-headline-lg text-headline-lg-mobile md:text-headline-lg font-bold text-on-surface uppercase">
-                {solicitudSeleccionada ? 'DETALLE DE SOLICITUD' : 'BANDEJA DE SOLICITUDES'}
+                {seccion === 'usuarios'
+                  ? 'GESTIÓN DE USUARIOS'
+                  : solicitudSeleccionada
+                    ? 'DETALLE DE SOLICITUD'
+                    : 'BANDEJA DE SOLICITUDES'}
               </h2>
             </div>
 
-            {solicitudSeleccionada ? (
+            {esAdmin && (
+              <div className="flex gap-3 mb-8">
+                <button
+                  type="button"
+                  onClick={() => setSeccion('solicitudes')}
+                  className={`inline-flex items-center px-4 py-2 font-label-caps text-label-caps transition-colors cursor-pointer ${
+                    seccion === 'solicitudes'
+                      ? 'bg-primary-container text-on-primary-container'
+                      : 'border border-outline text-on-surface hover:bg-surface-container-high'
+                  }`}
+                >
+                  SOLICITUDES
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSeccion('usuarios')}
+                  className={`inline-flex items-center px-4 py-2 font-label-caps text-label-caps transition-colors cursor-pointer ${
+                    seccion === 'usuarios'
+                      ? 'bg-primary-container text-on-primary-container'
+                      : 'border border-outline text-on-surface hover:bg-surface-container-high'
+                  }`}
+                >
+                  USUARIOS
+                </button>
+              </div>
+            )}
+
+            {seccion === 'usuarios' && esAdmin ? (
+              <GestionUsuarios token={token} onSesionInvalida={onSesionInvalida} />
+            ) : solicitudSeleccionada ? (
               <DetalleSolicitud
                 token={token}
                 id={solicitudSeleccionada}
