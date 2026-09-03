@@ -8,7 +8,11 @@ import piezasMecanizadasImg from './assets/images/piezas_mecanizadas_17882287697
 import tornoGalleryImg from './assets/images/torno_industrial_gallery_1788229002934.jpg';
 import fabricacionGalleryImg from './assets/images/fabricacion_gallery_1788229017518.jpg';
 
-export default function App() {
+interface AppProps {
+  onAcceso: () => void;
+}
+
+export default function App({ onAcceso }: AppProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeNav, setActiveNav] = useState('inicio');
 
@@ -154,7 +158,15 @@ export default function App() {
           </nav>
 
           {/* Trailing Action */}
-          <div className="hidden md:block">
+          <div className="hidden md:flex items-center">
+            <button
+              type="button"
+              onClick={onAcceso}
+              className="inline-flex items-center justify-center px-3 py-2 mr-3 text-on-surface-variant hover:text-on-surface transition-colors font-label-caps text-label-caps cursor-pointer"
+            >
+              <span className="material-symbols-outlined mr-1 text-[16px]">login</span>
+              ACCESO
+            </button>
             <a
               className="inline-flex items-center justify-center px-4 py-2 border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors font-label-caps text-label-caps cursor-pointer"
               href="https://wa.me/593939067666?text=Hola%20NEXTPROJECT,%20deseo%20solicitar%20una%20cotizaci%C3%B3n%20para%20un%20trabajo%20de%20mecanizado%20industrial."
@@ -196,7 +208,7 @@ export default function App() {
                 {link.name}
               </a>
             ))}
-            <div className="pt-2 border-t border-outline">
+            <div className="pt-2 border-t border-outline space-y-3">
               <a
                 className="w-full inline-flex items-center justify-center px-4 py-2 border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors font-label-caps text-label-caps"
                 href="https://wa.me/593939067666?text=Hola%20NEXTPROJECT,%20deseo%20solicitar%20una%20cotizaci%C3%B3n%20para%20un%20trabajo%20de%20mecanizado%20industrial."
@@ -208,6 +220,17 @@ export default function App() {
                 </span>
                 COTIZAR POR WHATSAPP
               </a>
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  onAcceso();
+                }}
+                className="w-full inline-flex items-center justify-center px-4 py-2 border border-outline text-on-surface hover:bg-surface-container-high transition-colors font-label-caps text-label-caps cursor-pointer"
+              >
+                <span className="material-symbols-outlined mr-2 text-[18px]">login</span>
+                ACCESO
+              </button>
             </div>
           </div>
         )}
