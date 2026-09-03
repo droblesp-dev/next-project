@@ -5,6 +5,7 @@ import { authRouter } from './routes/auth.routes.js';
 import { usuariosRouter } from './routes/usuarios.routes.js';
 import { clientesRouter } from './routes/clientes.routes.js';
 import { solicitudesRouter } from './routes/solicitudes.routes.js';
+import { cotizacionesRouter } from './routes/cotizaciones.routes.js';
 
 const app = express();
 
@@ -43,6 +44,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/usuarios', usuariosRouter);
 app.use('/api/clientes', clientesRouter);
 app.use('/api/solicitudes', solicitudesRouter);
+app.use('/api/cotizaciones', cotizacionesRouter);
 
 const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   console.error('Error no controlado:', err instanceof Error ? err.message : err);

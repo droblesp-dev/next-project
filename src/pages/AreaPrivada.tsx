@@ -3,6 +3,7 @@ import type { Usuario } from '../lib/authClient';
 import BandejaSolicitudes from './BandejaSolicitudes';
 import DetalleSolicitud from './DetalleSolicitud';
 import GestionUsuarios from './GestionUsuarios';
+import GestionCotizaciones from './GestionCotizaciones';
 
 interface AreaPrivadaProps {
   usuario: Usuario;
@@ -13,7 +14,7 @@ interface AreaPrivadaProps {
 
 const ROLES_CON_BANDEJA = ['ADMIN', 'COMERCIAL'];
 
-type Seccion = 'solicitudes' | 'usuarios';
+type Seccion = 'solicitudes' | 'cotizaciones' | 'usuarios';
 
 export default function AreaPrivada({ usuario, token, onLogout, onSesionInvalida }: AreaPrivadaProps) {
   const [solicitudSeleccionada, setSolicitudSeleccionada] = useState<string | null>(null);
@@ -69,25 +70,38 @@ export default function AreaPrivada({ usuario, token, onLogout, onSesionInvalida
               <h2 className="font-headline-lg text-headline-lg-mobile md:text-headline-lg font-bold text-on-surface uppercase">
                 {seccion === 'usuarios'
                   ? 'GESTIÓN DE USUARIOS'
-                  : solicitudSeleccionada
-                    ? 'DETALLE DE SOLICITUD'
-                    : 'BANDEJA DE SOLICITUDES'}
+                  : seccion === 'cotizaciones'
+                    ? 'GESTIÓN DE COTIZACIONES'
+                    : solicitudSeleccionada
+                      ? 'DETALLE DE SOLICITUD'
+                      : 'BANDEJA DE SOLICITUDES'}
               </h2>
             </div>
 
-            {esAdmin && (
-              <div className="flex gap-3 mb-8">
-                <button
-                  type="button"
-                  onClick={() => setSeccion('solicitudes')}
-                  className={`inline-flex items-center px-4 py-2 font-label-caps text-label-caps transition-colors cursor-pointer ${
-                    seccion === 'solicitudes'
-                      ? 'bg-primary-container text-on-primary-container'
-                      : 'border border-outline text-on-surface hover:bg-surface-container-high'
-                  }`}
-                >
-                  SOLICITUDES
-                </button>
+            <div className="flex gap-3 mb-8">
+              <button
+                type="button"
+                onClick={() => setSeccion('solicitudes')}
+                className={`inline-flex items-center px-4 py-2 font-label-caps text-label-caps transition-colors cursor-pointer ${
+                  seccion === 'solicitudes'
+                    ? 'bg-primary-container text-on-primary-container'
+                    : 'border border-outline text-on-surface hover:bg-surface-container-high'
+                }`}
+              >
+                SOLICITUDES
+              </button>
+              <button
+                type="button"
+                onClick={() => setSeccion('cotizaciones')}
+                className={`inline-flex items-center px-4 py-2 font-label-caps text-label-caps transition-colors cursor-pointer ${
+                  seccion === 'cotizaciones'
+                    ? 'bg-primary-container text-on-primary-container'
+                    : 'border border-outline text-on-surface hover:bg-surface-container-high'
+                }`}
+              >
+                COTIZACIONES
+              </button>
+              {esAdmin && (
                 <button
                   type="button"
                   onClick={() => setSeccion('usuarios')}
@@ -99,11 +113,13 @@ export default function AreaPrivada({ usuario, token, onLogout, onSesionInvalida
                 >
                   USUARIOS
                 </button>
-              </div>
-            )}
+              )}
+            </div>
 
             {seccion === 'usuarios' && esAdmin ? (
               <GestionUsuarios token={token} onSesionInvalida={onSesionInvalida} />
+            ) : seccion === 'cotizaciones' ? (
+              <GestionCotizaciones token={token} onSesionInvalida={onSesionInvalida} />
             ) : solicitudSeleccionada ? (
               <DetalleSolicitud
                 token={token}
