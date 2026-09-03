@@ -28,6 +28,7 @@ export default function App() {
   const [pdfFiles, setPdfFiles] = useState<File[]>([]);
   const [formSubmitted, setFormSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [modalType, setModalType] = useState<'terminos' | 'privacidad' | 'galeria' | 'asistente_ia' | null>(null);
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiAnalyzing, setAiAnalyzing] = useState(false);
@@ -63,11 +64,32 @@ export default function App() {
     }
   };
 
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitError(null);
     setIsSubmitting(true);
 
-    setTimeout(() => {
+    try {
+      const response = await fetch('http://localhost:3000/api/solicitudes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nombre: formData.nombre,
+          empresa: formData.empresa || undefined,
+          email: formData.email,
+          telefono: formData.telefono,
+          servicio: formData.servicio,
+          descripcion: formData.descripcion,
+          cantidad: Number(formData.cantidad),
+          fecha_requerida: formData.fecha || undefined,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        throw new Error(data?.message || 'No se pudo registrar la solicitud. Intente nuevamente.');
+      }
+
       setIsSubmitting(false);
       setFormSubmitted(true);
 
@@ -75,12 +97,17 @@ export default function App() {
       const message = `*SOLICITUD DE COTIZACIÓN - NEXTPROJECT*%0A%0A*Cliente:* ${encodeURIComponent(formData.nombre || 'No especificado')}%0A*Empresa:* ${encodeURIComponent(formData.empresa || 'N/A')}%0A*Teléfono:* ${encodeURIComponent(formData.telefono || 'N/A')}%0A*Email:* ${encodeURIComponent(formData.email || 'N/A')}%0A*Servicio:* ${encodeURIComponent(formData.servicio)}%0A*Cantidad:* ${encodeURIComponent(formData.cantidad || '1')}%0A*Fecha Requerida:* ${encodeURIComponent(formData.fecha || 'Lo antes posible')}%0A*Descripción:* ${encodeURIComponent(formData.descripcion || 'Sin descripción adicional')}%0A*Archivos adjuntos:* ${photoFiles.length} foto(s), ${pdfFiles.length} documento(s)`;
 
       const whatsappUrl = `https://wa.me/593939067666?text=${message}`;
-      
+
       // Open WhatsApp in new tab after 1 second if wanted
       setTimeout(() => {
         window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
       }, 800);
-    }, 600);
+    } catch (error) {
+      setIsSubmitting(false);
+      setSubmitError(
+        error instanceof Error ? error.message : 'No se pudo registrar la solicitud. Intente nuevamente.'
+      );
+    }
   };
 
   const navLinks = [
@@ -904,6 +931,7 @@ export default function App() {
                       name="cantidad"
                       value={formData.cantidad}
                       onChange={handleInputChange}
+                      required
                       className="w-full bg-background border-0 border-b border-outline text-on-surface px-0 py-2 focus:ring-0 focus:border-primary-container transition-colors font-body-md outline-none"
                       placeholder="Ej. 10 piezas"
                       type="number"
@@ -973,6 +1001,12 @@ export default function App() {
                 <p className="font-code-sm text-[11px] text-on-surface-variant uppercase mt-2 text-center">
                   Formatos aceptados: JPG, PNG, PDF. Se permite selección múltiple.
                 </p>
+
+                {submitError && (
+                  <p className="font-code-sm text-xs text-error uppercase mt-2 text-center">
+                    {submitError}
+                  </p>
+                )}
 
                 <button
                   disabled={isSubmitting}
