@@ -12,9 +12,22 @@ View your app in AI Studio: https://ai.studio/apps/531f713c-baa4-4b58-8798-1b703
 
 **Prerequisites:**  Node.js
 
+Estructura del monorepo:
+- `frontend/` — React + TypeScript + Vite.
+- `backend/` — Node.js + Express + TypeScript, incluye `backend/database/migrations/`.
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
+### Frontend
+
+1. Instalar dependencias:
+   `cd frontend && npm install`
+2. Configurar `.env.local` con `GEMINI_API_KEY` si corresponde.
+3. Ejecutar:
+   `npm run dev`
+
+### Backend
+
+1. Instalar dependencias:
+   `cd backend && npm install`
+2. Configurar `.env` (ver `backend/.env.example`).
+3. Ejecutar:
    `npm run dev`

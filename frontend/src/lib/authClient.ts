@@ -92,12 +92,17 @@ export async function fetchAutenticado(
   token: string,
   options: RequestInit = {}
 ): Promise<Response> {
+  // Si el body es FormData (subida de archivos, ej. evidencias de orden), no
+  // se fuerza Content-Type: el navegador debe fijar el boundary multipart
+  // por sí mismo.
+  const esFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
+
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {
       ...(options.headers ?? {}),
       Authorization: `Bearer ${token}`,
-      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(options.body && !esFormData ? { 'Content-Type': 'application/json' } : {}),
     },
   });
 

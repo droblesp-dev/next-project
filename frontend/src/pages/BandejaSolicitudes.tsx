@@ -17,11 +17,18 @@ export interface Solicitud {
 
 interface BandejaSolicitudesProps {
   token: string;
+  // Mejora UX (Análisis IA / Comunicación técnica): controla únicamente si
+  // se muestra el indicador de "canal de comunicación disponible" por fila
+  // — mismo permiso ya usado en DetalleSolicitud.tsx para el chat
+  // (COMERCIAL/OPERATIVO). No se agrega ninguna llamada nueva al backend:
+  // el indicador señala que la funcionalidad existe, no si esta solicitud
+  // en particular ya tiene mensajes (ese dato no lo expone el listado).
+  puedeChatear: boolean;
   onSeleccionar: (id: string) => void;
   onSesionInvalida: () => void;
 }
 
-export default function BandejaSolicitudes({ token, onSeleccionar, onSesionInvalida }: BandejaSolicitudesProps) {
+export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar, onSesionInvalida }: BandejaSolicitudesProps) {
   const [solicitudes, setSolicitudes] = useState<Solicitud[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -99,13 +106,24 @@ export default function BandejaSolicitudes({ token, onSeleccionar, onSesionInval
                 {new Date(s.creado_en).toLocaleDateString()}
               </td>
               <td className="py-3">
-                <button
-                  type="button"
-                  onClick={() => onSeleccionar(s.id)}
-                  className="inline-flex items-center px-3 py-1 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-label-caps text-label-caps text-[10px] cursor-pointer"
-                >
-                  VER DETALLE
-                </button>
+                <div className="flex items-center justify-end gap-2">
+                  {puedeChatear && (
+                    <span
+                      title="Canal de comunicación técnica disponible para esta solicitud"
+                      aria-label="Comunicación técnica disponible"
+                      className="inline-flex items-center justify-center w-7 h-7 border border-primary-container text-primary-container"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">forum</span>
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => onSeleccionar(s.id)}
+                    className="inline-flex items-center px-3 py-1 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-label-caps text-label-caps text-[10px] cursor-pointer"
+                  >
+                    VER DETALLE
+                  </button>
+                </div>
               </td>
             </tr>
           ))}

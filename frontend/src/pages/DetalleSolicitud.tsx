@@ -1,12 +1,27 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { fetchAutenticado, SesionInvalidaError } from '../lib/authClient';
 import type { Solicitud } from './BandejaSolicitudes';
 
 interface DetalleSolicitudProps {
   token: string;
   id: string;
+  // Bloque MVP (chat Comercial<->Operativo). `puedeGestionar` controla las
+  // secciones ya existentes (cambiar estado, análisis IA) — ADMIN/COMERCIAL,
+  // sin cambios de fondo. `puedeChatear` controla la sección nueva de chat —
+  // COMERCIAL/OPERATIVO, nunca ADMIN.
+  puedeGestionar: boolean;
+  puedeChatear: boolean;
   onVolver: () => void;
   onSesionInvalida: () => void;
+}
+
+interface Mensaje {
+  id: string;
+  solicitud_id: string;
+  autor_id: string | null;
+  autor_tipo: string;
+  contenido: string;
+  creado_en: string;
 }
 
 interface AnalisisIa {
@@ -35,7 +50,14 @@ const TRANSICIONES: Record<string, string[]> = {
   CANCELADA: [],
 };
 
-export default function DetalleSolicitud({ token, id, onVolver, onSesionInvalida }: DetalleSolicitudProps) {
+export default function DetalleSolicitud({
+  token,
+  id,
+  puedeGestionar,
+  puedeChatear,
+  onVolver,
+  onSesionInvalida,
+}: DetalleSolicitudProps) {
   const [solicitud, setSolicitud] = useState<Solicitud | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -49,6 +71,13 @@ export default function DetalleSolicitud({ token, id, onVolver, onSesionInvalida
   const [mensajeGenerar, setMensajeGenerar] = useState<string | null>(null);
   const [revisandoId, setRevisandoId] = useState<string | null>(null);
   const [mensajeRevisar, setMensajeRevisar] = useState<string | null>(null);
+
+  const [mensajes, setMensajes] = useState<Mensaje[] | null>(null);
+  const [loadingMensajes, setLoadingMensajes] = useState(true);
+  const [errorMensajes, setErrorMensajes] = useState<string | null>(null);
+  const [contenidoNuevo, setContenidoNuevo] = useState('');
+  const [enviandoMensaje, setEnviandoMensaje] = useState(false);
+  const [errorEnvioMensaje, setErrorEnvioMensaje] = useState<string | null>(null);
 
   async function cargar() {
     setLoading(true);
@@ -112,11 +141,83 @@ export default function DetalleSolicitud({ token, id, onVolver, onSesionInvalida
     }
   }
 
+  // Bloque MVP: lista de mensajes del chat de la solicitud. Solo se
+  // consulta si el usuario puede chatear (COMERCIAL/OPERATIVO) — ADMIN
+  // nunca dispara esta petición, ni siquiera en segundo plano.
+  async function cargarMensajes() {
+    setLoadingMensajes(true);
+    setErrorMensajes(null);
+
+    try {
+      const response = await fetchAutenticado(`/api/solicitudes/${id}/mensajes`, token);
+
+      if (response.status === 403) {
+        setErrorMensajes('No autorizado para consultar esta conversación.');
+        return;
+      }
+      if (!response.ok) {
+        setErrorMensajes('No se pudo cargar la conversación.');
+        return;
+      }
+
+      const data = (await response.json()) as { mensajes: Mensaje[] };
+      setMensajes(data.mensajes);
+    } catch (err) {
+      if (err instanceof SesionInvalidaError) {
+        onSesionInvalida();
+        return;
+      }
+      setErrorMensajes('No se pudo cargar la conversación.');
+    } finally {
+      setLoadingMensajes(false);
+    }
+  }
+
   useEffect(() => {
     cargar();
     cargarAnalisis();
+    if (puedeChatear) {
+      cargarMensajes();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, token]);
+
+  // Tras enviar, se vuelve a pedir la lista completa (en vez de mezclar
+  // manualmente el estado local) — mantiene el MVP simple, sin lógica de
+  // merge optimista. Si el mensaje invocó a NexIA, su respuesta ya está
+  // persistida cuando esta petición responde, así que aparece de una vez.
+  async function handleEnviarMensaje(e: FormEvent) {
+    e.preventDefault();
+    if (!contenidoNuevo.trim()) return;
+
+    setEnviandoMensaje(true);
+    setErrorEnvioMensaje(null);
+
+    try {
+      const response = await fetchAutenticado(`/api/solicitudes/${id}/mensajes`, token, {
+        method: 'POST',
+        body: JSON.stringify({ contenido: contenidoNuevo }),
+      });
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        setErrorEnvioMensaje(data?.message || 'No se pudo enviar el mensaje.');
+        return;
+      }
+
+      setContenidoNuevo('');
+      await cargarMensajes();
+    } catch (err) {
+      if (err instanceof SesionInvalidaError) {
+        onSesionInvalida();
+        return;
+      }
+      setErrorEnvioMensaje('No se pudo enviar el mensaje.');
+    } finally {
+      setEnviandoMensaje(false);
+    }
+  }
 
   async function handleGenerarAnalisis() {
     setGenerando(true);
@@ -277,6 +378,7 @@ export default function DetalleSolicitud({ token, id, onVolver, onSesionInvalida
             </div>
           )}
 
+          {puedeGestionar && (
           <div className="border-t border-outline pt-4">
             <p className="font-code-sm text-code-sm text-on-surface-variant uppercase mb-3">Cambiar estado</p>
             <div className="flex flex-wrap gap-3">
@@ -301,9 +403,18 @@ export default function DetalleSolicitud({ token, id, onVolver, onSesionInvalida
               <p className="font-code-sm text-xs text-on-surface-variant uppercase mt-3">{mensajeCambio}</p>
             )}
           </div>
+          )}
 
-          <div className="border-t border-outline pt-4">
-            <p className="font-code-sm text-code-sm text-on-surface-variant uppercase mb-3">Análisis IA</p>
+          {puedeGestionar && (
+          <div className="mt-2 bg-background border border-outline border-l-4 border-l-primary-container p-5">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="material-symbols-outlined text-primary-container text-[22px]">psychology</span>
+              <h4 className="font-headline-md text-headline-md text-on-surface uppercase">Análisis IA</h4>
+            </div>
+            <p className="font-body-md text-sm text-on-surface-variant mb-4">
+              Analiza la solicitud para identificar información faltante, prioridad y aspectos que Comercial debe
+              revisar antes de cotizar.
+            </p>
 
             {solicitud.estado === 'EN_REVISION' && (
               <button
@@ -374,6 +485,85 @@ export default function DetalleSolicitud({ token, id, onVolver, onSesionInvalida
               <p className="font-code-sm text-xs text-on-surface-variant uppercase mt-3">{mensajeRevisar}</p>
             )}
           </div>
+          )}
+
+          {puedeChatear && (
+            <div className="mt-2 bg-background border border-outline border-l-4 border-l-primary-container p-5">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="material-symbols-outlined text-primary-container text-[22px]">forum</span>
+                <h4 className="font-headline-md text-headline-md text-on-surface uppercase">Comunicación técnica</h4>
+              </div>
+              <p className="font-code-sm text-[11px] text-on-surface-variant uppercase mb-4">
+                Canal directo entre Comercial ↔ Operativo sobre esta solicitud.
+              </p>
+
+              <div className="flex items-start gap-3 bg-primary-container/10 border border-primary-container p-3 mb-4">
+                <span className="text-[20px] leading-none shrink-0">🤖</span>
+                <p className="font-body-md text-sm text-on-surface">
+                  <strong>NexIA está disponible.</strong> Iníciala escribiendo "NexIA" al comienzo de tu mensaje (ej.
+                  "NexIA, ¿qué información nos falta?"). Los demás mensajes son solo comunicación entre Comercial y
+                  Operativo.
+                </p>
+              </div>
+
+              {loadingMensajes && (
+                <p className="font-code-sm text-code-sm text-on-surface-variant uppercase">CARGANDO CONVERSACIÓN...</p>
+              )}
+              {!loadingMensajes && errorMensajes && (
+                <p className="font-code-sm text-xs text-error uppercase">{errorMensajes}</p>
+              )}
+              {!loadingMensajes && !errorMensajes && mensajes && mensajes.length === 0 && (
+                <p className="font-code-sm text-code-sm text-on-surface-variant uppercase mb-3">
+                  Sin mensajes todavía.
+                </p>
+              )}
+              {!loadingMensajes && !errorMensajes && mensajes && mensajes.length > 0 && (
+                <div className="space-y-2 mb-4 max-h-96 overflow-y-auto">
+                  {mensajes.map((m) => (
+                    <div
+                      key={m.id}
+                      className={`p-3 border ${
+                        m.autor_tipo === 'NEXIA'
+                          ? 'bg-primary-container/10 border-primary-container'
+                          : 'bg-background border-outline'
+                      }`}
+                    >
+                      <div className="flex justify-between items-baseline mb-1">
+                        <span className="font-code-sm text-[10px] text-primary-container uppercase font-bold">
+                          {m.autor_tipo}
+                        </span>
+                        <span className="font-code-sm text-[10px] text-on-surface-variant uppercase">
+                          {new Date(m.creado_en).toLocaleString()}
+                        </span>
+                      </div>
+                      <p className="font-body-md text-body-md text-on-surface whitespace-pre-wrap">{m.contenido}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <form className="space-y-2" onSubmit={handleEnviarMensaje}>
+                <textarea
+                  value={contenidoNuevo}
+                  onChange={(e) => setContenidoNuevo(e.target.value)}
+                  required
+                  rows={2}
+                  placeholder='Escriba un mensaje, o "NexIA, ..." para invocarla'
+                  className="w-full bg-background border border-outline p-3 text-on-surface text-sm focus:border-primary-container focus:outline-hidden font-body-md resize-none"
+                />
+                {errorEnvioMensaje && (
+                  <p className="font-code-sm text-xs text-error uppercase">{errorEnvioMensaje}</p>
+                )}
+                <button
+                  disabled={enviandoMensaje || !contenidoNuevo.trim()}
+                  type="submit"
+                  className="inline-flex items-center justify-center px-6 py-2 bg-primary-container text-on-primary-container font-label-caps text-label-caps hover:bg-primary-fixed-dim transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  {enviandoMensaje ? 'ENVIANDO...' : 'ENVIAR'}
+                </button>
+              </form>
+            </div>
+          )}
         </div>
       )}
     </div>

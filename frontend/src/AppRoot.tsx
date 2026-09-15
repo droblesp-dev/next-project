@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import App from './App';
 import Login from './pages/Login';
 import AreaPrivada from './pages/AreaPrivada';
+import VistaCotizacionPublica from './pages/VistaCotizacionPublica';
 import {
   guardarSesion,
   leerSesionGuardada,
@@ -11,10 +12,21 @@ import {
   type Sesion,
 } from './lib/authClient';
 
-type Vista = 'validando' | 'publico' | 'login' | 'privado';
+type Vista = 'validando' | 'publico' | 'login' | 'privado' | 'cotizacion-publica';
+
+// Sin router: se detecta la ruta de la vista pública de cotización
+// directamente sobre window.location, igual de válido para esta única
+// pantalla standalone (Fase C, decisión explícita de no instalar
+// react-router solo para esto). Cualquier otra ruta sigue el flujo normal
+// (landing/login/área privada), sin cambios.
+function extraerTokenCotizacionPublica(): string | null {
+  const match = window.location.pathname.match(/^\/cotizacion\/publica\/([^/]+)\/?$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
 
 export default function AppRoot() {
-  const [vista, setVista] = useState<Vista>('validando');
+  const [tokenCotizacionPublica] = useState<string | null>(extraerTokenCotizacionPublica);
+  const [vista, setVista] = useState<Vista>(tokenCotizacionPublica ? 'cotizacion-publica' : 'validando');
   const [sesion, setSesion] = useState<Sesion | null>(null);
   const [mensajeLogin, setMensajeLogin] = useState<string | null>(null);
 
@@ -22,7 +34,13 @@ export default function AppRoot() {
   // en sessionStorage y la valida contra GET /api/auth/me. Si ya no es
   // válida, se limpia en silencio (el usuario no inició esta acción, así
   // que no se le muestra ningún mensaje de error) y queda en la landing.
+  // La vista pública de cotización no requiere (ni intenta) ninguna
+  // sesión de usuario — se omite por completo este chequeo en ese caso.
   useEffect(() => {
+    if (tokenCotizacionPublica) {
+      return;
+    }
+
     const guardada = leerSesionGuardada();
 
     if (!guardada) {
@@ -64,6 +82,10 @@ export default function AppRoot() {
     setSesion(null);
     setMensajeLogin('Sesión expirada o inválida. Inicie sesión nuevamente.');
     setVista('login');
+  }
+
+  if (vista === 'cotizacion-publica' && tokenCotizacionPublica) {
+    return <VistaCotizacionPublica token={tokenCotizacionPublica} />;
   }
 
   if (vista === 'validando') {

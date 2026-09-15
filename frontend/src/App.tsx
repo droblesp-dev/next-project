@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useRef } from 'react';
+import AsistenteComercial from './pages/AsistenteComercial';
 import piezasMecanizadasImg from './assets/images/piezas_mecanizadas_1788228769715.jpg';
 import tornoGalleryImg from './assets/images/torno_industrial_gallery_1788229002934.jpg';
 import fabricacionGalleryImg from './assets/images/fabricacion_gallery_1788229017518.jpg';
@@ -11,6 +12,68 @@ import fabricacionGalleryImg from './assets/images/fabricacion_gallery_178822901
 interface AppProps {
   onAcceso: () => void;
 }
+
+// Íconos de redes sociales: SVG inline (sin dependencias nuevas ni CDN externo,
+// currentColor para heredar el color del sitio) — no Material Symbols porque
+// ese set no incluye logos de marca.
+type IconoProps = { className?: string };
+
+function IconoFacebook({ className }: IconoProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <path d="M13.5 21v-7.5h2.5l.5-3h-3V8.5c0-.87.24-1.46 1.49-1.46H16.5V4.36C16.24 4.32 15.36 4.25 14.33 4.25c-2.15 0-3.62 1.31-3.62 3.72V10.5H8.19v3h2.52V21h2.79Z" />
+    </svg>
+  );
+}
+
+function IconoInstagram({ className }: IconoProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={className} aria-hidden="true">
+      <rect x="3.5" y="3.5" width="17" height="17" rx="4.5" />
+      <circle cx="12" cy="12" r="4" />
+      <circle cx="17.2" cy="6.8" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+function IconoLinkedIn({ className }: IconoProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <path d="M6.94 8.5H4V20h2.94V8.5ZM5.47 4a1.7 1.7 0 1 0 0 3.4 1.7 1.7 0 0 0 0-3.4ZM20 13.34c0-3.07-1.64-4.5-3.83-4.5-1.77 0-2.56.97-3 1.65V8.5H10.2c.04.86 0 11.5 0 11.5h2.97v-6.42c0-.34.02-.69.13-.94.28-.69.9-1.4 1.96-1.4 1.38 0 1.94 1.05 1.94 2.59V20H20v-6.66Z" />
+    </svg>
+  );
+}
+
+function IconoYouTube({ className }: IconoProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <path d="M21.6 7.2s-.2-1.44-.82-2.07c-.79-.83-1.67-.83-2.07-.88C15.9 4 12 4 12 4h-.01s-3.89 0-6.7.25c-.4.05-1.28.05-2.07.88-.62.63-.82 2.07-.82 2.07S2.2 8.9 2.2 10.6v1.8c0 1.7.2 3.4.2 3.4s.2 1.44.82 2.07c.79.83 1.82.8 2.28.89 1.65.16 7 .25 7 .25s3.9-.01 6.71-.26c.4-.05 1.28-.05 2.07-.88.62-.63.82-2.07.82-2.07s.2-1.7.2-3.4v-1.8c0-1.7-.2-3.4-.2-3.4ZM9.96 14.5v-5l4.8 2.51-4.8 2.49Z" />
+    </svg>
+  );
+}
+
+function IconoTikTok({ className }: IconoProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <path d="M16.6 5.2c.6 1.02 1.6 1.78 2.8 2.02v2.55a5.86 5.86 0 0 1-2.8-.77v5.5a4.9 4.9 0 1 1-4.9-4.9c.17 0 .34 0 .5.03v2.6a2.3 2.3 0 1 0 1.9 2.27V3h2.5c0 .77.03 1.5 0 2.2Z" />
+    </svg>
+  );
+}
+
+// [TEMPORAL] Ninguna cuenta oficial de NextProject/Centro de Mecanizado está
+// configurada todavía en el proyecto (verificado en env.ts, .env y en todo el
+// frontend). Por indicación explícita del usuario, mientras tanto se usan los
+// enlaces generales oficiales de cada plataforma (no representan la cuenta de
+// la empresa). Para migrar a las cuentas reales, basta con reemplazar el
+// `href` de la red correspondiente aquí abajo — el resto del componente
+// (composición, tamaños, colores, target/rel) no necesita ningún cambio.
+const SOCIAL_LINKS: { nombre: string; href: string | null; Icono: (props: IconoProps) => React.JSX.Element }[] = [
+  { nombre: 'Facebook', href: 'https://www.facebook.com/', Icono: IconoFacebook },
+  { nombre: 'Instagram', href: 'https://www.instagram.com/', Icono: IconoInstagram },
+  { nombre: 'LinkedIn', href: 'https://www.linkedin.com/', Icono: IconoLinkedIn },
+  { nombre: 'YouTube', href: 'https://www.youtube.com/', Icono: IconoYouTube },
+  { nombre: 'TikTok', href: 'https://www.tiktok.com/', Icono: IconoTikTok },
+];
 
 export default function App({ onAcceso }: AppProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -33,7 +96,9 @@ export default function App({ onAcceso }: AppProps) {
   const [formSubmitted, setFormSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [modalType, setModalType] = useState<'terminos' | 'privacidad' | 'galeria' | 'asistente_ia' | null>(null);
+  const [modalType, setModalType] = useState<
+    'terminos' | 'privacidad' | 'galeria' | 'asistente_ia' | 'asistente_comercial' | null
+  >(null);
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiAnalyzing, setAiAnalyzing] = useState(false);
   const [aiTechnicalSpec, setAiTechnicalSpec] = useState<string | null>(null);
@@ -749,303 +814,403 @@ export default function App({ onAcceso }: AppProps) {
       </section>
 
       {/* 11. SOLICITAR COTIZACIÓN */}
-      <section className="w-full bg-background py-20 border-b border-outline" id="cotizacion">
-        <div className="max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop grid grid-cols-1 lg:grid-cols-2 gap-12">
-          <div className="flex flex-col space-y-6">
-            <div>
-              <div className="border-l-4 border-primary-container pl-4 mb-4">
-                <h3 className="font-label-caps text-label-caps text-primary-container tracking-widest uppercase mb-1">
-                  CONTACTO COMERCIAL
-                </h3>
-                <h2 className="font-headline-lg text-headline-lg-mobile md:text-headline-lg font-bold text-on-surface uppercase">
-                  SOLICITAR COTIZACIÓN
-                </h2>
+      <section className="w-full bg-background border-b border-outline" id="cotizacion">
+        {/* CABECERA: banda amplia con la imagen de mecanizado integrada al fondo (mismo
+            recurso que la propia HERO section: imagen absoluta + degradado hacia
+            bg-background) — a propósito NO es una tarjeta con borde. */}
+        <div className="relative overflow-hidden border-b border-outline">
+          <div className="absolute inset-0 w-full h-full lg:w-1/2 lg:right-0 lg:left-auto opacity-20 lg:opacity-100">
+            <img
+              src={tornoGalleryImg}
+              alt="Mecanizado industrial de precisión en torno convencional"
+              className="w-full h-full object-cover grayscale-[15%] brightness-75"
+            />
+            <div className="absolute inset-0 bg-gradient-to-r from-background via-background/85 to-transparent lg:w-2/3"></div>
+          </div>
+
+          <div className="relative z-10 max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop py-16 md:py-20">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div>
+                <div className="border-l-4 border-primary-container pl-4 mb-4">
+                  <h3 className="font-label-caps text-label-caps text-primary-container tracking-widest uppercase mb-1">
+                    CONTACTO COMERCIAL
+                  </h3>
+                  <h2 className="font-headline-lg text-headline-lg-mobile md:text-headline-lg font-bold text-on-surface uppercase">
+                    SOLICITAR COTIZACIÓN
+                  </h2>
+                </div>
+                <p className="font-body-md text-body-md text-on-surface-variant max-w-lg mb-8">
+                  Cuéntanos qué necesitas y nuestro equipo evaluará tu requerimiento. No necesitas conocer todos los
+                  detalles técnicos.
+                </p>
+
+                <div className="flex flex-col sm:flex-row sm:items-center gap-6">
+                  {/* Ver servicios — visible y con presencia real, mismo estilo del hero, más grande */}
+                  <a
+                    className="w-full sm:w-auto inline-flex items-center justify-center px-8 py-5 border-2 border-outline text-on-surface hover:bg-surface-container-high transition-colors font-label-caps text-label-caps"
+                    href="#servicios"
+                    onClick={() => setActiveNav('servicios')}
+                  >
+                    <span className="material-symbols-outlined mr-2 text-[20px]">apps</span>
+                    VER SERVICIOS
+                    <span className="material-symbols-outlined ml-2 text-[20px]">arrow_forward</span>
+                  </a>
+
+                  <div>
+                    <p className="font-code-sm text-code-sm text-on-surface-variant uppercase mb-2">
+                      Síguenos en redes sociales
+                    </p>
+                    {/* [TEMPORAL] Los 5 enlazan hoy a la plataforma general (ver SOCIAL_LINKS
+                        arriba) mientras no exista la cuenta oficial de NextProject. La rama
+                        <span> de abajo queda para cuando algún href vuelva a ser null. */}
+                    <div className="flex items-center gap-3">
+                      {SOCIAL_LINKS.map((red) =>
+                        red.href ? (
+                          <a
+                            key={red.nombre}
+                            href={red.href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label={red.nombre}
+                            className="w-11 h-11 flex items-center justify-center border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors"
+                          >
+                            <red.Icono className="w-5 h-5" />
+                          </a>
+                        ) : (
+                          <span
+                            key={red.nombre}
+                            aria-label={red.nombre}
+                            className="w-11 h-11 flex items-center justify-center border border-primary-container text-primary-container"
+                          >
+                            <red.Icono className="w-5 h-5" />
+                          </span>
+                        )
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
-              <p className="font-body-md text-body-md text-on-surface-variant">
-                Complete el formulario detallando sus requerimientos. Adjunte planos o fotografías de la pieza para una evaluación más precisa. Nuestro equipo técnico se pondrá en contacto a la brevedad.
-              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop py-16">
+          {/* 3. Formulario — camino principal, único bloque grande de la pantalla */}
+          <div className="bg-surface sharp-border p-6 md:p-10 lg:p-12 relative">
+              {formSubmitted ? (
+                <div className="text-center py-12 space-y-4">
+                  <div className="w-16 h-16 bg-primary-container text-on-primary-container flex items-center justify-center mx-auto">
+                    <span className="material-symbols-outlined text-4xl">check_circle</span>
+                  </div>
+                  <h3 className="font-headline-md text-headline-md text-on-surface uppercase">
+                    SOLICITUD REGISTRADA CON ÉXITO
+                  </h3>
+                  <p className="font-body-md text-on-surface-variant max-w-md mx-auto">
+                    Hemos recibido sus datos y especificaciones. Un especialista técnico revisará la información y se comunicará con usted a la brevedad.
+                  </p>
+                  <div className="pt-4 flex flex-col sm:flex-row justify-center gap-4">
+                    <button
+                      onClick={() => {
+                        setFormSubmitted(false);
+                        setFormData({
+                          nombre: '',
+                          empresa: '',
+                          telefono: '',
+                          email: '',
+                          servicio: 'SELECCIONE UN SERVICIO',
+                          descripcion: '',
+                          cantidad: '',
+                          fecha: '',
+                        });
+                        setPhotoFiles([]);
+                        setPdfFiles([]);
+                      }}
+                      className="px-6 py-3 border border-outline text-on-surface font-label-caps text-label-caps hover:bg-surface-container-high transition-colors"
+                    >
+                      ENVIAR OTRA SOLICITUD
+                    </button>
+                    <a
+                      href="https://wa.me/593939067666"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-6 py-3 bg-primary-container text-on-primary-container font-label-caps text-label-caps hover:bg-primary-fixed-dim transition-colors inline-flex items-center justify-center"
+                    >
+                      <span className="material-symbols-outlined mr-2 text-[18px]">chat</span>
+                      CONTACTAR POR WHATSAPP
+                    </a>
+                  </div>
+                </div>
+              ) : (
+                <form className="space-y-8" onSubmit={handleFormSubmit}>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-12 gap-y-10">
+                    {/* COLUMNA IZQUIERDA: Tus datos */}
+                    <div className="space-y-6">
+                      <div className="flex items-center gap-3 border-b border-outline pb-3 mb-2">
+                        <div className="w-9 h-9 shrink-0 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center font-headline-md font-bold text-sm">
+                          1
+                        </div>
+                        <div>
+                          <h4 className="font-label-caps text-label-caps text-on-surface uppercase">Tus datos</h4>
+                          <p className="font-code-sm text-[11px] text-on-surface-variant">
+                            Completa la información para contactarte.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block font-code-sm text-code-sm text-on-surface-variant uppercase mb-2">
+                          NOMBRE COMPLETO
+                        </label>
+                        <input
+                          name="nombre"
+                          value={formData.nombre}
+                          onChange={handleInputChange}
+                          required
+                          className="w-full bg-background border-0 border-b border-outline text-on-surface px-0 py-2 focus:ring-0 focus:border-primary-container transition-colors font-body-md outline-none"
+                          placeholder="Ej. Juan Pérez"
+                          type="text"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-code-sm text-code-sm text-on-surface-variant uppercase mb-2">
+                          EMPRESA / CLIENTE
+                        </label>
+                        <input
+                          name="empresa"
+                          value={formData.empresa}
+                          onChange={handleInputChange}
+                          className="w-full bg-background border-0 border-b border-outline text-on-surface px-0 py-2 focus:ring-0 focus:border-primary-container transition-colors font-body-md outline-none"
+                          placeholder="Nombre de la industria"
+                          type="text"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-code-sm text-code-sm text-on-surface-variant uppercase mb-2">
+                          TELÉFONO / WHATSAPP
+                        </label>
+                        <input
+                          name="telefono"
+                          value={formData.telefono}
+                          onChange={handleInputChange}
+                          required
+                          className="w-full bg-background border-0 border-b border-outline text-on-surface px-0 py-2 focus:ring-0 focus:border-primary-container transition-colors font-body-md outline-none"
+                          placeholder="Ej. 099 999 9999"
+                          type="tel"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-code-sm text-code-sm text-on-surface-variant uppercase mb-2">
+                          CORREO ELECTRÓNICO
+                        </label>
+                        <input
+                          name="email"
+                          value={formData.email}
+                          onChange={handleInputChange}
+                          required
+                          className="w-full bg-background border-0 border-b border-outline text-on-surface px-0 py-2 focus:ring-0 focus:border-primary-container transition-colors font-body-md outline-none"
+                          placeholder="correo@empresa.com"
+                          type="email"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block font-code-sm text-code-sm text-on-surface-variant uppercase mb-2">
+                            CANTIDAD ESTIMADA
+                          </label>
+                          <input
+                            name="cantidad"
+                            value={formData.cantidad}
+                            onChange={handleInputChange}
+                            required
+                            className="w-full bg-background border-0 border-b border-outline text-on-surface px-0 py-2 focus:ring-0 focus:border-primary-container transition-colors font-body-md outline-none"
+                            placeholder="Ej. 10 piezas"
+                            type="number"
+                            min="1"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-code-sm text-code-sm text-on-surface-variant uppercase mb-2">
+                            FECHA TENTATIVA (OPCIONAL)
+                          </label>
+                          <input
+                            name="fecha"
+                            value={formData.fecha}
+                            onChange={handleInputChange}
+                            className="w-full bg-background border-0 border-b border-outline text-on-surface-variant px-0 py-2 focus:ring-0 focus:border-primary-container transition-colors font-body-md [color-scheme:dark] outline-none"
+                            type="date"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* COLUMNA DERECHA: Tu requerimiento */}
+                    <div className="space-y-6">
+                      <div className="flex items-center gap-3 border-b border-outline pb-3 mb-2">
+                        <div className="w-9 h-9 shrink-0 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center font-headline-md font-bold text-sm">
+                          2
+                        </div>
+                        <div>
+                          <h4 className="font-label-caps text-label-caps text-on-surface uppercase">Tu requerimiento</h4>
+                          <p className="font-code-sm text-[11px] text-on-surface-variant">
+                            Cuéntanos los detalles de lo que necesitas.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block font-code-sm text-code-sm text-on-surface-variant uppercase mb-2">
+                          TIPO DE SERVICIO
+                        </label>
+                        <select
+                          name="servicio"
+                          value={formData.servicio}
+                          onChange={handleInputChange}
+                          className="w-full bg-background border-0 border-b border-outline text-on-surface px-0 py-2 focus:ring-0 focus:border-primary-container transition-colors font-body-md outline-none cursor-pointer"
+                        >
+                          <option value="SELECCIONE UN SERVICIO">SELECCIONE UN SERVICIO</option>
+                          <option value="TORNO INDUSTRIAL">TORNO INDUSTRIAL</option>
+                          <option value="FRESADO INDUSTRIAL">FRESADO INDUSTRIAL</option>
+                          <option value="FABRICACIÓN DE PIEZA NUEVA">FABRICACIÓN DE PIEZA NUEVA</option>
+                          <option value="REPARACIÓN / RECUPERACIÓN">REPARACIÓN / RECUPERACIÓN</option>
+                          <option value="OTRO">OTRO</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
+                          <label className="block font-code-sm text-code-sm text-on-surface-variant uppercase">
+                            DESCRIPCIÓN DEL REQUERIMIENTO
+                          </label>
+                          {/* 4. IA integrada en el propio campo — no es un bloque aparte.
+                              Abre el asistente IA público ya existente; el visitante revisa y
+                              edita el resultado antes de enviar (comportamiento sin cambios). */}
+                          <button
+                            type="button"
+                            onClick={() => setModalType('asistente_ia')}
+                            className="shrink-0 inline-flex items-center gap-1 px-3 py-1.5 border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors font-label-caps text-[10px] uppercase cursor-pointer"
+                          >
+                            <span className="material-symbols-outlined text-[14px]">smart_toy</span>
+                            Ayúdame con IA
+                          </button>
+                        </div>
+                        <p className="font-body-md text-sm text-on-surface-variant mb-2">
+                          Cuéntanos qué necesitas fabricar, reparar o modificar. Describe lo que conozcas; si tienes
+                          fotografías o planos, puedes adjuntarlos.
+                        </p>
+                        <textarea
+                          name="descripcion"
+                          value={formData.descripcion}
+                          onChange={handleInputChange}
+                          required
+                          className="w-full bg-background border-0 border-b border-outline text-on-surface px-0 py-2 focus:ring-0 focus:border-primary-container transition-colors font-body-md resize-none outline-none"
+                          placeholder="Ej.: Necesito fabricar 4 piezas iguales a una muestra que tengo. Adjunto fotografías como referencia."
+                          rows={4}
+                        ></textarea>
+                      </div>
+
+                      <div>
+                        <p className="font-code-sm text-code-sm text-on-surface-variant uppercase mb-2">
+                          Archivos de referencia (opcional)
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="border border-outline border-dashed p-4 text-center bg-background">
+                            <span className="material-symbols-outlined text-on-surface-variant text-3xl mb-2">add_a_photo</span>
+                            <p className="font-code-sm text-code-sm text-on-surface-variant uppercase mb-2">
+                              {photoFiles.length > 0 ? `${photoFiles.length} FOTO(S) SELECCIONADA(S)` : 'ADJUNTAR FOTOGRAFÍAS'}
+                            </p>
+                            <input
+                              ref={photoInputRef}
+                              className="hidden"
+                              id="photo-upload"
+                              type="file"
+                              multiple
+                              accept="image/*"
+                              onChange={handlePhotoUpload}
+                            />
+                            <label
+                              className="cursor-pointer inline-flex items-center justify-center px-4 py-2 border border-outline text-on-surface hover:bg-surface-container-high transition-colors font-label-caps text-label-caps text-[10px]"
+                              htmlFor="photo-upload"
+                            >
+                              {photoFiles.length > 0 ? 'CAMBIAR ARCHIVOS' : 'SELECCIONAR ARCHIVOS'}
+                            </label>
+                          </div>
+
+                          <div className="border border-outline border-dashed p-4 text-center bg-background">
+                            <span className="material-symbols-outlined text-on-surface-variant text-3xl mb-2">picture_as_pdf</span>
+                            <p className="font-code-sm text-code-sm text-on-surface-variant uppercase mb-2">
+                              {pdfFiles.length > 0 ? `${pdfFiles.length} ARCHIVO(S) PDF` : 'ADJUNTAR PLANO / PDF'}
+                            </p>
+                            <input
+                              ref={pdfInputRef}
+                              className="hidden"
+                              id="pdf-upload"
+                              type="file"
+                              multiple
+                              accept=".pdf"
+                              onChange={handlePdfUpload}
+                            />
+                            <label
+                              className="cursor-pointer inline-flex items-center justify-center px-4 py-2 border border-outline text-on-surface hover:bg-surface-container-high transition-colors font-label-caps text-label-caps text-[10px]"
+                              htmlFor="pdf-upload"
+                            >
+                              {pdfFiles.length > 0 ? 'CAMBIAR ARCHIVOS' : 'SELECCIONAR ARCHIVOS'}
+                            </label>
+                          </div>
+                        </div>
+                        <p className="font-code-sm text-[11px] text-on-surface-variant uppercase mt-2 text-center">
+                          Formatos aceptados: JPG, PNG, PDF. Se permite selección múltiple.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {submitError && (
+                    <p className="font-code-sm text-xs text-error uppercase text-center">
+                      {submitError}
+                    </p>
+                  )}
+
+                  {/* 6. Botón principal — único, grande, dominante */}
+                  <button
+                    disabled={isSubmitting}
+                    className="w-full inline-flex items-center justify-center px-6 py-4 bg-primary-container text-on-primary-container font-label-caps text-label-caps hover:bg-primary-fixed-dim transition-colors cursor-pointer disabled:opacity-50"
+                    type="submit"
+                  >
+                    {isSubmitting ? 'PROCESANDO SOLICITUD...' : 'ENVIAR SOLICITUD DE COTIZACIÓN'}
+                    <span className="material-symbols-outlined ml-2 text-[18px]">send</span>
+                  </button>
+                </form>
+              )}
             </div>
 
-            {/* ATENCIÓN INMEDIATA */}
-            <div className="bg-surface sharp-border p-6 border-l-4 border-l-primary-container">
-              <h4 className="font-label-caps text-label-caps text-on-surface uppercase mb-2 font-bold tracking-wider">
-                ATENCIÓN INMEDIATA
-              </h4>
-              <p className="font-body-md text-body-md text-on-surface-variant mb-4">
-                Para consultas urgentes, contáctenos directamente vía WhatsApp.
-              </p>
-              <a
-                className="inline-flex items-center justify-center px-6 py-3 border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors font-label-caps text-label-caps w-full md:w-auto cursor-pointer"
-                href="https://wa.me/593939067666?text=Hola%20NEXTPROJECT,%20deseo%20solicitar%20una%20cotizaci%C3%B3n%20urgente%20para%20un%20trabajo%20de%20mecanizado."
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <span className="material-symbols-outlined mr-2 text-[18px]">chat</span>
-                COTIZAR POR WHATSAPP
-              </a>
-            </div>
-
-            {/* ASISTENTE INTELIGENTE DE SOLICITUDES */}
-            <div className="bg-surface sharp-border p-6 border-l-4 border-l-primary-container">
-              <h4 className="font-label-caps text-label-caps text-on-surface uppercase mb-2 font-bold tracking-wider">
-                ASISTENTE INTELIGENTE DE SOLICITUDES
-              </h4>
-              <p className="font-body-md text-body-md text-on-surface-variant mb-4">
-                ¿No está seguro de cómo describir su requerimiento? Nuestro asistente puede analizar la información proporcionada y ayudar a identificar los datos técnicos necesarios para la evaluación inicial.
-              </p>
+            {/* 7. Atención humana — una sola acción visible (no WhatsApp + asesor por separado) */}
+            <div className="mt-8 bg-surface sharp-border p-8 border-l-4 border-l-primary-container flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
+              <div>
+                <p className="font-headline-md text-headline-md text-on-surface uppercase mb-1">
+                  ¿Necesitas hablar con alguien?
+                </p>
+                <p className="font-body-md text-body-md text-on-surface-variant">
+                  Nuestro equipo comercial puede ayudarte por WhatsApp.
+                </p>
+              </div>
               <button
                 type="button"
-                onClick={() => setModalType('asistente_ia')}
-                className="inline-flex items-center justify-center px-6 py-3 bg-primary-container text-on-primary-container hover:bg-primary-fixed-dim transition-colors font-label-caps text-label-caps w-full md:w-auto cursor-pointer"
+                onClick={() => setModalType('asistente_comercial')}
+                className="w-full sm:w-auto shrink-0 inline-flex items-center justify-center px-8 py-4 border-2 border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors font-label-caps text-label-caps cursor-pointer"
               >
-                <span className="material-symbols-outlined mr-2 text-[18px]">smart_toy</span>
-                ABRIR ASISTENTE DE SOLICITUDES IA
+                <span className="material-symbols-outlined mr-2 text-[20px]">support_agent</span>
+                HABLAR CON UN ASESOR
               </button>
             </div>
           </div>
-
-          <div className="bg-surface sharp-border p-8 relative">
-            {formSubmitted ? (
-              <div className="text-center py-12 space-y-4">
-                <div className="w-16 h-16 bg-primary-container text-on-primary-container flex items-center justify-center mx-auto">
-                  <span className="material-symbols-outlined text-4xl">check_circle</span>
-                </div>
-                <h3 className="font-headline-md text-headline-md text-on-surface uppercase">
-                  SOLICITUD REGISTRADA CON ÉXITO
-                </h3>
-                <p className="font-body-md text-on-surface-variant max-w-md mx-auto">
-                  Hemos recibido sus datos y especificaciones. Un especialista técnico revisará la información y se comunicará con usted a la brevedad.
-                </p>
-                <div className="pt-4 flex flex-col sm:flex-row justify-center gap-4">
-                  <button
-                    onClick={() => {
-                      setFormSubmitted(false);
-                      setFormData({
-                        nombre: '',
-                        empresa: '',
-                        telefono: '',
-                        email: '',
-                        servicio: 'SELECCIONE UN SERVICIO',
-                        descripcion: '',
-                        cantidad: '',
-                        fecha: '',
-                      });
-                      setPhotoFiles([]);
-                      setPdfFiles([]);
-                    }}
-                    className="px-6 py-3 border border-outline text-on-surface font-label-caps text-label-caps hover:bg-surface-container-high transition-colors"
-                  >
-                    ENVIAR OTRA SOLICITUD
-                  </button>
-                  <a
-                    href="https://wa.me/593939067666"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-6 py-3 bg-primary-container text-on-primary-container font-label-caps text-label-caps hover:bg-primary-fixed-dim transition-colors inline-flex items-center justify-center"
-                  >
-                    <span className="material-symbols-outlined mr-2 text-[18px]">chat</span>
-                    CONTACTAR POR WHATSAPP
-                  </a>
-                </div>
-              </div>
-            ) : (
-              <form className="space-y-6" onSubmit={handleFormSubmit}>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block font-code-sm text-code-sm text-on-surface-variant uppercase mb-2">
-                      NOMBRE COMPLETO
-                    </label>
-                    <input
-                      name="nombre"
-                      value={formData.nombre}
-                      onChange={handleInputChange}
-                      required
-                      className="w-full bg-background border-0 border-b border-outline text-on-surface px-0 py-2 focus:ring-0 focus:border-primary-container transition-colors font-body-md outline-none"
-                      placeholder="Ej. Juan Pérez"
-                      type="text"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-code-sm text-code-sm text-on-surface-variant uppercase mb-2">
-                      EMPRESA / CLIENTE
-                    </label>
-                    <input
-                      name="empresa"
-                      value={formData.empresa}
-                      onChange={handleInputChange}
-                      className="w-full bg-background border-0 border-b border-outline text-on-surface px-0 py-2 focus:ring-0 focus:border-primary-container transition-colors font-body-md outline-none"
-                      placeholder="Nombre de la industria"
-                      type="text"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block font-code-sm text-code-sm text-on-surface-variant uppercase mb-2">
-                      TELÉFONO / WHATSAPP
-                    </label>
-                    <input
-                      name="telefono"
-                      value={formData.telefono}
-                      onChange={handleInputChange}
-                      required
-                      className="w-full bg-background border-0 border-b border-outline text-on-surface px-0 py-2 focus:ring-0 focus:border-primary-container transition-colors font-body-md outline-none"
-                      placeholder="Ej. 099 999 9999"
-                      type="tel"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-code-sm text-code-sm text-on-surface-variant uppercase mb-2">
-                      CORREO ELECTRÓNICO
-                    </label>
-                    <input
-                      name="email"
-                      value={formData.email}
-                      onChange={handleInputChange}
-                      required
-                      className="w-full bg-background border-0 border-b border-outline text-on-surface px-0 py-2 focus:ring-0 focus:border-primary-container transition-colors font-body-md outline-none"
-                      placeholder="correo@empresa.com"
-                      type="email"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block font-code-sm text-code-sm text-on-surface-variant uppercase mb-2">
-                    TIPO DE SERVICIO
-                  </label>
-                  <select
-                    name="servicio"
-                    value={formData.servicio}
-                    onChange={handleInputChange}
-                    className="w-full bg-background border-0 border-b border-outline text-on-surface px-0 py-2 focus:ring-0 focus:border-primary-container transition-colors font-body-md outline-none cursor-pointer"
-                  >
-                    <option value="SELECCIONE UN SERVICIO">SELECCIONE UN SERVICIO</option>
-                    <option value="TORNO INDUSTRIAL">TORNO INDUSTRIAL</option>
-                    <option value="FRESADO INDUSTRIAL">FRESADO INDUSTRIAL</option>
-                    <option value="FABRICACIÓN DE PIEZA NUEVA">FABRICACIÓN DE PIEZA NUEVA</option>
-                    <option value="REPARACIÓN / RECUPERACIÓN">REPARACIÓN / RECUPERACIÓN</option>
-                    <option value="OTRO">OTRO</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-code-sm text-code-sm text-on-surface-variant uppercase mb-2">
-                    DESCRIPCIÓN DEL REQUERIMIENTO
-                  </label>
-                  <textarea
-                    name="descripcion"
-                    value={formData.descripcion}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full bg-background border-0 border-b border-outline text-on-surface px-0 py-2 focus:ring-0 focus:border-primary-container transition-colors font-body-md resize-none outline-none"
-                    placeholder="Detalle material, medidas preliminares, tolerancias, etc."
-                    rows={3}
-                  ></textarea>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block font-code-sm text-code-sm text-on-surface-variant uppercase mb-2">
-                      CANTIDAD ESTIMADA
-                    </label>
-                    <input
-                      name="cantidad"
-                      value={formData.cantidad}
-                      onChange={handleInputChange}
-                      required
-                      className="w-full bg-background border-0 border-b border-outline text-on-surface px-0 py-2 focus:ring-0 focus:border-primary-container transition-colors font-body-md outline-none"
-                      placeholder="Ej. 10 piezas"
-                      type="number"
-                      min="1"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-code-sm text-code-sm text-on-surface-variant uppercase mb-2">
-                      FECHA REQUERIDA (OPCIONAL)
-                    </label>
-                    <input
-                      name="fecha"
-                      value={formData.fecha}
-                      onChange={handleInputChange}
-                      className="w-full bg-background border-0 border-b border-outline text-on-surface-variant px-0 py-2 focus:ring-0 focus:border-primary-container transition-colors font-body-md [color-scheme:dark] outline-none"
-                      type="date"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="border border-outline border-dashed p-4 text-center bg-background">
-                    <span className="material-symbols-outlined text-on-surface-variant text-3xl mb-2">add_a_photo</span>
-                    <p className="font-code-sm text-code-sm text-on-surface-variant uppercase mb-2">
-                      {photoFiles.length > 0 ? `${photoFiles.length} FOTO(S) SELECCIONADA(S)` : 'ADJUNTAR FOTOGRAFÍAS'}
-                    </p>
-                    <input
-                      ref={photoInputRef}
-                      className="hidden"
-                      id="photo-upload"
-                      type="file"
-                      multiple
-                      accept="image/*"
-                      onChange={handlePhotoUpload}
-                    />
-                    <label
-                      className="cursor-pointer inline-flex items-center justify-center px-4 py-2 border border-outline text-on-surface hover:bg-surface-container-high transition-colors font-label-caps text-label-caps text-[10px]"
-                      htmlFor="photo-upload"
-                    >
-                      {photoFiles.length > 0 ? 'CAMBIAR ARCHIVOS' : 'SELECCIONAR ARCHIVOS'}
-                    </label>
-                  </div>
-
-                  <div className="border border-outline border-dashed p-4 text-center bg-background">
-                    <span className="material-symbols-outlined text-on-surface-variant text-3xl mb-2">picture_as_pdf</span>
-                    <p className="font-code-sm text-code-sm text-on-surface-variant uppercase mb-2">
-                      {pdfFiles.length > 0 ? `${pdfFiles.length} ARCHIVO(S) PDF` : 'ADJUNTAR PLANO / PDF'}
-                    </p>
-                    <input
-                      ref={pdfInputRef}
-                      className="hidden"
-                      id="pdf-upload"
-                      type="file"
-                      multiple
-                      accept=".pdf"
-                      onChange={handlePdfUpload}
-                    />
-                    <label
-                      className="cursor-pointer inline-flex items-center justify-center px-4 py-2 border border-outline text-on-surface hover:bg-surface-container-high transition-colors font-label-caps text-label-caps text-[10px]"
-                      htmlFor="pdf-upload"
-                    >
-                      {pdfFiles.length > 0 ? 'CAMBIAR ARCHIVOS' : 'SELECCIONAR ARCHIVOS'}
-                    </label>
-                  </div>
-                </div>
-
-                <p className="font-code-sm text-[11px] text-on-surface-variant uppercase mt-2 text-center">
-                  Formatos aceptados: JPG, PNG, PDF. Se permite selección múltiple.
-                </p>
-
-                {submitError && (
-                  <p className="font-code-sm text-xs text-error uppercase mt-2 text-center">
-                    {submitError}
-                  </p>
-                )}
-
-                <button
-                  disabled={isSubmitting}
-                  className="w-full inline-flex items-center justify-center px-6 py-4 bg-primary-container text-on-primary-container font-label-caps text-label-caps hover:bg-primary-fixed-dim transition-colors mt-4 cursor-pointer disabled:opacity-50"
-                  type="submit"
-                >
-                  {isSubmitting ? 'PROCESANDO SOLICITUD...' : 'ENVIAR SOLICITUD DE COTIZACIÓN'}
-                  <span className="material-symbols-outlined ml-2 text-[18px]">send</span>
-                </button>
-              </form>
-            )}
-          </div>
-        </div>
       </section>
 
       {/* 12. CONTACTO */}
+
       <section className="w-full bg-surface py-20" id="contacto">
         <div className="max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
           <div>
@@ -1177,6 +1342,7 @@ export default function App({ onAcceso }: AppProps) {
                 {modalType === 'privacidad' && 'POLÍTICA DE PRIVACIDAD'}
                 {modalType === 'galeria' && 'GALERÍA TÉCNICA DE TRABAJOS'}
                 {modalType === 'asistente_ia' && 'ASISTENTE INTELIGENTE DE SOLICITUDES'}
+                {modalType === 'asistente_comercial' && 'ASISTENTE COMERCIAL'}
               </h3>
               <button
                 onClick={() => {
@@ -1305,6 +1471,16 @@ export default function App({ onAcceso }: AppProps) {
                   </div>
                 )}
               </div>
+            )}
+
+            {modalType === 'asistente_comercial' && (
+              <AsistenteComercial
+                onIrFormulario={() => {
+                  setModalType(null);
+                  const el = document.getElementById('cotizacion');
+                  if (el) el.scrollIntoView({ behavior: 'smooth' });
+                }}
+              />
             )}
 
             {modalType === 'terminos' && (
