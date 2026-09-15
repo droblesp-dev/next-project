@@ -8,18 +8,18 @@ import { solicitudesRouter } from './routes/solicitudes.routes.js';
 import { cotizacionesRouter } from './routes/cotizaciones.routes.js';
 import { ordenesRouter } from './routes/ordenes.routes.js';
 import { analisisIaRouter } from './routes/analisisIa.routes.js';
+import { leadsRouter } from './routes/leads.routes.js';
+import { alertasRouter } from './routes/alertas.routes.js';
+import { dashboardRouter } from './routes/dashboard.routes.js';
 
 const app = express();
 
-// CORS mínimo, sin dependencias nuevas: orígenes de desarrollo del propio
-// proyecto (el configurado en package.json y el usado en la práctica para
-// probarlo en paralelo con el backend, dado el conflicto de puerto ya
-// documentado). Sin '*'. No afecta la lógica de requireAuth/requireRole.
-const ORIGENES_PERMITIDOS = ['http://localhost:3000', 'http://localhost:5173'];
-
+// CORS mínimo, sin dependencias nuevas: orígenes permitidos configurados en
+// CORS_ORIGINS (.env), no hardcodeados. Sin '*'. No afecta la lógica de
+// requireAuth/requireRole.
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  if (origin && ORIGENES_PERMITIDOS.includes(origin)) {
+  if (origin && env.corsOrigins.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
@@ -49,6 +49,9 @@ app.use('/api/solicitudes', solicitudesRouter);
 app.use('/api/cotizaciones', cotizacionesRouter);
 app.use('/api/ordenes', ordenesRouter);
 app.use('/api/analisis-ia', analisisIaRouter);
+app.use('/api/leads', leadsRouter);
+app.use('/api/alertas', alertasRouter);
+app.use('/api/dashboard', dashboardRouter);
 
 const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   console.error('Error no controlado:', err instanceof Error ? err.message : err);

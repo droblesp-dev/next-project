@@ -7,6 +7,10 @@ import {
   crearController,
   cambiarEstadoController,
 } from '../controllers/solicitudes.controller.js';
+import {
+  listarMensajesController,
+  crearMensajeController,
+} from '../controllers/solicitudMensajes.controller.js';
 
 function asyncRoute(handler: (req: Request, res: Response) => Promise<void>): RequestHandler {
   return (req, res, next: NextFunction) => {
@@ -56,11 +60,31 @@ export const solicitudesRouter = Router();
 
 solicitudesRouter.post('/', publicoOAdminOComercial, asyncRoute(crearController));
 
-solicitudesRouter.get('/', requireAuth, requireRole('ADMIN', 'COMERCIAL'), asyncRoute(listarController));
-solicitudesRouter.get('/:id', requireAuth, requireRole('ADMIN', 'COMERCIAL'), asyncRoute(obtenerController));
+// Bloque MVP (chat Comercial<->Operativo): OPERATIVO se agrega
+// ÚNICAMENTE a la lectura — nunca a la creación pública ni al cambio de
+// estado, que siguen siendo exclusivos de ADMIN/COMERCIAL, sin cambios.
+solicitudesRouter.get('/', requireAuth, requireRole('ADMIN', 'COMERCIAL', 'OPERATIVO'), asyncRoute(listarController));
+solicitudesRouter.get('/:id', requireAuth, requireRole('ADMIN', 'COMERCIAL', 'OPERATIVO'), asyncRoute(obtenerController));
 solicitudesRouter.patch(
   '/:id/estado',
   requireAuth,
   requireRole('ADMIN', 'COMERCIAL'),
   asyncRoute(cambiarEstadoController)
+);
+
+// Chat asociado a la solicitud: exclusivo COMERCIAL/OPERATIVO — ADMIN
+// deliberadamente excluido (decisión aprobada explícitamente: "ADMIN no
+// participa en este chat"), a diferencia de todas las demás rutas del
+// proyecto, donde ADMIN siempre tiene acceso total.
+solicitudesRouter.get(
+  '/:id/mensajes',
+  requireAuth,
+  requireRole('COMERCIAL', 'OPERATIVO'),
+  asyncRoute(listarMensajesController)
+);
+solicitudesRouter.post(
+  '/:id/mensajes',
+  requireAuth,
+  requireRole('COMERCIAL', 'OPERATIVO'),
+  asyncRoute(crearMensajeController)
 );
