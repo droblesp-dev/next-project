@@ -8,7 +8,8 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "hash:admin": "tsx scripts/generate-admin-hash.ts",
-    "seed:initial": "tsx scripts/seed-initial-data.ts"
+    "seed:initial": "tsx scripts/seed-initial-data.ts",
+    "seed:usuarios-roles": "tsx scripts/seed-usuarios-roles.ts"
   },
   "dependencies": {
     "@google/genai": "^2.21.0",
