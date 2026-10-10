@@ -143,7 +143,7 @@ Una modificación visual solo se permite si es técnicamente necesaria, necesari
 
 ## 9. PostgreSQL — modelo aprobado
 
-**[DECISIÓN]** La base `nextproject` mantiene exactamente **8 tablas**: `roles`, `usuarios`, `clientes`, `solicitudes`, `analisis_ia`, `cotizaciones`, `ordenes`, `alertas`. Este es el modelo físico actualmente aprobado.
+**[DECISIÓN]** La base `nextproject` mantiene exactamente **13 tablas**: `roles`, `usuarios`, `clientes`, `solicitudes`, `analisis_ia`, `cotizaciones`, `ordenes`, `alertas`, `leads`, `lead_seguimientos`, `fichas_tecnicas`, `ordenes_evidencias`, `solicitud_mensajes`. Este es el modelo físico actualmente aprobado (corregido en CIERRE TÉCNICO Y DOCUMENTAL — FASE FINAL, tras confirmarse por consulta real a `information_schema` que el valor anterior de 8 tablas ya no correspondía al estado actual del sistema).
 
 No crear tablas adicionales sin autorización — en particular no crear automáticamente `pagos`, `facturas`, `dashboard`, `historial`, `seguimiento_orden`, `notificaciones` u otras entidades no aprobadas. Un dashboard debe representar datos ya existentes, nunca convertirse por sí mismo en una tabla nueva.
 

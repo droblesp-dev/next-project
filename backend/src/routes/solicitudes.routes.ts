@@ -58,6 +58,23 @@ function publicoOAdminOComercial(req: Request, res: Response, next: NextFunction
 
 export const solicitudesRouter = Router();
 
+// OPERATIVO-08 (corrige H1/H2 de OPERATIVO-07): mismo guardia de formato UUID ya usado en
+// ordenes.routes.ts y alertas.routes.ts — un :id que no es UUID no puede corresponder a ninguna
+// solicitud; se responde 404 controlado en lugar de dejar que PostgreSQL falle con "invalid input
+// syntax for type uuid" (500). `router.param` protege por nombre de parámetro, no por ruta: cubre
+// también `/:id/mensajes` y `/:id/mensajes` (POST), pero sin cambiar su comportamiento observable —
+// ambas ya devolvían exactamente el mismo 404 `{"message":"Solicitud no encontrada."}` para un UUID
+// inválido, vía la validación propia de `resolverContextoChat` (solicitudMensajes.service.ts), que
+// no se toca ni se elimina.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+solicitudesRouter.param('id', (_req, res, next, valor: string) => {
+  if (!UUID_RE.test(valor)) {
+    res.status(404).json({ message: 'Solicitud no encontrada.' });
+    return;
+  }
+  next();
+});
+
 solicitudesRouter.post('/', publicoOAdminOComercial, asyncRoute(crearController));
 
 // Bloque MVP (chat Comercial<->Operativo): OPERATIVO se agrega
@@ -72,14 +89,14 @@ solicitudesRouter.patch(
   asyncRoute(cambiarEstadoController)
 );
 
-// Chat asociado a la solicitud: exclusivo COMERCIAL/OPERATIVO — ADMIN
-// deliberadamente excluido (decisión aprobada explícitamente: "ADMIN no
-// participa en este chat"), a diferencia de todas las demás rutas del
-// proyecto, donde ADMIN siempre tiene acceso total.
+// Chat asociado a la solicitud. Bloque 2A: la LECTURA se abre a ADMIN (solo
+// lectura); escribir sigue siendo exclusivo de COMERCIAL/OPERATIVO (ADMIN → 403).
+// La autorización contextual (orden asociada, responsable, solo lectura por
+// estado) se aplica en el service.
 solicitudesRouter.get(
   '/:id/mensajes',
   requireAuth,
-  requireRole('COMERCIAL', 'OPERATIVO'),
+  requireRole('ADMIN', 'COMERCIAL', 'OPERATIVO'),
   asyncRoute(listarMensajesController)
 );
 solicitudesRouter.post(

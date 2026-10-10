@@ -1,26 +1,44 @@
-import { randomBytes, randomUUID } from 'crypto';
-import { existsSync, mkdirSync, writeFileSync } from 'fs';
-import path from 'path';
+import { randomUUID } from 'crypto';
 import bcrypt from 'bcryptjs';
+import 'dotenv/config';
 import { pool } from '../src/config/db.js';
 
-const SECRETS_DIR = path.resolve('.local-secrets');
-const OUTPUT_PATH = path.join(SECRETS_DIR, 'usuarios-seed-credenciales.txt');
 const SALT_ROUNDS = 12;
 
 const USUARIOS = [
-  { nombre: 'Administrador NextProject', email: 'admin.seed@nextproject.test', rolNombre: 'ADMIN' },
-  { nombre: 'Comercial NextProject', email: 'comercial.seed@nextproject.test', rolNombre: 'COMERCIAL' },
-  { nombre: 'Operativo NextProject', email: 'operativo.seed@nextproject.test', rolNombre: 'OPERATIVO' },
+  {
+    nombre: 'Administrador NextProject',
+    email: 'admin.seed@nextproject.test',
+    rolNombre: 'ADMIN',
+    envVar: 'SEED_ADMIN_PASSWORD',
+  },
+  {
+    nombre: 'Comercial NextProject',
+    email: 'comercial.seed@nextproject.test',
+    rolNombre: 'COMERCIAL',
+    envVar: 'SEED_COMERCIAL_PASSWORD',
+  },
+  {
+    nombre: 'Operativo NextProject',
+    email: 'operativo.seed@nextproject.test',
+    rolNombre: 'OPERATIVO',
+    envVar: 'SEED_OPERATIVO_PASSWORD',
+  },
 ];
 
-function generarPassword(): string {
-  return randomBytes(9).toString('base64url');
-}
-
 async function main() {
+  const faltantes = USUARIOS.filter((usuario) => !process.env[usuario.envVar]).map((usuario) => usuario.envVar);
+
+  if (faltantes.length > 0) {
+    console.error(
+      `Faltan variables de entorno en backend/.env: ${faltantes.join(', ')}.\n` +
+        'Definí una contraseña para cada una (ver backend/.env.example) y volvé a ejecutar el script.'
+    );
+    process.exit(1);
+  }
+
   const client = await pool.connect();
-  const credenciales: string[] = [];
+  const resultado: string[] = [];
 
   try {
     await client.query('BEGIN');
@@ -45,11 +63,11 @@ async function main() {
       const existente = await client.query('SELECT id FROM usuarios WHERE email = $1', [usuario.email]);
 
       if ((existente.rowCount ?? 0) > 0) {
-        credenciales.push(`${usuario.rolNombre} | ${usuario.email} | (ya existía, contraseña no modificada)`);
+        resultado.push(`${usuario.rolNombre} | ${usuario.email} | ya existía, no se modificó`);
         continue;
       }
 
-      const password = generarPassword();
+      const password = process.env[usuario.envVar]!;
       const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
       const rolId = rolResult.rows[0].id;
 
@@ -59,23 +77,14 @@ async function main() {
         [randomUUID(), usuario.nombre, usuario.email, passwordHash, rolId]
       );
 
-      credenciales.push(`${usuario.rolNombre} | ${usuario.email} | ${password}`);
+      resultado.push(`${usuario.rolNombre} | ${usuario.email} | creado`);
     }
 
     await client.query('COMMIT');
 
-    if (!existsSync(SECRETS_DIR)) {
-      mkdirSync(SECRETS_DIR, { recursive: true });
-    }
-    writeFileSync(
-      OUTPUT_PATH,
-      credenciales.join('\n') + '\n',
-      'utf-8'
-    );
-
-    console.log('Usuarios de prueba aplicados correctamente (uno por rol).');
-    console.log(`Credenciales en texto plano guardadas localmente en: ${OUTPUT_PATH}`);
-    console.log('Ese archivo no se sube a git (.local-secrets/ está en .gitignore).');
+    console.log('Usuarios de prueba aplicados correctamente (uno por rol):');
+    resultado.forEach((linea) => console.log(`  - ${linea}`));
+    console.log('Las contraseñas son las definidas en backend/.env (no se muestran aquí).');
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Error durante la carga de usuarios. Se ejecutó ROLLBACK. Detalle:', (error as Error).message);

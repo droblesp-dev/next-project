@@ -1,5 +1,6 @@
 import { Router, type Request, type Response, type NextFunction, type RequestHandler } from 'express';
 import { requireAuth, requireRole } from '../middleware/auth.middleware.js';
+import { validarFormatoUuid } from '../middleware/uuidParam.middleware.js';
 import {
   listarController,
   crearController,
@@ -20,6 +21,10 @@ function asyncRoute(
 export const usuariosRouter = Router();
 
 usuariosRouter.use(requireAuth, requireRole('ADMIN'));
+
+// CORRECCIÓN FASE 4 (hallazgo #1): mismo guard de formato UUID que ya tenían ordenes/alertas/
+// solicitudes — ver uuidParam.middleware.ts.
+usuariosRouter.param('id', validarFormatoUuid('Usuario no encontrado.'));
 
 usuariosRouter.get('/', asyncRoute(listarController));
 usuariosRouter.post('/', asyncRoute(crearController));

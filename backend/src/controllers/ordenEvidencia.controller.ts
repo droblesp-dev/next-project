@@ -5,6 +5,7 @@ import multer from 'multer';
 import {
   uploadEvidencia,
   tipoEvidenciaPorMime,
+  detectarMimePorFirma,
   generarNombreEvidencia,
   EVIDENCIAS_DIR,
   EVIDENCIA_MAX_BYTES,
@@ -66,15 +67,30 @@ async function procesarEvidencia(req: Request, res: Response, err: unknown): Pro
     return;
   }
 
+  // Bloque 3A: el contenido real (magic bytes) debe corresponder al tipo declarado; el MIME y la
+  // extensión del cliente por sí solos no bastan. Se valida antes de tocar la BD o el disco.
+  const mimeReal = detectarMimePorFirma(req.file.buffer);
+  if (mimeReal === null || mimeReal !== req.file.mimetype) {
+    res.status(400).json({ message: 'El contenido del archivo no corresponde a un PDF, JPG o PNG válido.' });
+    return;
+  }
+
+  const nombreArchivo = generarNombreEvidencia(mimeReal);
+  const rutaArchivo = path.join(EVIDENCIAS_DIR, nombreArchivo);
+  const contenido = req.file.buffer;
+
   try {
-    const nombreArchivo = generarNombreEvidencia(req.file.mimetype);
-    const evidencia = await agregarEvidencia(req.params.id, tipo, nombreArchivo);
-    // Solo se llega aquí si la orden existe y el límite no se superó —
-    // recién ahora se escribe el archivo real a disco (mismo orden que
-    // el comprobante de anticipo, F-02).
-    await fs.promises.writeFile(path.join(EVIDENCIAS_DIR, nombreArchivo), req.file.buffer);
+    // Bloque 3A: la fila y el archivo se confirman juntos. `agregarEvidencia` inserta la fila dentro
+    // de una transacción, invoca esta escritura física y solo entonces hace COMMIT; si la escritura
+    // falla se hace ROLLBACK y no queda ninguna evidencia registrada.
+    const evidencia = await agregarEvidencia(req.params.id, tipo, nombreArchivo, async () => {
+      await fs.promises.mkdir(EVIDENCIAS_DIR, { recursive: true });
+      await fs.promises.writeFile(rutaArchivo, contenido, { flag: 'wx' });
+    });
     res.status(201).json({ evidencia });
   } catch (error) {
+    // Compensación: si el archivo llegó a escribirse y luego falló algo (o quedó parcial), se elimina.
+    await fs.promises.rm(rutaArchivo, { force: true }).catch(() => undefined);
     if (error instanceof OrdenNoEncontradaError) {
       res.status(404).json({ message: 'Orden no encontrada.' });
       return;
@@ -100,6 +116,8 @@ export async function descargarEvidenciaController(req: Request, res: Response):
   try {
     const evidencia = await obtenerArchivoEvidencia(req.params.id, req.params.evidenciaId);
     const rutaAbsoluta = path.join(EVIDENCIAS_DIR, evidencia.nombre_archivo);
+    // Bloque 3A: el navegador debe respetar el Content-Type declarado y no "adivinar" el tipo del contenido.
+    res.setHeader('X-Content-Type-Options', 'nosniff');
     res.sendFile(rutaAbsoluta, (error) => {
       if (error && !res.headersSent) {
         res.status(404).json({ message: 'El archivo de la evidencia no se encontró.' });

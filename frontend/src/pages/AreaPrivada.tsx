@@ -17,12 +17,13 @@ interface AreaPrivadaProps {
 }
 
 const ROLES_CON_BANDEJA = ['ADMIN', 'COMERCIAL'];
-// ROLES_CON_ORDENES sigue controlando ALERTAS (sin cambios, backend
-// intacto: alertas.routes.ts sigue exigiendo ADMIN/OPERATIVO). F-08 agrega
-// una visibilidad de solo lectura de ÓRDENES para COMERCIAL, controlada
-// por una lista separada para no otorgarle también acceso a alertas.
 const ROLES_CON_ORDENES = ['ADMIN', 'OPERATIVO'];
 const ROLES_CON_LECTURA_ORDENES = ['ADMIN', 'OPERATIVO', 'COMERCIAL'];
+// ALERTAS-02 (decisiones 1A/2B/3A): COMERCIAL deja de recibir 403 en Alertas — el backend ya
+// filtra qué ve cada rol (todas / solo responsable / solo tipo ENTREGA); aquí solo se decide quién
+// ve la sección. Antes reutilizaba ROLES_CON_ORDENES (ADMIN/OPERATIVO); se separa en su propia
+// constante para no afectar el menú de ÓRDENES, que sigue gobernado por ROLES_CON_ORDENES.
+const ROLES_CON_ALERTAS = ['ADMIN', 'OPERATIVO', 'COMERCIAL'];
 // Bloque MVP (chat Comercial<->Operativo): visibilidad de solo lectura de
 // SOLICITUDES para OPERATIVO (antes sin ningún acceso a este módulo).
 // Distinta de ROLES_CON_BANDEJA: esta última sigue controlando además
@@ -35,6 +36,11 @@ export default function AreaPrivada({ usuario, token, onLogout, onSesionInvalida
   const tieneBandeja = ROLES_CON_BANDEJA.includes(usuario.rol);
   const tieneOrdenes = ROLES_CON_ORDENES.includes(usuario.rol);
   const puedeVerOrdenes = ROLES_CON_LECTURA_ORDENES.includes(usuario.rol);
+  const tieneAlertas = ROLES_CON_ALERTAS.includes(usuario.rol);
+  // ALERTAS-02 (decisión 5A): solo el OPERATIVO responsable puede atender (el backend lo vuelve a
+  // verificar en cada PATCH); ADMIN nunca ve el botón (vista de solo supervisión, sin cambios) y
+  // COMERCIAL tampoco (2B es de consulta, no de atención).
+  const puedeAtenderAlertas = usuario.rol === 'OPERATIVO';
   const esAdmin = usuario.rol === 'ADMIN';
   // F-08: gestionar (cambiar estado) sigue siendo exclusivo de ADMIN/OPERATIVO
   // — COMERCIAL solo puede ver el listado/detalle, nunca actuar sobre ellas.
@@ -43,6 +49,21 @@ export default function AreaPrivada({ usuario, token, onLogout, onSesionInvalida
   // Chat: exclusivo COMERCIAL/OPERATIVO — ADMIN no participa (decisión
   // aprobada explícitamente para este bloque).
   const puedeChatear = usuario.rol === 'COMERCIAL' || usuario.rol === 'OPERATIVO';
+  // Corrección de responsabilidades por rol en DetalleSolicitud
+  // (autorización explícita — "AUTORIZACIÓN DE IMPLEMENTACIÓN — DETALLE DE
+  // SOLICITUDES POR ROL"): ADMIN pasa a ser exclusivamente de
+  // consulta/supervisión — ya no cambia el estado de la solicitud ni
+  // genera/revisa análisis IA, eso queda exclusivo de COMERCIAL. La
+  // consulta del historial de análisis IA (solo lectura) sigue siendo
+  // ADMIN+COMERCIAL — se reutiliza `tieneBandeja` tal cual ya se usaba
+  // antes para ese bloque completo, sin ninguna lógica de autenticación
+  // nueva. IMPORTANTE: esto es una corrección de interfaz, no de
+  // seguridad — el backend (solicitudes.routes.ts, analisisIa.routes.ts)
+  // sigue aceptando estas acciones desde un JWT de ADMIN; queda
+  // [PENDIENTE] una corrección posterior de permisos backend.
+  const puedeGestionarSolicitud = usuario.rol === 'COMERCIAL';
+  const puedeGenerarAnalisis = usuario.rol === 'COMERCIAL';
+  const puedeRevisarAnalisis = usuario.rol === 'COMERCIAL';
   // Bloque MVP (ficha técnica), decisiones 1-3: ADMIN y COMERCIAL pueden
   // crear la orden; OPERATIVO no. Independiente de `esAdmin` (que sigue
   // controlando exclusivamente "Asignar responsable").
@@ -54,6 +75,38 @@ export default function AreaPrivada({ usuario, token, onLogout, onSesionInvalida
   const puedeGestionarPago = usuario.rol === 'ADMIN' || usuario.rol === 'COMERCIAL';
 
   const [solicitudSeleccionada, setSolicitudSeleccionada] = useState<string | null>(null);
+  // Bloque 2B.1: al llegar a la comunicación técnica desde el detalle de una orden se enfoca el chat;
+  // el modo (editable / solo lectura / sin acceso) lo decide el backend al cargar los mensajes.
+  const [enfocarChat, setEnfocarChat] = useState(false);
+  function handleAbrirSolicitud(id: string | null) {
+    setEnfocarChat(false);
+    setSolicitudSeleccionada(id);
+  }
+  function handleVerComunicacionDesdeOrden(solicitudId: string) {
+    setEnfocarChat(true);
+    setSolicitudSeleccionada(solicitudId);
+    setSeccion('solicitudes');
+  }
+  // Cableado de navegación Alertas -> Órdenes (autorización explícita —
+  // "IMPLEMENTACIÓN AUTORIZADA — ALERTAS ADMIN"). Sin react-router: se
+  // reutiliza el mismo patrón de estado-en-memoria ya usado en todo el
+  // proyecto. `ordenIdDesdeAlerta` se consume una sola vez en
+  // GestionOrdenes.tsx (que ya lo limpia mediante
+  // onOrdenInicialConsumida) para preseleccionar la orden correspondiente
+  // al abrir esa sección.
+  const [ordenIdDesdeAlerta, setOrdenIdDesdeAlerta] = useState<string | null>(null);
+  // Leads -> Cotizaciones: mismo mecanismo (se consume una sola vez).
+  const [cotizacionIdDesdeLead, setCotizacionIdDesdeLead] = useState<string | null>(null);
+
+  function handleVerCotizacionDesdeLead(cotizacionId: string) {
+    setCotizacionIdDesdeLead(cotizacionId);
+    setSeccion('cotizaciones');
+  }
+
+  function handleVerOrdenDesdeAlerta(ordenId: string) {
+    setOrdenIdDesdeAlerta(ordenId);
+    setSeccion('ordenes');
+  }
   const [seccion, setSeccion] = useState<Seccion>(tieneBandeja ? 'solicitudes' : 'ordenes');
 
   return (
@@ -76,7 +129,7 @@ export default function AreaPrivada({ usuario, token, onLogout, onSesionInvalida
             <button
               type="button"
               onClick={onLogout}
-              className="inline-flex items-center justify-center px-4 py-2 border border-outline text-on-surface hover:bg-surface-container-high transition-colors font-label-caps text-label-caps cursor-pointer"
+              className="inline-flex items-center justify-center px-4 py-2 border border-outline text-on-surface hover:bg-surface-container-high transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
             >
               <span className="material-symbols-outlined mr-2 text-[18px]">logout</span>
               CERRAR SESIÓN
@@ -125,7 +178,7 @@ export default function AreaPrivada({ usuario, token, onLogout, onSesionInvalida
                 <button
                   type="button"
                   onClick={() => setSeccion('dashboard')}
-                  className={`inline-flex items-center px-4 py-2 font-label-caps text-label-caps transition-colors cursor-pointer ${
+                  className={`inline-flex items-center px-4 py-2 font-['Inter'] text-[14px] font-semibold transition-colors cursor-pointer ${
                     seccion === 'dashboard'
                       ? 'bg-primary-container text-on-primary-container'
                       : 'border border-outline text-on-surface hover:bg-surface-container-high'
@@ -138,7 +191,7 @@ export default function AreaPrivada({ usuario, token, onLogout, onSesionInvalida
                 <button
                   type="button"
                   onClick={() => setSeccion('solicitudes')}
-                  className={`inline-flex items-center px-4 py-2 font-label-caps text-label-caps transition-colors cursor-pointer ${
+                  className={`inline-flex items-center px-4 py-2 font-['Inter'] text-[14px] font-semibold transition-colors cursor-pointer ${
                     seccion === 'solicitudes'
                       ? 'bg-primary-container text-on-primary-container'
                       : 'border border-outline text-on-surface hover:bg-surface-container-high'
@@ -151,7 +204,7 @@ export default function AreaPrivada({ usuario, token, onLogout, onSesionInvalida
                 <button
                   type="button"
                   onClick={() => setSeccion('cotizaciones')}
-                  className={`inline-flex items-center px-4 py-2 font-label-caps text-label-caps transition-colors cursor-pointer ${
+                  className={`inline-flex items-center px-4 py-2 font-['Inter'] text-[14px] font-semibold transition-colors cursor-pointer ${
                     seccion === 'cotizaciones'
                       ? 'bg-primary-container text-on-primary-container'
                       : 'border border-outline text-on-surface hover:bg-surface-container-high'
@@ -164,7 +217,7 @@ export default function AreaPrivada({ usuario, token, onLogout, onSesionInvalida
                 <button
                   type="button"
                   onClick={() => setSeccion('ordenes')}
-                  className={`inline-flex items-center px-4 py-2 font-label-caps text-label-caps transition-colors cursor-pointer ${
+                  className={`inline-flex items-center px-4 py-2 font-['Inter'] text-[14px] font-semibold transition-colors cursor-pointer ${
                     seccion === 'ordenes'
                       ? 'bg-primary-container text-on-primary-container'
                       : 'border border-outline text-on-surface hover:bg-surface-container-high'
@@ -173,11 +226,11 @@ export default function AreaPrivada({ usuario, token, onLogout, onSesionInvalida
                   ÓRDENES
                 </button>
               )}
-              {tieneOrdenes && (
+              {tieneAlertas && (
                 <button
                   type="button"
                   onClick={() => setSeccion('alertas')}
-                  className={`inline-flex items-center px-4 py-2 font-label-caps text-label-caps transition-colors cursor-pointer ${
+                  className={`inline-flex items-center px-4 py-2 font-['Inter'] text-[14px] font-semibold transition-colors cursor-pointer ${
                     seccion === 'alertas'
                       ? 'bg-primary-container text-on-primary-container'
                       : 'border border-outline text-on-surface hover:bg-surface-container-high'
@@ -190,7 +243,7 @@ export default function AreaPrivada({ usuario, token, onLogout, onSesionInvalida
                 <button
                   type="button"
                   onClick={() => setSeccion('leads')}
-                  className={`inline-flex items-center px-4 py-2 font-label-caps text-label-caps transition-colors cursor-pointer ${
+                  className={`inline-flex items-center px-4 py-2 font-['Inter'] text-[14px] font-semibold transition-colors cursor-pointer ${
                     seccion === 'leads'
                       ? 'bg-primary-container text-on-primary-container'
                       : 'border border-outline text-on-surface hover:bg-surface-container-high'
@@ -203,7 +256,7 @@ export default function AreaPrivada({ usuario, token, onLogout, onSesionInvalida
                 <button
                   type="button"
                   onClick={() => setSeccion('usuarios')}
-                  className={`inline-flex items-center px-4 py-2 font-label-caps text-label-caps transition-colors cursor-pointer ${
+                  className={`inline-flex items-center px-4 py-2 font-['Inter'] text-[14px] font-semibold transition-colors cursor-pointer ${
                     seccion === 'usuarios'
                       ? 'bg-primary-container text-on-primary-container'
                       : 'border border-outline text-on-surface hover:bg-surface-container-high'
@@ -212,6 +265,20 @@ export default function AreaPrivada({ usuario, token, onLogout, onSesionInvalida
                   USUARIOS
                 </button>
               )}
+
+              {/* Notificaciones — entrada visual global preparada para uso
+                  futuro (autorización explícita: solo placeholder de
+                  navegación). Sin sección, sin contador, sin datos
+                  simulados — no se agrega ningún endpoint/tabla/lógica. */}
+              <button
+                type="button"
+                disabled
+                title="Próximamente"
+                className="inline-flex items-center gap-2 px-4 py-2 font-['Inter'] text-[14px] font-semibold border border-outline text-on-surface-variant opacity-50 cursor-not-allowed"
+              >
+                <span className="material-symbols-outlined text-[16px]">notifications</span>
+                NOTIFICACIONES
+              </button>
             </div>
 
             {seccion === 'dashboard' && esAdmin ? (
@@ -223,30 +290,55 @@ export default function AreaPrivada({ usuario, token, onLogout, onSesionInvalida
                 token={token}
                 esAdmin={esAdmin}
                 puedeGestionar={puedeGestionarOrdenes}
+                usuarioId={usuario.id}
                 puedeCrearOrden={puedeCrearOrden}
                 puedeGestionarPago={puedeGestionarPago}
+                ordenIdSeleccionadaInicial={ordenIdDesdeAlerta}
+                onOrdenInicialConsumida={() => setOrdenIdDesdeAlerta(null)}
+                onVerComunicacion={handleVerComunicacionDesdeOrden}
                 onSesionInvalida={onSesionInvalida}
               />
             ) : seccion === 'leads' && tieneBandeja ? (
-              <GestionLeads token={token} esAdmin={esAdmin} onSesionInvalida={onSesionInvalida} />
-            ) : seccion === 'alertas' && tieneOrdenes ? (
-              <GestionAlertas token={token} onSesionInvalida={onSesionInvalida} />
+              <GestionLeads
+                token={token}
+                esAdmin={esAdmin}
+                onSesionInvalida={onSesionInvalida}
+                onVerCotizacion={handleVerCotizacionDesdeLead}
+              />
+            ) : seccion === 'alertas' && tieneAlertas ? (
+              <GestionAlertas
+                token={token}
+                esAdmin={esAdmin}
+                puedeAtender={puedeAtenderAlertas}
+                onVerOrden={handleVerOrdenDesdeAlerta}
+                onSesionInvalida={onSesionInvalida}
+              />
             ) : seccion === 'cotizaciones' && tieneBandeja ? (
-              <GestionCotizaciones token={token} onSesionInvalida={onSesionInvalida} />
+              <GestionCotizaciones
+                token={token}
+                esAdmin={esAdmin}
+                onSesionInvalida={onSesionInvalida}
+                cotizacionIdInicial={cotizacionIdDesdeLead}
+                onCotizacionInicialConsumida={() => setCotizacionIdDesdeLead(null)}
+              />
             ) : puedeVerSolicitudes && solicitudSeleccionada ? (
               <DetalleSolicitud
                 token={token}
                 id={solicitudSeleccionada}
-                puedeGestionar={tieneBandeja}
-                puedeChatear={puedeChatear}
-                onVolver={() => setSolicitudSeleccionada(null)}
+                puedeGestionarSolicitud={puedeGestionarSolicitud}
+                puedeConsultarAnalisis={tieneBandeja}
+                puedeGenerarAnalisis={puedeGenerarAnalisis}
+                puedeRevisarAnalisis={puedeRevisarAnalisis}
+                rolUsuario={usuario.rol}
+                enfocarChat={enfocarChat}
+                onVolver={() => handleAbrirSolicitud(null)}
                 onSesionInvalida={onSesionInvalida}
               />
             ) : puedeVerSolicitudes ? (
               <BandejaSolicitudes
                 token={token}
                 puedeChatear={puedeChatear}
-                onSeleccionar={setSolicitudSeleccionada}
+                onSeleccionar={handleAbrirSolicitud}
                 onSesionInvalida={onSesionInvalida}
               />
             ) : null}

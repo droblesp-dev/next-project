@@ -1,9 +1,11 @@
 import { Router, type Request, type Response, type NextFunction, type RequestHandler } from 'express';
 import { requireAuth, requireRole } from '../middleware/auth.middleware.js';
+import { validarFormatoUuid } from '../middleware/uuidParam.middleware.js';
 import {
   listarController,
   obtenerController,
   crearController,
+  editarController,
   cambiarEstadoController,
   generarEnlaceController,
   obtenerPublicaController,
@@ -49,9 +51,22 @@ cotizacionesRouter.post('/publica/:token/comprobante-saldo', asyncRoute(subirCom
 
 cotizacionesRouter.use(requireAuth, requireRole('ADMIN', 'COMERCIAL'));
 
+// CORRECCIÓN FASE 4 (hallazgo #1): mismo guard de formato UUID que ya tenían ordenes/alertas/
+// solicitudes — un :id que no es UUID no puede corresponder a ninguna cotización; se responde 404
+// controlado en lugar de dejar que PostgreSQL falle con "invalid input syntax for type uuid" (500).
+// No afecta a las rutas públicas de arriba (usan :token, nunca :id). Se ejecuta después de
+// requireAuth/requireRole (401/403 primero) y antes de cualquier handler con :id.
+cotizacionesRouter.param('id', validarFormatoUuid('Cotización no encontrada.'));
+
 cotizacionesRouter.get('/', asyncRoute(listarController));
 cotizacionesRouter.post('/', asyncRoute(crearController));
 cotizacionesRouter.get('/:id', asyncRoute(obtenerController));
+// Edición de condiciones comerciales — EXCLUSIVA de BORRADOR (autorización
+// explícita — "IMPLEMENTACIÓN AUTORIZADA — EDICIÓN DE COTIZACIONES
+// BORRADOR"). Mismos roles que el resto del bloque interno (ADMIN/COMERCIAL,
+// heredado del middleware de arriba) — la corrección de permisos de ADMIN
+// queda fuera de este bloque, sin tocar aquí.
+cotizacionesRouter.patch('/:id', asyncRoute(editarController));
 cotizacionesRouter.patch('/:id/estado', asyncRoute(cambiarEstadoController));
 cotizacionesRouter.post('/:id/enlace', asyncRoute(generarEnlaceController));
 // Fase D.6: exclusivas de ADMIN/COMERCIAL (detrás del middleware de arriba)

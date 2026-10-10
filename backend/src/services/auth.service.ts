@@ -11,7 +11,14 @@ import {
 // Se usa únicamente para que la comparación tarde lo mismo cuando el
 // email no existe, y así no delatar por timing si un email está o no
 // registrado.
-const DUMMY_HASH = '$2a$10$q.7Pxg.mIxFF1/JGHdTM..6tGY95w3q6Hs1u0NTjnSaNf.3W1cRzO';
+//
+// CORRECCIÓN FASE 4 (hallazgo #2): costo bcrypt 12, igual al estándar real verificado del sistema
+// (usuarios.service.ts::SALT_ROUNDS, usado por crearUsuario() para TODO usuario nuevo real desde
+// esta corrección). El valor anterior (costo 10) coincidía con los scripts de seed/generación de
+// hash ya desalineados en ese momento y producía una diferencia de tiempo medible (~3.3x, Fase 4)
+// entre un correo existente y uno inexistente. Hash generado una sola vez a partir de una cadena
+// arbitraria sin relación con ninguna contraseña real — nunca se usa para autenticar a nadie.
+const DUMMY_HASH = '$2a$12$HtdOriBIV2tdo7n/j8UouOfLIPALxdlflzU0cbRvsG.P5e5IkjazK';
 
 export interface JwtPayload {
   sub: string;

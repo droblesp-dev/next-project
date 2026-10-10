@@ -1,4 +1,9 @@
+import type { Pool, PoolClient } from 'pg';
 import { pool } from '../config/db.js';
+
+// Bloque 3A: contarPorTipo/crear aceptan un executor opcional para ejecutarse dentro de la
+// transacción de subida de evidencia (ver ordenEvidencia.service.ts). Sin él usan el pool, igual que antes.
+type Executor = Pool | PoolClient;
 
 export interface OrdenEvidencia {
   id: string;
@@ -18,8 +23,8 @@ export async function listarPorOrden(ordenId: string): Promise<OrdenEvidencia[]>
   return result.rows;
 }
 
-export async function contarPorTipo(ordenId: string, tipo: string): Promise<number> {
-  const result = await pool.query<{ total: string }>(
+export async function contarPorTipo(ordenId: string, tipo: string, executor: Executor = pool): Promise<number> {
+  const result = await executor.query<{ total: string }>(
     'SELECT COUNT(*) AS total FROM ordenes_evidencias WHERE orden_id = $1 AND tipo = $2',
     [ordenId, tipo]
   );
@@ -46,12 +51,15 @@ export async function findById(id: string): Promise<OrdenEvidencia | null> {
 }
 
 // Sin función de eliminación (decisión explícita del bloque: solo agregar).
-export async function crear(data: {
-  ordenId: string;
-  tipo: string;
-  nombreArchivo: string;
-}): Promise<OrdenEvidencia> {
-  const result = await pool.query<OrdenEvidencia>(
+export async function crear(
+  data: {
+    ordenId: string;
+    tipo: string;
+    nombreArchivo: string;
+  },
+  executor: Executor = pool
+): Promise<OrdenEvidencia> {
+  const result = await executor.query<OrdenEvidencia>(
     `INSERT INTO ordenes_evidencias (id, orden_id, tipo, nombre_archivo)
      VALUES (gen_random_uuid(), $1, $2, $3)
      RETURNING ${COLUMNAS}`,

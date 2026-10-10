@@ -132,17 +132,80 @@ export async function create(
 // garantiza a nivel de PostgreSQL que no haya dos cotizaciones ACEPTADA
 // para la misma solicitud; una violación de esa unicidad se traduce en el
 // service a un error de dominio específico.
+// `executor` opcional (por defecto el pool): permite invocar este mismo
+// UPDATE condicional dentro de una transacción ya abierta por el service
+// (ver cambiarAEnviadaConSolicitud, más abajo en cotizaciones.service.ts)
+// sin duplicar la sentencia SQL. Todos los llamadores existentes, que no
+// pasan `executor`, se comportan exactamente igual que antes.
 export async function updateEstado(
   id: string,
   nuevoEstado: string,
-  estadosOrigenValidos: string[]
+  estadosOrigenValidos: string[],
+  executor: Executor = pool
 ): Promise<Cotizacion | null> {
-  const result = await pool.query<Cotizacion>(
+  const result = await executor.query<Cotizacion>(
     `UPDATE cotizaciones
      SET estado = $2, actualizado_en = CURRENT_TIMESTAMP
      WHERE id = $1 AND estado = ANY($3::varchar[])
      RETURNING ${COLUMNAS}`,
     [id, nuevoEstado, estadosOrigenValidos]
+  );
+  return result.rows[0] ?? null;
+}
+
+// Edición de condiciones comerciales — EXCLUSIVA de BORRADOR (autorización
+// explícita — "IMPLEMENTACIÓN AUTORIZADA — EDICIÓN DE COTIZACIONES
+// BORRADOR"). UPDATE condicional (mismo patrón que updateEstado): solo
+// aplica si la fila SIGUE en BORRADOR en este instante. `fecha_vigencia` se
+// recalcula igual que en create() — CURRENT_TIMESTAMP + dias_vigencia — pero
+// tomando el momento de la EDICIÓN como punto de partida (no el de la
+// creación original), manteniendo el mismo criterio ya usado por el sistema
+// ("la vigencia corre desde ahora"). Ningún campo derivado (subtotal/
+// iva_valor/total/anticipo_valor/saldo_pendiente/estado_anticipo) se acepta
+// como entrada — todos llegan ya calculados por
+// cotizaciones.service.ts::calcularCondicionesComerciales().
+export async function updateCondiciones(
+  id: string,
+  data: {
+    valor: number;
+    descripcion: string | null;
+    subtotal: number;
+    ivaPorcentaje: number;
+    ivaValor: number;
+    total: number;
+    anticipoPorcentaje: number;
+    anticipoValor: number;
+    saldoPendiente: number;
+    metodoAnticipo: string | null;
+    estadoAnticipo: string;
+    diasVigencia: number;
+  }
+): Promise<Cotizacion | null> {
+  const result = await pool.query<Cotizacion>(
+    `UPDATE cotizaciones
+     SET valor = $2, descripcion = $3,
+         subtotal = $4, iva_porcentaje = $5, iva_valor = $6, total = $7,
+         anticipo_porcentaje = $8, anticipo_valor = $9, saldo_pendiente = $10,
+         metodo_anticipo = $11, estado_anticipo = $12,
+         fecha_vigencia = CURRENT_TIMESTAMP + ($13 || ' days')::INTERVAL,
+         actualizado_en = CURRENT_TIMESTAMP
+     WHERE id = $1 AND estado = 'BORRADOR'
+     RETURNING ${COLUMNAS}`,
+    [
+      id,
+      data.valor,
+      data.descripcion,
+      data.subtotal,
+      data.ivaPorcentaje,
+      data.ivaValor,
+      data.total,
+      data.anticipoPorcentaje,
+      data.anticipoValor,
+      data.saldoPendiente,
+      data.metodoAnticipo,
+      data.estadoAnticipo,
+      data.diasVigencia,
+    ]
   );
   return result.rows[0] ?? null;
 }

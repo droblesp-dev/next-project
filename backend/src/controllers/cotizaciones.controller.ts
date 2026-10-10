@@ -6,6 +6,7 @@ import {
   listarCotizaciones,
   obtenerCotizacion,
   crearCotizacion,
+  editarCotizacionBorrador,
   cambiarEstadoCotizacion,
   generarEnlaceCotizacion,
   validarEnlaceCotizacion,
@@ -42,6 +43,7 @@ import {
   MetodoSaldoInvalidoError,
   ComprobanteSaldoRequeridoError,
   SaldoNoRechazadoError,
+  CotizacionNoEditableError,
 } from '../services/cotizaciones.service.js';
 import { uploadComprobante, generarNombreComprobante, COMPROBANTES_DIR, COMPROBANTE_MAX_BYTES } from '../config/uploadsComprobantes.js';
 
@@ -132,6 +134,91 @@ export async function crearController(req: Request, res: Response): Promise<void
     }
     if (error instanceof SolicitudNoEnRevisionError) {
       res.status(409).json({ message: 'La solicitud no está en estado EN_REVISION.' });
+      return;
+    }
+    if (error instanceof IvaPorcentajeInvalidoError) {
+      res.status(400).json({ message: 'iva_porcentaje inválido. Valores permitidos: 0, 15.' });
+      return;
+    }
+    if (error instanceof AnticipoPorcentajeInvalidoError) {
+      res.status(400).json({ message: 'anticipo_porcentaje inválido. Valores permitidos: 0, 50, 75.' });
+      return;
+    }
+    if (error instanceof MetodoAnticipoRequeridoError) {
+      res.status(400).json({ message: 'metodo_anticipo es requerido cuando anticipo_porcentaje es mayor a 0.' });
+      return;
+    }
+    if (error instanceof MetodoAnticipoNoPermitidoError) {
+      res.status(400).json({ message: 'metodo_anticipo no debe enviarse cuando anticipo_porcentaje es 0.' });
+      return;
+    }
+    if (error instanceof MetodoAnticipoInvalidoError) {
+      res.status(400).json({ message: 'metodo_anticipo inválido. Valores permitidos: TRANSFERENCIA, EFECTIVO.' });
+      return;
+    }
+    if (error instanceof DiasVigenciaInvalidoError) {
+      res.status(400).json({ message: 'dias_vigencia inválido. Debe ser un entero mayor a 0.' });
+      return;
+    }
+    throw error;
+  }
+}
+
+// Edición de condiciones comerciales — EXCLUSIVA de BORRADOR (autorización
+// explícita — "IMPLEMENTACIÓN AUTORIZADA — EDICIÓN DE COTIZACIONES
+// BORRADOR"). Mismas validaciones de tipo que crearController, sin
+// solicitud_id (no editable, ver EditarCotizacionBorradorInput) — la
+// precondición de estado (solo BORRADOR) la aplica editarCotizacionBorrador()
+// mediante el UPDATE condicional del repositorio, nunca aquí.
+export async function editarController(req: Request, res: Response): Promise<void> {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const { valor, descripcion, iva_porcentaje, anticipo_porcentaje, dias_vigencia, metodo_anticipo } = body;
+
+  const valorNum = typeof valor === 'number' ? valor : Number(valor);
+  if (valor === undefined || valor === null || valor === '' || Number.isNaN(valorNum) || valorNum < 0) {
+    res.status(400).json({ message: 'valor es requerido y debe ser un número mayor o igual a 0.' });
+    return;
+  }
+
+  if (descripcion !== undefined && descripcion !== null && typeof descripcion !== 'string') {
+    res.status(400).json({ message: 'descripcion debe ser texto.' });
+    return;
+  }
+
+  if (iva_porcentaje !== undefined && typeof iva_porcentaje !== 'number') {
+    res.status(400).json({ message: 'iva_porcentaje debe ser un número.' });
+    return;
+  }
+  if (anticipo_porcentaje !== undefined && typeof anticipo_porcentaje !== 'number') {
+    res.status(400).json({ message: 'anticipo_porcentaje debe ser un número.' });
+    return;
+  }
+  if (dias_vigencia !== undefined && typeof dias_vigencia !== 'number') {
+    res.status(400).json({ message: 'dias_vigencia debe ser un número.' });
+    return;
+  }
+  if (metodo_anticipo !== undefined && metodo_anticipo !== null && typeof metodo_anticipo !== 'string') {
+    res.status(400).json({ message: 'metodo_anticipo debe ser texto.' });
+    return;
+  }
+
+  try {
+    const cotizacion = await editarCotizacionBorrador(req.params.id, {
+      valor: valorNum,
+      descripcion: typeof descripcion === 'string' ? descripcion : null,
+      ivaPorcentaje: iva_porcentaje as number | undefined,
+      anticipoPorcentaje: anticipo_porcentaje as number | undefined,
+      diasVigencia: dias_vigencia as number | undefined,
+      metodoAnticipo: metodo_anticipo as string | null | undefined,
+    });
+    res.status(200).json({ cotizacion });
+  } catch (error) {
+    if (error instanceof CotizacionNoEncontradaError) {
+      res.status(404).json({ message: 'Cotización no encontrada.' });
+      return;
+    }
+    if (error instanceof CotizacionNoEditableError) {
+      res.status(409).json({ message: 'Solo se puede editar una cotización en estado BORRADOR.' });
       return;
     }
     if (error instanceof IvaPorcentajeInvalidoError) {

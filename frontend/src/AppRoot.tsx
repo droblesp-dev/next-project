@@ -3,6 +3,7 @@ import App from './App';
 import Login from './pages/Login';
 import AreaPrivada from './pages/AreaPrivada';
 import VistaCotizacionPublica from './pages/VistaCotizacionPublica';
+import SolicitudPorEnlace from './pages/SolicitudPorEnlace';
 import {
   guardarSesion,
   leerSesionGuardada,
@@ -12,7 +13,7 @@ import {
   type Sesion,
 } from './lib/authClient';
 
-type Vista = 'validando' | 'publico' | 'login' | 'privado' | 'cotizacion-publica';
+type Vista = 'validando' | 'publico' | 'login' | 'privado' | 'cotizacion-publica' | 'solicitud-enlace';
 
 // Sin router: se detecta la ruta de la vista pública de cotización
 // directamente sobre window.location, igual de válido para esta única
@@ -24,9 +25,19 @@ function extraerTokenCotizacionPublica(): string | null {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
+// Misma técnica para el enlace de solicitud que un comercial envía a un lead
+// TIBIO (/solicitud/enlace/<token>): página pública sin sesión.
+function extraerTokenSolicitudEnlace(): string | null {
+  const match = window.location.pathname.match(/^\/solicitud\/enlace\/([^/]+)\/?$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 export default function AppRoot() {
   const [tokenCotizacionPublica] = useState<string | null>(extraerTokenCotizacionPublica);
-  const [vista, setVista] = useState<Vista>(tokenCotizacionPublica ? 'cotizacion-publica' : 'validando');
+  const [tokenSolicitudEnlace] = useState<string | null>(extraerTokenSolicitudEnlace);
+  const [vista, setVista] = useState<Vista>(
+    tokenCotizacionPublica ? 'cotizacion-publica' : tokenSolicitudEnlace ? 'solicitud-enlace' : 'validando'
+  );
   const [sesion, setSesion] = useState<Sesion | null>(null);
   const [mensajeLogin, setMensajeLogin] = useState<string | null>(null);
 
@@ -37,7 +48,7 @@ export default function AppRoot() {
   // La vista pública de cotización no requiere (ni intenta) ninguna
   // sesión de usuario — se omite por completo este chequeo en ese caso.
   useEffect(() => {
-    if (tokenCotizacionPublica) {
+    if (tokenCotizacionPublica || tokenSolicitudEnlace) {
       return;
     }
 
@@ -86,6 +97,10 @@ export default function AppRoot() {
 
   if (vista === 'cotizacion-publica' && tokenCotizacionPublica) {
     return <VistaCotizacionPublica token={tokenCotizacionPublica} />;
+  }
+
+  if (vista === 'solicitud-enlace' && tokenSolicitudEnlace) {
+    return <SolicitudPorEnlace token={tokenSolicitudEnlace} />;
   }
 
   if (vista === 'validando') {

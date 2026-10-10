@@ -2,11 +2,32 @@ import { GoogleGenAI } from '@google/genai';
 import { env } from '../config/env.js';
 import * as mensajesRepo from '../repositories/solicitudMensajes.repository.js';
 import * as solicitudesRepo from '../repositories/solicitudes.repository.js';
+import * as ordenesRepo from '../repositories/ordenes.repository.js';
+import { consumirInvocacionNexia } from './nexiaRateLimit.service.js';
 import type { SolicitudMensaje } from '../repositories/solicitudMensajes.repository.js';
 import type { Solicitud } from '../repositories/solicitudes.repository.js';
 
 export class SolicitudNoEncontradaError extends Error {}
+// `message` lleva el texto que el controller devuelve tal cual en el 400.
 export class ContenidoInvalidoError extends Error {}
+// Bloque 2A: autorización contextual (403) y solo lectura derivada (409).
+export class SinAccesoChatError extends Error {}
+export class ChatSoloLecturaError extends Error {}
+
+// Bloque 2A: máximo de caracteres por mensaje. Se mide sobre el contenido ya
+// recortado con trim() (lo que se persiste), en unidades UTF-16 de
+// String.length. No se trunca ni se modifica el contenido: si excede, 400.
+export const MENSAJE_MAX_CARACTERES = 2000;
+
+// Estados de orden existentes (no se crea ningún estado de chat) que dejan la
+// conversación en solo lectura. La solicitud CANCELADA también la deja así.
+const ESTADOS_ORDEN_SOLO_LECTURA = ['FINALIZADA', 'CERRADA', 'CANCELADA'];
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export interface UsuarioChat {
+  id: string;
+  rol: string;
+}
 
 // Mismo timeout/estrategia de reintentos ya usados y probados en
 // analisisIa.service.ts — sin reintentos automáticos (evita un segundo
@@ -25,12 +46,56 @@ const LIMITE_MENSAJES_CONTEXTO = 20;
 // en todo este módulo — un mensaje normal jamás la atraviesa.
 const REGEX_INVOCACION_NEXIA = /^\s*nexia\b/i;
 
-export async function listarMensajes(solicitudId: string): Promise<SolicitudMensaje[]> {
+// Resuelve la solicitud y la orden asociada (si existe) y aplica la
+// autorización contextual de LECTURA:
+//   - COMERCIAL y ADMIN: siempre.
+//   - OPERATIVO: sin orden, sí; con orden, solo si es su responsable
+//     (orden de otro OPERATIVO o sin responsable -> 403).
+//   - cualquier otro rol: 403.
+// La existencia de la orden decide el régimen; no se asume que la solicitud
+// haya cambiado a COTIZADA (hay datos históricos con orden y otro estado).
+async function resolverContextoChat(solicitudId: string, usuario: UsuarioChat) {
+  if (!UUID_RE.test(solicitudId)) {
+    throw new SolicitudNoEncontradaError();
+  }
   const solicitud = await solicitudesRepo.findById(solicitudId);
   if (!solicitud) {
     throw new SolicitudNoEncontradaError();
   }
-  return mensajesRepo.listarPorSolicitud(solicitudId);
+  const orden = await ordenesRepo.findContextoChatPorSolicitud(solicitudId);
+
+  if (!['ADMIN', 'COMERCIAL', 'OPERATIVO'].includes(usuario.rol)) {
+    throw new SinAccesoChatError();
+  }
+  if (usuario.rol === 'OPERATIVO' && orden && (!orden.responsable_id || orden.responsable_id !== usuario.id)) {
+    throw new SinAccesoChatError();
+  }
+
+  return { solicitud, orden };
+}
+
+// Única definición de "solo lectura derivada de estados existentes" (no hay estado de chat
+// persistente): solicitud CANCELADA u orden FINALIZADA/CERRADA/CANCELADA.
+function chatCerradoPorEstado(solicitud: Solicitud, orden: ordenesRepo.OrdenContextoChat | null): boolean {
+  return solicitud.estado === 'CANCELADA' || (orden !== null && ESTADOS_ORDEN_SOLO_LECTURA.includes(orden.estado));
+}
+
+// Bloque 2B.1: `modo` es solo una ayuda de UX para el frontend (EDITABLE / SOLO_LECTURA); no
+// sustituye la autorización — POST vuelve a verificar rol, acceso y estado. SIN_ACCESO sigue siendo
+// el HTTP 403 (resolverContextoChat lanza antes de llegar aquí).
+export type ModoChat = 'EDITABLE' | 'SOLO_LECTURA';
+
+export interface ResultadoListado {
+  mensajes: SolicitudMensaje[];
+  modo: ModoChat;
+}
+
+export async function listarMensajes(solicitudId: string, usuario: UsuarioChat): Promise<ResultadoListado> {
+  const { solicitud, orden } = await resolverContextoChat(solicitudId, usuario);
+  const mensajes = await mensajesRepo.listarPorSolicitud(solicitudId);
+  // ADMIN solo lee; COMERCIAL/OPERATIVO escriben salvo que un estado cierre la conversación.
+  const soloLectura = usuario.rol === 'ADMIN' || chatCerradoPorEstado(solicitud, orden);
+  return { mensajes, modo: soloLectura ? 'SOLO_LECTURA' : 'EDITABLE' };
 }
 
 export interface ResultadoMensaje {
@@ -38,34 +103,57 @@ export interface ResultadoMensaje {
   respuestaNexia: SolicitudMensaje | null;
 }
 
-// `autorTipo` llega siempre desde `req.user.rol` (COMERCIAL u OPERATIVO,
-// la ruta ya lo garantiza vía requireRole) — nunca del cuerpo de la
-// petición, mismo criterio de seguridad ya usado en `anticipo_confirmado_por`
-// y `revisado_por`.
+// La identidad y el rol llegan siempre desde `req.user` (JWT) — nunca del
+// cuerpo de la petición, mismo criterio de seguridad ya usado en
+// `anticipo_confirmado_por` y `revisado_por`.
+//
+// Orden de comprobaciones (Bloque 2A): [JWT y rol en la ruta] -> solicitud
+// existente -> orden relacionada -> autorización contextual -> solo lectura ->
+// validación de contenido -> límite de longitud -> detección de NexIA ->
+// rate limit de NexIA -> persistir -> respuesta de NexIA. Nada se persiste ni
+// se llama a Gemini antes de superar las anteriores.
 export async function crearMensaje(
   solicitudId: string,
-  autorId: string,
-  autorTipo: 'COMERCIAL' | 'OPERATIVO',
-  contenido: string
+  usuario: UsuarioChat,
+  contenido: unknown
 ): Promise<ResultadoMensaje> {
-  const solicitud = await solicitudesRepo.findById(solicitudId);
-  if (!solicitud) {
-    throw new SolicitudNoEncontradaError();
+  // Solo COMERCIAL y OPERATIVO escriben (ADMIN solo lee). La ruta ya lo filtra;
+  // se repite aquí como defensa en profundidad.
+  if (usuario.rol !== 'COMERCIAL' && usuario.rol !== 'OPERATIVO') {
+    throw new SinAccesoChatError();
   }
 
+  const { solicitud, orden } = await resolverContextoChat(solicitudId, usuario);
+
+  if (chatCerradoPorEstado(solicitud, orden)) {
+    throw new ChatSoloLecturaError();
+  }
+
+  if (typeof contenido !== 'string') {
+    throw new ContenidoInvalidoError('contenido es requerido.');
+  }
   const contenidoLimpio = contenido.trim();
   if (!contenidoLimpio) {
-    throw new ContenidoInvalidoError();
+    throw new ContenidoInvalidoError('contenido no puede estar vacío.');
+  }
+  if (contenidoLimpio.length > MENSAJE_MAX_CARACTERES) {
+    throw new ContenidoInvalidoError(`contenido no puede superar ${MENSAJE_MAX_CARACTERES} caracteres.`);
+  }
+
+  const invocaNexia = REGEX_INVOCACION_NEXIA.test(contenidoLimpio);
+  if (invocaNexia) {
+    // Lanza LimiteNexiaError (429) sin persistir nada si se superó el límite.
+    consumirInvocacionNexia(usuario.id);
   }
 
   const mensaje = await mensajesRepo.crear({
     solicitudId,
-    autorId,
-    autorTipo,
+    autorId: usuario.id,
+    autorTipo: usuario.rol,
     contenido: contenidoLimpio,
   });
 
-  if (!REGEX_INVOCACION_NEXIA.test(contenidoLimpio)) {
+  if (!invocaNexia) {
     return { mensaje, respuestaNexia: null };
   }
 

@@ -41,6 +41,33 @@ export function tipoEvidenciaPorMime(mimetype: string): 'FOTO' | 'PDF' | null {
   return TIPO_POR_MIME[mimetype] ?? null;
 }
 
+// Bloque 3A: tipo REAL del archivo según su firma (magic bytes), independiente del MIME o de la
+// extensión que declare el cliente. Solo los tres formatos permitidos:
+//   JPEG: FF D8 FF                        PNG: 89 50 4E 47 0D 0A 1A 0A          PDF: "%PDF-"
+// Devuelve el MIME correspondiente o null si el contenido no coincide con ninguno.
+export function detectarMimePorFirma(contenido: Buffer): 'image/jpeg' | 'image/png' | 'application/pdf' | null {
+  if (contenido.length >= 3 && contenido[0] === 0xff && contenido[1] === 0xd8 && contenido[2] === 0xff) {
+    return 'image/jpeg';
+  }
+  if (
+    contenido.length >= 8 &&
+    contenido[0] === 0x89 &&
+    contenido[1] === 0x50 &&
+    contenido[2] === 0x4e &&
+    contenido[3] === 0x47 &&
+    contenido[4] === 0x0d &&
+    contenido[5] === 0x0a &&
+    contenido[6] === 0x1a &&
+    contenido[7] === 0x0a
+  ) {
+    return 'image/png';
+  }
+  if (contenido.length >= 5 && contenido.subarray(0, 5).toString('latin1') === '%PDF-') {
+    return 'application/pdf';
+  }
+  return null;
+}
+
 // Nombre generado por el servidor (UUID + extensión validada) — nunca el
 // nombre original del archivo del cliente. Es la única referencia que se
 // guarda en `ordenes_evidencias.nombre_archivo`.

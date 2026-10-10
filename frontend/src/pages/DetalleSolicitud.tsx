@@ -1,27 +1,70 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState } from 'react';
 import { fetchAutenticado, SesionInvalidaError } from '../lib/authClient';
 import type { Solicitud } from './BandejaSolicitudes';
+import ChatTecnico from './ChatTecnico';
 
 interface DetalleSolicitudProps {
   token: string;
   id: string;
-  // Bloque MVP (chat Comercial<->Operativo). `puedeGestionar` controla las
-  // secciones ya existentes (cambiar estado, análisis IA) — ADMIN/COMERCIAL,
-  // sin cambios de fondo. `puedeChatear` controla la sección nueva de chat —
-  // COMERCIAL/OPERATIVO, nunca ADMIN.
-  puedeGestionar: boolean;
-  puedeChatear: boolean;
+  // Corrección de responsabilidades por rol (autorización explícita —
+  // "AUTORIZACIÓN DE IMPLEMENTACIÓN — DETALLE DE SOLICITUDES POR ROL"):
+  // el antiguo `puedeGestionar` único (ADMIN+COMERCIAL) se separa en 4
+  // permisos independientes para que ADMIN quede como vista de
+  // consulta/supervisión y COMERCIAL conserve todas las acciones.
+  //
+  // puedeGestionarSolicitud: controla únicamente la sección "Cambiar
+  //   estado" — exclusivo COMERCIAL (antes ADMIN+COMERCIAL).
+  // puedeConsultarAnalisis: controla si se muestra el bloque "Análisis IA"
+  //   (solo lectura del historial) — ADMIN+COMERCIAL, igual que antes,
+  //   coincide con los permisos reales del backend (analisisIaRouter exige
+  //   ADMIN/COMERCIAL; OPERATIVO recibiría 403).
+  // puedeGenerarAnalisis: controla el botón "GENERAR ANÁLISIS" dentro del
+  //   bloque anterior — exclusivo COMERCIAL.
+  // puedeRevisarAnalisis: controla el botón "MARCAR REVISADO" dentro del
+  //   bloque anterior — exclusivo COMERCIAL.
+  //
+  // IMPORTANTE: esto es una corrección de interfaz, no de seguridad — el
+  // backend sigue aceptando estas acciones desde un JWT de ADMIN
+  // (solicitudes.routes.ts y analisisIa.routes.ts comparten
+  // requireRole('ADMIN','COMERCIAL')); queda documentado como [PENDIENTE]
+  // una corrección posterior de permisos backend, no realizada aquí.
+  //
+  // Bloque 2B: la comunicación técnica la resuelve <ChatTecnico> a partir del rol, el estado de
+  // la solicitud y la orden asociada; ADMIN ahora la ve (solo lectura). El backend es la autoridad.
+  puedeGestionarSolicitud: boolean;
+  puedeConsultarAnalisis: boolean;
+  puedeGenerarAnalisis: boolean;
+  puedeRevisarAnalisis: boolean;
+  rolUsuario: string;
+  // Al llegar desde el detalle de una orden (misma conversación de la solicitud) se enfoca el chat.
+  enfocarChat?: boolean;
   onVolver: () => void;
   onSesionInvalida: () => void;
 }
 
-interface Mensaje {
-  id: string;
-  solicitud_id: string;
-  autor_id: string | null;
-  autor_tipo: string;
-  contenido: string;
-  creado_en: string;
+// FORMULARIO-UX-06.1 (autorización explícita — auditoría previa "AUDITORÍA FORMULARIO —
+// PENDIENTES UX-06"): misma regla que BandejaSolicitudes.tsx::formatearCantidad — `cantidad`
+// guarda 1 tanto para "1 unidad real" como para "el cliente marcó Aún no lo sé"; solo
+// `especificaciones` distingue ambos casos. No se toca la BD ni `cantidad_desconocida`, solo se
+// lee un texto ya guardado para mostrar "(a confirmar)" cuando corresponde.
+const MARCA_CANTIDAD_DESCONOCIDA = 'el cliente indicó que aún no la conoce';
+
+function formatearCantidad(cantidad: number, especificaciones: string | null): string {
+  if (especificaciones?.includes(MARCA_CANTIDAD_DESCONOCIDA)) {
+    return `${cantidad} (a confirmar)`;
+  }
+  return String(cantidad);
+}
+
+// Forma real de informacion_estructurada, tal como la exige
+// backend/src/services/analisisIa.service.ts (ESQUEMA_RESPUESTA): son los
+// ÚNICOS 3 campos que la IA puede devolver dentro de este objeto — no existe
+// ningún "servicio identificado" en el contrato real (el servicio ya viene
+// de la propia solicitud y se muestra en la cabecera, sin duplicarlo aquí).
+interface InformacionEstructurada {
+  material_estimado?: string;
+  proceso_estimado?: string;
+  informacion_faltante?: string[];
 }
 
 interface AnalisisIa {
@@ -30,7 +73,7 @@ interface AnalisisIa {
   fecha_hora: string;
   resultado: string | null;
   prioridad_sugerida: string | null;
-  informacion_estructurada: Record<string, unknown> | null;
+  informacion_estructurada: InformacionEstructurada | null;
   modelo_ia: string | null;
   version_ia: string | null;
   estado: string;
@@ -39,22 +82,57 @@ interface AnalisisIa {
   revisado_en: string | null;
 }
 
+interface ClienteResumen {
+  nombre: string;
+  empresa: string | null;
+}
+
 // Transiciones permitidas — deben coincidir con TRANSICIONES en
 // backend/src/services/solicitudes.service.ts. Es solo una guía de UX
 // (oculta opciones obviamente inválidas): el backend sigue siendo la
 // única autoridad real sobre qué transición se acepta.
+//
+// COTIZADA ya no es una transición manual (autorización explícita —
+// "IMPLEMENTACIÓN AUTORIZADA — SOLICITUDES COMERCIAL"): ahora es un efecto
+// automático de formalizar una cotización como ENVIADA en
+// GestionCotizaciones.tsx. El backend ya la rechaza también (ver
+// solicitudes.service.ts), esto solo evita ofrecer un botón que fallaría.
 const TRANSICIONES: Record<string, string[]> = {
   NUEVA: ['EN_REVISION', 'CANCELADA'],
-  EN_REVISION: ['COTIZADA', 'CANCELADA'],
+  EN_REVISION: ['CANCELADA'],
   COTIZADA: [],
   CANCELADA: [],
 };
 
+// Badges — mismos tokens/paleta ya usados en el resto del proyecto
+// (BandejaSolicitudes.tsx / GestionCotizaciones.tsx / GestionDashboard.tsx),
+// sin introducir ningún color nuevo.
+const BADGE_ESTADO_ANALISIS: Record<string, string> = {
+  PENDIENTE: 'border border-outline text-on-surface-variant',
+  PROCESANDO: 'border border-primary-container text-primary-container bg-primary-container/10',
+  COMPLETADO: 'border border-primary-container bg-primary-container text-on-primary-container',
+  ERROR: 'border border-error text-error bg-error-container/20',
+};
+
+const BADGE_PRIORIDAD: Record<string, string> = {
+  ALTA: 'border border-error text-error bg-error-container/20',
+  MEDIA: 'border border-primary-container text-primary-container bg-primary-container/10',
+  BAJA: 'border border-outline text-on-surface-variant',
+};
+
+function claseBadgeEstadoAnalisis(estado: string): string {
+  return BADGE_ESTADO_ANALISIS[estado] ?? 'border border-outline text-on-surface-variant';
+}
+
 export default function DetalleSolicitud({
   token,
   id,
-  puedeGestionar,
-  puedeChatear,
+  puedeGestionarSolicitud,
+  puedeConsultarAnalisis,
+  puedeGenerarAnalisis,
+  puedeRevisarAnalisis,
+  rolUsuario,
+  enfocarChat,
   onVolver,
   onSesionInvalida,
 }: DetalleSolicitudProps) {
@@ -64,6 +142,16 @@ export default function DetalleSolicitud({
   const [cambiando, setCambiando] = useState(false);
   const [mensajeCambio, setMensajeCambio] = useState<string | null>(null);
 
+  // Resolución de cliente — mismo patrón "bulk-fetch + Map" ya usado en
+  // GestionCotizaciones.tsx/GestionLeads.tsx. /api/clientes exige ADMIN/COMERCIAL
+  // (clientes.routes.ts, sin cambios) — ningún endpoint nuevo.
+  const [clientesPorId, setClientesPorId] = useState<Map<string, ClienteResumen>>(new Map());
+  // OPERATIVO-09.1 (corrige H1 de OPERATIVO-09): OPERATIVO nunca puede consultar
+  // /api/clientes (403 ya garantizado por el backend, sin cambios) — antes se llamaba
+  // igual y se descartaba la respuesta en silencio. Mismo criterio ya usado para
+  // `puedeConsultarAnalisis` con `cargarAnalisis()`, aplicado aquí a `cargarCliente()`.
+  const puedeConsultarCliente = rolUsuario === 'ADMIN' || rolUsuario === 'COMERCIAL';
+
   const [analisis, setAnalisis] = useState<AnalisisIa[] | null>(null);
   const [loadingAnalisis, setLoadingAnalisis] = useState(true);
   const [errorAnalisis, setErrorAnalisis] = useState<string | null>(null);
@@ -71,13 +159,6 @@ export default function DetalleSolicitud({
   const [mensajeGenerar, setMensajeGenerar] = useState<string | null>(null);
   const [revisandoId, setRevisandoId] = useState<string | null>(null);
   const [mensajeRevisar, setMensajeRevisar] = useState<string | null>(null);
-
-  const [mensajes, setMensajes] = useState<Mensaje[] | null>(null);
-  const [loadingMensajes, setLoadingMensajes] = useState(true);
-  const [errorMensajes, setErrorMensajes] = useState<string | null>(null);
-  const [contenidoNuevo, setContenidoNuevo] = useState('');
-  const [enviandoMensaje, setEnviandoMensaje] = useState(false);
-  const [errorEnvioMensaje, setErrorEnvioMensaje] = useState<string | null>(null);
 
   async function cargar() {
     setLoading(true);
@@ -112,6 +193,25 @@ export default function DetalleSolicitud({
     }
   }
 
+  async function cargarCliente() {
+    try {
+      const response = await fetchAutenticado('/api/clientes', token);
+      if (!response.ok) return;
+      const data = (await response.json()) as {
+        clientes: { id: string; nombre: string; empresa: string | null }[];
+      };
+      const mapa = new Map<string, ClienteResumen>();
+      data.clientes.forEach((c) => mapa.set(c.id, { nombre: c.nombre, empresa: c.empresa }));
+      setClientesPorId(mapa);
+    } catch (err) {
+      if (err instanceof SesionInvalidaError) {
+        onSesionInvalida();
+      }
+      // Falla silenciosa: el nombre de cliente es un dato de apoyo, no
+      // bloquea la consulta/gestión real de la solicitud.
+    }
+  }
+
   async function cargarAnalisis() {
     setLoadingAnalisis(true);
     setErrorAnalisis(null);
@@ -141,83 +241,21 @@ export default function DetalleSolicitud({
     }
   }
 
-  // Bloque MVP: lista de mensajes del chat de la solicitud. Solo se
-  // consulta si el usuario puede chatear (COMERCIAL/OPERATIVO) — ADMIN
-  // nunca dispara esta petición, ni siquiera en segundo plano.
-  async function cargarMensajes() {
-    setLoadingMensajes(true);
-    setErrorMensajes(null);
-
-    try {
-      const response = await fetchAutenticado(`/api/solicitudes/${id}/mensajes`, token);
-
-      if (response.status === 403) {
-        setErrorMensajes('No autorizado para consultar esta conversación.');
-        return;
-      }
-      if (!response.ok) {
-        setErrorMensajes('No se pudo cargar la conversación.');
-        return;
-      }
-
-      const data = (await response.json()) as { mensajes: Mensaje[] };
-      setMensajes(data.mensajes);
-    } catch (err) {
-      if (err instanceof SesionInvalidaError) {
-        onSesionInvalida();
-        return;
-      }
-      setErrorMensajes('No se pudo cargar la conversación.');
-    } finally {
-      setLoadingMensajes(false);
-    }
-  }
-
   useEffect(() => {
     cargar();
-    cargarAnalisis();
-    if (puedeChatear) {
-      cargarMensajes();
+    // Ambas llamadas de apoyo se restringen a quien realmente puede consultar el
+    // recurso (ADMIN/COMERCIAL) — evita una llamada que el backend igual
+    // rechazaría con 403 para OPERATIVO. Antes `cargarCliente()` se llamaba
+    // incondicionalmente (hallazgo H1, OPERATIVO-09); `cargarAnalisis()` ya
+    // seguía este mismo criterio.
+    if (puedeConsultarCliente) {
+      cargarCliente();
+    }
+    if (puedeConsultarAnalisis) {
+      cargarAnalisis();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, token]);
-
-  // Tras enviar, se vuelve a pedir la lista completa (en vez de mezclar
-  // manualmente el estado local) — mantiene el MVP simple, sin lógica de
-  // merge optimista. Si el mensaje invocó a NexIA, su respuesta ya está
-  // persistida cuando esta petición responde, así que aparece de una vez.
-  async function handleEnviarMensaje(e: FormEvent) {
-    e.preventDefault();
-    if (!contenidoNuevo.trim()) return;
-
-    setEnviandoMensaje(true);
-    setErrorEnvioMensaje(null);
-
-    try {
-      const response = await fetchAutenticado(`/api/solicitudes/${id}/mensajes`, token, {
-        method: 'POST',
-        body: JSON.stringify({ contenido: contenidoNuevo }),
-      });
-
-      const data = await response.json().catch(() => null);
-
-      if (!response.ok) {
-        setErrorEnvioMensaje(data?.message || 'No se pudo enviar el mensaje.');
-        return;
-      }
-
-      setContenidoNuevo('');
-      await cargarMensajes();
-    } catch (err) {
-      if (err instanceof SesionInvalidaError) {
-        onSesionInvalida();
-        return;
-      }
-      setErrorEnvioMensaje('No se pudo enviar el mensaje.');
-    } finally {
-      setEnviandoMensaje(false);
-    }
-  }
 
   async function handleGenerarAnalisis() {
     setGenerando(true);
@@ -324,246 +362,261 @@ export default function DetalleSolicitud({
     }
   }
 
+  const nombreCliente = solicitud ? clientesPorId.get(solicitud.cliente_id) : undefined;
+  // Una solicitud NUEVA nunca tuvo la oportunidad de generar un análisis
+  // (generarAnalisis() exige EN_REVISION, y NUEVA->EN_REVISION es la única
+  // vía de entrada, sin retorno) — se puede afirmar con certeza que su
+  // historial está vacío sin esperar la respuesta de cargarAnalisis().
+  const solicitudNuevaSinAnalisis = solicitud?.estado === 'NUEVA';
+
   return (
     <div>
       <button
         type="button"
         onClick={onVolver}
-        className="mb-6 inline-flex items-center font-label-caps text-label-caps text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
+        className="mb-6 inline-flex items-center font-['Inter'] text-[14px] font-semibold text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
       >
         <span className="material-symbols-outlined mr-1 text-[18px]">arrow_back</span>
         VOLVER A LA BANDEJA
       </button>
 
       {loading && (
-        <p className="font-code-sm text-code-sm text-on-surface-variant uppercase">CARGANDO...</p>
+        <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">CARGANDO...</p>
       )}
 
       {!loading && error && (
-        <p className="font-code-sm text-xs text-error uppercase">{error}</p>
+        <p className="font-['Inter'] text-[13px] font-normal text-error uppercase">{error}</p>
       )}
 
       {!loading && !error && solicitud && (
-        <div className="bg-surface sharp-border p-6 space-y-4">
-          <div className="flex justify-between items-start border-b border-outline pb-4">
-            <h3 className="font-headline-md text-headline-md text-on-surface uppercase">{solicitud.servicio}</h3>
-            <span className="font-code-sm text-code-sm text-primary-container uppercase">{solicitud.estado}</span>
-          </div>
+        <div className="space-y-6">
+          {/* Cabecera — servicio, estado, cliente, cantidad, fecha
+              requerida, descripción. Sin repetir estos datos dentro de
+              Análisis IA. */}
+          <div className="bg-surface sharp-border p-6 space-y-4">
+            <div className="flex justify-between items-start border-b border-outline pb-4">
+              <h3 className="font-headline-md text-headline-md text-on-surface uppercase">{solicitud.servicio}</h3>
+              <span className="font-code-sm text-code-sm text-primary-container uppercase">{solicitud.estado}</span>
+            </div>
 
-          <p className="font-body-md text-body-md text-on-surface-variant">{solicitud.descripcion}</p>
+            <p className="font-body-md text-body-md text-on-surface-variant">{solicitud.descripcion}</p>
 
-          <dl className="grid grid-cols-2 gap-4 font-code-sm text-code-sm">
-            <div>
-              <dt className="text-on-surface-variant uppercase">Cantidad</dt>
-              <dd className="text-on-surface">{solicitud.cantidad}</dd>
-            </div>
-            <div>
-              <dt className="text-on-surface-variant uppercase">Fecha requerida</dt>
-              <dd className="text-on-surface">{solicitud.fecha_requerida ?? 'No especificada'}</dd>
-            </div>
-            <div>
-              <dt className="text-on-surface-variant uppercase">Creada</dt>
-              <dd className="text-on-surface">{new Date(solicitud.creado_en).toLocaleString()}</dd>
-            </div>
-            <div>
-              <dt className="text-on-surface-variant uppercase">Actualizada</dt>
-              <dd className="text-on-surface">{new Date(solicitud.actualizado_en).toLocaleString()}</dd>
-            </div>
-          </dl>
+            <dl className="grid grid-cols-2 md:grid-cols-4 gap-4 font-code-sm text-code-sm">
+              <div>
+                <dt className="text-on-surface-variant uppercase">Cliente</dt>
+                <dd className="text-on-surface">
+                  {nombreCliente ? (nombreCliente.empresa?.trim() ? nombreCliente.empresa : nombreCliente.nombre) : '—'}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-on-surface-variant uppercase">Cantidad</dt>
+                <dd className="text-on-surface">{formatearCantidad(solicitud.cantidad, solicitud.especificaciones)}</dd>
+              </div>
+              <div>
+                <dt className="text-on-surface-variant uppercase">Fecha requerida</dt>
+                <dd className="text-on-surface">{solicitud.fecha_requerida ?? 'No especificada'}</dd>
+              </div>
+              <div>
+                <dt className="text-on-surface-variant uppercase">Creada</dt>
+                <dd className="text-on-surface">{new Date(solicitud.creado_en).toLocaleString()}</dd>
+              </div>
+            </dl>
 
-          {solicitud.especificaciones && (
-            <div>
-              <p className="font-code-sm text-code-sm text-on-surface-variant uppercase mb-1">Especificaciones</p>
-              <p className="font-body-md text-body-md text-on-surface">{solicitud.especificaciones}</p>
-            </div>
-          )}
-
-          {puedeGestionar && (
-          <div className="border-t border-outline pt-4">
-            <p className="font-code-sm text-code-sm text-on-surface-variant uppercase mb-3">Cambiar estado</p>
-            <div className="flex flex-wrap gap-3">
-              {(TRANSICIONES[solicitud.estado] ?? []).map((destino) => (
-                <button
-                  key={destino}
-                  type="button"
-                  disabled={cambiando}
-                  onClick={() => handleCambiarEstado(destino)}
-                  className="inline-flex items-center px-4 py-2 border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors font-label-caps text-label-caps disabled:opacity-50 cursor-pointer"
-                >
-                  {destino}
-                </button>
-              ))}
-              {(TRANSICIONES[solicitud.estado] ?? []).length === 0 && (
-                <p className="font-code-sm text-code-sm text-on-surface-variant uppercase">
-                  Este estado no admite más transiciones.
-                </p>
-              )}
-            </div>
-            {mensajeCambio && (
-              <p className="font-code-sm text-xs text-on-surface-variant uppercase mt-3">{mensajeCambio}</p>
-            )}
-          </div>
-          )}
-
-          {puedeGestionar && (
-          <div className="mt-2 bg-background border border-outline border-l-4 border-l-primary-container p-5">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="material-symbols-outlined text-primary-container text-[22px]">psychology</span>
-              <h4 className="font-headline-md text-headline-md text-on-surface uppercase">Análisis IA</h4>
-            </div>
-            <p className="font-body-md text-sm text-on-surface-variant mb-4">
-              Analiza la solicitud para identificar información faltante, prioridad y aspectos que Comercial debe
-              revisar antes de cotizar.
-            </p>
-
-            {solicitud.estado === 'EN_REVISION' && (
-              <button
-                type="button"
-                disabled={generando}
-                onClick={handleGenerarAnalisis}
-                className="inline-flex items-center px-4 py-2 bg-primary-container text-on-primary-container font-label-caps text-label-caps hover:bg-primary-fixed-dim transition-colors disabled:opacity-50 cursor-pointer mb-3"
-              >
-                {generando ? 'GENERANDO...' : 'GENERAR ANÁLISIS'}
-              </button>
-            )}
-            {mensajeGenerar && (
-              <p className="font-code-sm text-xs text-on-surface-variant uppercase mb-3">{mensajeGenerar}</p>
+            {solicitud.especificaciones && (
+              <div>
+                <p className="font-code-sm text-code-sm text-on-surface-variant uppercase mb-1">Especificaciones</p>
+                <p className="font-body-md text-body-md text-on-surface">{solicitud.especificaciones}</p>
+              </div>
             )}
 
-            {loadingAnalisis && (
-              <p className="font-code-sm text-code-sm text-on-surface-variant uppercase">CARGANDO ANÁLISIS...</p>
-            )}
-            {!loadingAnalisis && errorAnalisis && (
-              <p className="font-code-sm text-xs text-error uppercase">{errorAnalisis}</p>
-            )}
-            {!loadingAnalisis && !errorAnalisis && analisis && analisis.length === 0 && (
-              <p className="font-code-sm text-code-sm text-on-surface-variant uppercase">
-                Sin análisis generados todavía.
-              </p>
-            )}
-            {!loadingAnalisis && !errorAnalisis && analisis && analisis.length > 0 && (
-              <div className="space-y-3">
-                {analisis.map((a) => (
-                  <div key={a.id} className="bg-background border border-outline p-4">
-                    <div className="flex justify-between items-start mb-2">
-                      <span className="font-code-sm text-code-sm text-primary-container uppercase">{a.estado}</span>
-                      <span className="font-code-sm text-[10px] text-on-surface-variant uppercase">
-                        {new Date(a.fecha_hora).toLocaleString()}
-                      </span>
-                    </div>
-                    {a.resultado && (
-                      <p className="font-body-md text-body-md text-on-surface mb-2">{a.resultado}</p>
-                    )}
-                    {a.prioridad_sugerida && (
-                      <p className="font-code-sm text-code-sm text-on-surface-variant uppercase mb-2">
-                        Prioridad sugerida: {a.prioridad_sugerida}
-                      </p>
-                    )}
-                    {a.informacion_estructurada && (
-                      <pre className="font-code-sm text-[10px] text-on-surface-variant whitespace-pre-wrap break-all mb-2">
-                        {JSON.stringify(a.informacion_estructurada, null, 2)}
-                      </pre>
-                    )}
-                    <p className="font-code-sm text-[10px] text-on-surface-variant uppercase">
-                      {a.revisado ? `Revisado el ${a.revisado_en ? new Date(a.revisado_en).toLocaleString() : ''}` : 'No revisado'}
+            {puedeGestionarSolicitud && (
+              <div className="border-t border-outline pt-4">
+                <p className="font-code-sm text-code-sm text-on-surface-variant uppercase mb-3">Cambiar estado</p>
+                <div className="flex flex-wrap gap-3">
+                  {(TRANSICIONES[solicitud.estado] ?? []).map((destino) => (
+                    <button
+                      key={destino}
+                      type="button"
+                      disabled={cambiando}
+                      onClick={() => handleCambiarEstado(destino)}
+                      className="inline-flex items-center px-4 py-2 border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors font-['Inter'] text-[14px] font-semibold disabled:opacity-50 cursor-pointer"
+                    >
+                      {destino}
+                    </button>
+                  ))}
+                  {(TRANSICIONES[solicitud.estado] ?? []).length === 0 && (
+                    <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">
+                      Este estado no admite más transiciones.
                     </p>
-                    {a.estado === 'COMPLETADO' && !a.revisado && (
+                  )}
+                </div>
+                {mensajeCambio && (
+                  <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase mt-3">{mensajeCambio}</p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Dos columnas en desktop (no necesariamente 50/50): Análisis IA
+              a la izquierda con más ancho relativo (contiene tarjetas de
+              datos estructurados), Comunicación Técnica a la derecha. En
+              mobile/tablet se apilan verticalmente, Análisis IA primero. */}
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-6 items-start">
+            {puedeConsultarAnalisis && (
+              <div className="md:col-span-3 bg-background border border-outline border-l-4 border-l-primary-container p-5">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="material-symbols-outlined text-primary-container text-[22px]">psychology</span>
+                  <h4 className="font-headline-md text-headline-md text-on-surface uppercase">Análisis IA</h4>
+                </div>
+                <p className="font-body-md text-sm text-on-surface-variant mb-4">
+                  Analiza la solicitud para identificar información faltante, prioridad y aspectos que Comercial debe
+                  revisar antes de cotizar.
+                </p>
+
+                {solicitudNuevaSinAnalisis ? (
+                  <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">
+                    Sin análisis generado — disponible al pasar a EN_REVISION.
+                  </p>
+                ) : (
+                  <>
+                    {puedeGenerarAnalisis && solicitud.estado === 'EN_REVISION' && (
                       <button
                         type="button"
-                        disabled={revisandoId === a.id}
-                        onClick={() => handleMarcarRevisado(a.id)}
-                        className="mt-2 inline-flex items-center px-3 py-1 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-label-caps text-label-caps text-[10px] disabled:opacity-50 cursor-pointer"
+                        disabled={generando}
+                        onClick={handleGenerarAnalisis}
+                        className="inline-flex items-center px-4 py-2 bg-primary-container text-on-primary-container font-['Inter'] text-[14px] font-semibold hover:bg-primary-fixed-dim transition-colors disabled:opacity-50 cursor-pointer mb-3"
                       >
-                        MARCAR REVISADO
+                        {generando
+                          ? 'GENERANDO...'
+                          : analisis && analisis.length > 0
+                            ? 'REGENERAR ANÁLISIS'
+                            : 'GENERAR ANÁLISIS'}
                       </button>
                     )}
-                  </div>
-                ))}
+                    {mensajeGenerar && (
+                      <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase mb-3">{mensajeGenerar}</p>
+                    )}
+
+                    {loadingAnalisis && (
+                      <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">CARGANDO ANÁLISIS...</p>
+                    )}
+                    {!loadingAnalisis && errorAnalisis && (
+                      <p className="font-['Inter'] text-[13px] font-normal text-error uppercase">{errorAnalisis}</p>
+                    )}
+                    {!loadingAnalisis && !errorAnalisis && analisis && analisis.length === 0 && (
+                      <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">
+                        SIN ANÁLISIS GENERADO
+                      </p>
+                    )}
+                    {!loadingAnalisis && !errorAnalisis && analisis && analisis.length > 0 && (
+                      <div className="space-y-3">
+                        {analisis.map((a) => {
+                          const info = a.informacion_estructurada;
+                          const faltante = info?.informacion_faltante?.filter((v) => v && v.trim()) ?? [];
+                          return (
+                            <div key={a.id} className="bg-surface border border-outline p-4">
+                              <div className="flex flex-wrap justify-between items-start gap-2 mb-2">
+                                <span
+                                  className={`inline-flex px-2 py-0.5 font-code-sm text-[10px] uppercase ${claseBadgeEstadoAnalisis(a.estado)}`}
+                                >
+                                  {a.estado}
+                                </span>
+                                <span className="font-code-sm text-[10px] text-on-surface-variant uppercase">
+                                  {new Date(a.fecha_hora).toLocaleString()}
+                                </span>
+                              </div>
+
+                              {a.resultado && (
+                                <p className="font-body-md text-body-md text-on-surface mb-3">{a.resultado}</p>
+                              )}
+
+                              {(a.prioridad_sugerida || info?.material_estimado || info?.proceso_estimado) && (
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
+                                  {a.prioridad_sugerida && (
+                                    <div className="bg-background border border-outline p-2">
+                                      <p className="font-code-sm text-[9px] text-on-surface-variant uppercase mb-1">
+                                        Prioridad
+                                      </p>
+                                      <span
+                                        className={`inline-flex px-2 py-0.5 font-code-sm text-[10px] uppercase ${BADGE_PRIORIDAD[a.prioridad_sugerida] ?? 'border border-outline text-on-surface-variant'}`}
+                                      >
+                                        {a.prioridad_sugerida}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {info?.material_estimado && (
+                                    <div className="bg-background border border-outline p-2">
+                                      <p className="font-code-sm text-[9px] text-on-surface-variant uppercase mb-1">
+                                        Material estimado
+                                      </p>
+                                      <p className="font-body-md text-sm text-on-surface">{info.material_estimado}</p>
+                                    </div>
+                                  )}
+                                  {info?.proceso_estimado && (
+                                    <div className="bg-background border border-outline p-2">
+                                      <p className="font-code-sm text-[9px] text-on-surface-variant uppercase mb-1">
+                                        Proceso estimado
+                                      </p>
+                                      <p className="font-body-md text-sm text-on-surface">{info.proceso_estimado}</p>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {faltante.length > 0 && (
+                                <div className="bg-error-container/20 border border-error p-3 mb-3">
+                                  <p className="font-code-sm text-[10px] text-error uppercase font-bold mb-2">
+                                    Información faltante
+                                  </p>
+                                  <ul className="list-disc list-inside space-y-1">
+                                    {faltante.map((item, i) => (
+                                      <li key={i} className="font-body-md text-sm text-on-surface">
+                                        {item}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+
+                              <p className="font-code-sm text-[10px] text-on-surface-variant uppercase">
+                                {a.revisado
+                                  ? `Revisado el ${a.revisado_en ? new Date(a.revisado_en).toLocaleString() : ''}`
+                                  : 'No revisado'}
+                              </p>
+                              {puedeRevisarAnalisis && a.estado === 'COMPLETADO' && !a.revisado && (
+                                <button
+                                  type="button"
+                                  disabled={revisandoId === a.id}
+                                  onClick={() => handleMarcarRevisado(a.id)}
+                                  className="mt-2 inline-flex items-center px-3 py-1 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-['Inter'] text-[14px] font-semibold disabled:opacity-50 cursor-pointer"
+                                >
+                                  MARCAR REVISADO
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {mensajeRevisar && (
+                      <p className="font-code-sm text-xs text-on-surface-variant uppercase mt-3">{mensajeRevisar}</p>
+                    )}
+                  </>
+                )}
               </div>
             )}
-            {mensajeRevisar && (
-              <p className="font-code-sm text-xs text-on-surface-variant uppercase mt-3">{mensajeRevisar}</p>
+
+            {solicitud && (
+              <ChatTecnico
+                token={token}
+                solicitudId={id}
+                rolUsuario={rolUsuario}
+                solicitudEstado={solicitud.estado}
+                enfocar={enfocarChat}
+                onSesionInvalida={onSesionInvalida}
+              />
             )}
           </div>
-          )}
-
-          {puedeChatear && (
-            <div className="mt-2 bg-background border border-outline border-l-4 border-l-primary-container p-5">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="material-symbols-outlined text-primary-container text-[22px]">forum</span>
-                <h4 className="font-headline-md text-headline-md text-on-surface uppercase">Comunicación técnica</h4>
-              </div>
-              <p className="font-code-sm text-[11px] text-on-surface-variant uppercase mb-4">
-                Canal directo entre Comercial ↔ Operativo sobre esta solicitud.
-              </p>
-
-              <div className="flex items-start gap-3 bg-primary-container/10 border border-primary-container p-3 mb-4">
-                <span className="text-[20px] leading-none shrink-0">🤖</span>
-                <p className="font-body-md text-sm text-on-surface">
-                  <strong>NexIA está disponible.</strong> Iníciala escribiendo "NexIA" al comienzo de tu mensaje (ej.
-                  "NexIA, ¿qué información nos falta?"). Los demás mensajes son solo comunicación entre Comercial y
-                  Operativo.
-                </p>
-              </div>
-
-              {loadingMensajes && (
-                <p className="font-code-sm text-code-sm text-on-surface-variant uppercase">CARGANDO CONVERSACIÓN...</p>
-              )}
-              {!loadingMensajes && errorMensajes && (
-                <p className="font-code-sm text-xs text-error uppercase">{errorMensajes}</p>
-              )}
-              {!loadingMensajes && !errorMensajes && mensajes && mensajes.length === 0 && (
-                <p className="font-code-sm text-code-sm text-on-surface-variant uppercase mb-3">
-                  Sin mensajes todavía.
-                </p>
-              )}
-              {!loadingMensajes && !errorMensajes && mensajes && mensajes.length > 0 && (
-                <div className="space-y-2 mb-4 max-h-96 overflow-y-auto">
-                  {mensajes.map((m) => (
-                    <div
-                      key={m.id}
-                      className={`p-3 border ${
-                        m.autor_tipo === 'NEXIA'
-                          ? 'bg-primary-container/10 border-primary-container'
-                          : 'bg-background border-outline'
-                      }`}
-                    >
-                      <div className="flex justify-between items-baseline mb-1">
-                        <span className="font-code-sm text-[10px] text-primary-container uppercase font-bold">
-                          {m.autor_tipo}
-                        </span>
-                        <span className="font-code-sm text-[10px] text-on-surface-variant uppercase">
-                          {new Date(m.creado_en).toLocaleString()}
-                        </span>
-                      </div>
-                      <p className="font-body-md text-body-md text-on-surface whitespace-pre-wrap">{m.contenido}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <form className="space-y-2" onSubmit={handleEnviarMensaje}>
-                <textarea
-                  value={contenidoNuevo}
-                  onChange={(e) => setContenidoNuevo(e.target.value)}
-                  required
-                  rows={2}
-                  placeholder='Escriba un mensaje, o "NexIA, ..." para invocarla'
-                  className="w-full bg-background border border-outline p-3 text-on-surface text-sm focus:border-primary-container focus:outline-hidden font-body-md resize-none"
-                />
-                {errorEnvioMensaje && (
-                  <p className="font-code-sm text-xs text-error uppercase">{errorEnvioMensaje}</p>
-                )}
-                <button
-                  disabled={enviandoMensaje || !contenidoNuevo.trim()}
-                  type="submit"
-                  className="inline-flex items-center justify-center px-6 py-2 bg-primary-container text-on-primary-container font-label-caps text-label-caps hover:bg-primary-fixed-dim transition-colors disabled:opacity-50 cursor-pointer"
-                >
-                  {enviandoMensaje ? 'ENVIANDO...' : 'ENVIAR'}
-                </button>
-              </form>
-            </div>
-          )}
         </div>
       )}
     </div>

@@ -11,6 +11,7 @@ import { analisisIaRouter } from './routes/analisisIa.routes.js';
 import { leadsRouter } from './routes/leads.routes.js';
 import { alertasRouter } from './routes/alertas.routes.js';
 import { dashboardRouter } from './routes/dashboard.routes.js';
+import { asistenteFormularioRouter } from './routes/asistenteFormulario.routes.js';
 
 const app = express();
 
@@ -22,7 +23,12 @@ app.use((req, res, next) => {
   if (origin && env.corsOrigins.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+    // SOLICITUD-RECUPERACION-01A (autorización explícita): se agrega
+    // 'Idempotency-Key' — sin esto, el navegador bloquea la petición real en
+    // el preflight (OPTIONS) de CORS antes de que llegue al backend
+    // (confirmado con una prueba real: "Failed to fetch" en el frontend
+    // pese a que el backend nunca llegaba a recibir la petición).
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,Idempotency-Key');
   }
 
   if (req.method === 'OPTIONS') {
@@ -52,8 +58,21 @@ app.use('/api/analisis-ia', analisisIaRouter);
 app.use('/api/leads', leadsRouter);
 app.use('/api/alertas', alertasRouter);
 app.use('/api/dashboard', dashboardRouter);
+app.use('/api/asistente-formulario', asistenteFormularioRouter);
 
 const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
+  // CORRECCIÓN FASE 4 (hallazgo #1, manifestación B): un cuerpo JSON sintácticamente inválido, o
+  // válido pero no objeto/array en la raíz (ej. el literal `null`), es rechazado por el propio
+  // express.json() con un SyntaxError que ya trae status 400 (lo fija body-parser, no código del
+  // proyecto) — es un error de ENTRADA del cliente, no un fallo interno. Antes este handler
+  // genérico lo convertía igual en 500. Cualquier otro error (sin status 400 de body-parser)
+  // conserva exactamente el mismo comportamiento 500 de siempre — no se oculta ningún error
+  // interno real.
+  if (err instanceof SyntaxError && (err as { status?: number }).status === 400) {
+    res.status(400).json({ message: 'El cuerpo de la petición no es JSON válido.' });
+    return;
+  }
+
   console.error('Error no controlado:', err instanceof Error ? err.message : err);
   res.status(500).json({ message: 'Error interno del servidor.' });
 };

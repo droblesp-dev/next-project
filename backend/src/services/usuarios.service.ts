@@ -13,7 +13,14 @@ import {
 } from '../repositories/usuarios.repository.js';
 import { findByNombre, esRolValido } from '../repositories/roles.repository.js';
 
-const SALT_ROUNDS = 10;
+// CORRECCIÓN FASE 4 (hallazgo #2): costo 12, igual al que ya usan los scripts de seed
+// (scripts/seed-usuarios-roles.ts, scripts/generate-admin-hash.ts) y al nuevo DUMMY_HASH de
+// auth.service.ts. Antes era 10 — desalineado con esos scripts, lo que producía un side-channel
+// de timing real y medible (Fase 4) entre un login con correo existente y uno inexistente.
+// bcrypt.compare() sigue funcionando igual para cualquier hash ya existente (el costo viaja
+// embebido en el propio hash) — no afecta a ningún usuario ya creado, solo a los que se creen de
+// aquí en adelante.
+const SALT_ROUNDS = 12;
 
 export class EmailDuplicadoError extends Error {}
 export class RolInvalidoError extends Error {}

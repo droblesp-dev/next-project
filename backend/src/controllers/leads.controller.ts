@@ -7,6 +7,9 @@ import {
   asignarComercial,
   registrarSeguimiento,
   listarSeguimientosDeLead,
+  generarEnlaceSolicitud,
+  validarEnlaceSolicitud,
+  crearSolicitudPorEnlace,
   LeadNoEncontradoError,
   FuenteInvalidaError,
   ClienteNoEncontradoError,
@@ -16,10 +19,24 @@ import {
   TransicionInvalidaError,
   SinEvidenciaError,
   TipoSeguimientoInvalidoError,
+  VinculosBloqueadosError,
+  IntegridadClienteSolicitudError,
+  LeadNoElegibleParaEnlaceError,
+  EnlaceInvalidoError,
+  EnlaceExpiradoError,
+  EnlaceNoDisponibleError,
 } from '../services/leads.service.js';
+import { validarCuerpoSolicitud, normalizarTelefonoEc } from './solicitudes.controller.js';
 
 const FUENTES_VALIDAS = ['WEB', 'WHATSAPP', 'FACEBOOK', 'INSTAGRAM', 'TIKTOK', 'REFERIDO', 'OTRO'];
 const TIPOS_SEGUIMIENTO_VALIDOS = ['LLAMADA', 'WHATSAPP', 'EMAIL', 'VISITA', 'OTRO'];
+
+// ASISTENTE-COMERCIAL-02 (autorización explícita — hallazgo de la auditoría
+// ASISTENTE-COMERCIAL-01): mismo regex que App.tsx/AsistenteComercial.tsx en
+// el frontend.
+// ASISTENTE-COMERCIAL-06 (autorización explícita): el correo ya no es
+// opcional en este endpoint — ver `crearController`.
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function listarController(_req: Request, res: Response): Promise<void> {
   const leads = await listarLeads();
@@ -47,8 +64,44 @@ export async function crearController(req: Request, res: Response): Promise<void
     res.status(400).json({ message: 'telefono es requerido y debe tener un formato válido.' });
     return;
   }
-  if (email !== undefined && email !== null && (typeof email !== 'string' || email.length > 150)) {
+  // ASISTENTE-COMERCIAL-02 (autorización explícita — hallazgo de la auditoría
+  // ASISTENTE-COMERCIAL-01): reutiliza EXACTAMENTE la misma regla del
+  // formulario principal (un solo número EC, normalizado a +593XXXXXXXXX) —
+  // antes este endpoint no validaba formato y aceptaba texto libre o varios
+  // números separados por coma. Nunca se confía en que el frontend ya
+  // normalizó: se vuelve a validar aquí.
+  const telefonoResultado = normalizarTelefonoEc(telefono);
+  if (!telefonoResultado.valido) {
+    res.status(400).json({ message: 'Ingresa un solo número de contacto válido de Ecuador.' });
+    return;
+  }
+  // ASISTENTE-COMERCIAL-06 (autorización explícita — decisión nacida de la
+  // auditoría "ASESOR → ASESOR / Sin correo → con correo"): el correo deja
+  // de ser opcional en este endpoint. Verificado antes de este cambio que
+  // POST /api/leads solo tiene un consumidor real: el formulario público
+  // "Hablar con un asesor" (AsistenteComercial.tsx) — no se modifica el
+  // contrato de ningún otro flujo porque no existe otro que dependa de que
+  // el correo sea opcional aquí.
+  if (typeof email !== 'string' || !email.trim()) {
+    res.status(400).json({ message: 'El correo electrónico es obligatorio.' });
+    return;
+  }
+  if (email.length > 150) {
     res.status(400).json({ message: 'email debe ser texto de hasta 150 caracteres.' });
+    return;
+  }
+  // ASISTENTE-COMERCIAL-05 (autorización explícita, sin cambios): se agrega
+  // `.toLowerCase()` — antes solo se recortaban espacios, sin normalizar
+  // mayúsculas/minúsculas, a diferencia del formulario principal
+  // (solicitudes.service.ts usa `email.trim().toLowerCase()`). Sin este
+  // ajuste, "Juan@Ejemplo.com" y "juan@ejemplo.com" nunca se habrían
+  // reconocido como el mismo correo al buscar coincidencia con un lead
+  // existente — misma normalización en ambos formularios, requisito de la
+  // regla central de ese bloque ("correo normalizado"), que esta tarea no
+  // modifica.
+  const emailTrim = email.trim().toLowerCase();
+  if (!EMAIL_REGEX.test(emailTrim)) {
+    res.status(400).json({ message: 'Ingresa un correo electrónico válido.' });
     return;
   }
   if (typeof fuente !== 'string' || !FUENTES_VALIDAS.includes(fuente)) {
@@ -58,8 +111,8 @@ export async function crearController(req: Request, res: Response): Promise<void
 
   const lead = await crearLead({
     nombre: nombre.trim(),
-    telefono: telefono.trim(),
-    email: typeof email === 'string' ? email.trim() : null,
+    telefono: telefonoResultado.normalizado,
+    email: emailTrim,
     fuente,
   });
   res.status(201).json({ lead });
@@ -103,6 +156,10 @@ export async function actualizarController(req: Request, res: Response): Promise
     }
     if (error instanceof ClasificacionNoPermitidaError) {
       res.status(400).json({ message: 'Ese valor de clasificación no puede establecerse manualmente.' });
+      return;
+    }
+    if (error instanceof VinculosBloqueadosError || error instanceof IntegridadClienteSolicitudError) {
+      res.status(409).json({ message: error.message });
       return;
     }
     if (error instanceof TransicionInvalidaError) {
@@ -195,6 +252,74 @@ export async function registrarSeguimientoController(req: Request, res: Response
       res.status(400).json({ message: 'tipo inválido.' });
       return;
     }
+    throw error;
+  }
+}
+
+// Genera el enlace de solicitud (ADMIN/COMERCIAL, ya filtrado por el router).
+// Devuelve el token y su fecha de expiración; el frontend arma la URL.
+export async function generarEnlaceSolicitudController(req: Request, res: Response): Promise<void> {
+  try {
+    const enlace = await generarEnlaceSolicitud(req.params.id);
+    res.status(201).json(enlace);
+  } catch (error) {
+    if (error instanceof LeadNoEncontradoError) {
+      res.status(404).json({ message: 'Lead no encontrado.' });
+      return;
+    }
+    if (error instanceof LeadNoElegibleParaEnlaceError) {
+      res
+        .status(409)
+        .json({ message: 'Solo se puede generar el enlace para un lead ACTIVO y TIBIO que aún no tiene solicitud.' });
+      return;
+    }
+    throw error;
+  }
+}
+
+// Respuestas públicas de enlace: `code` permite al frontend distinguir
+// inválido / expirado / ya utilizado sin revelar datos del lead.
+function responderErrorEnlace(error: unknown, res: Response): boolean {
+  if (error instanceof EnlaceExpiradoError) {
+    res.status(410).json({ code: 'ENLACE_EXPIRADO', message: 'Este enlace ha expirado.' });
+    return true;
+  }
+  if (error instanceof EnlaceInvalidoError) {
+    res.status(401).json({ code: 'ENLACE_INVALIDO', message: 'Este enlace no es válido.' });
+    return true;
+  }
+  if (error instanceof EnlaceNoDisponibleError) {
+    res.status(409).json({ code: 'ENLACE_USADO', message: 'Este enlace ya fue utilizado o ya no está disponible.' });
+    return true;
+  }
+  return false;
+}
+
+export async function validarEnlaceSolicitudController(req: Request, res: Response): Promise<void> {
+  try {
+    const resultado = await validarEnlaceSolicitud(req.params.token);
+    res.status(200).json(resultado);
+  } catch (error) {
+    if (responderErrorEnlace(error, res)) return;
+    throw error;
+  }
+}
+
+// Público: el lead se obtiene EXCLUSIVAMENTE del token verificado; cualquier
+// lead_id / cliente_id / estado enviado en el cuerpo se ignora (whitelist en
+// validarCuerpoSolicitud). No se devuelve la solicitud ni ids internos.
+export async function crearSolicitudPorEnlaceController(req: Request, res: Response): Promise<void> {
+  const validacion = validarCuerpoSolicitud((req.body ?? {}) as Record<string, unknown>);
+  if (!validacion.ok) {
+    res.status(400).json({ message: validacion.message });
+    return;
+  }
+
+  try {
+    await crearSolicitudPorEnlace(req.params.token, validacion.data);
+    res.status(201).json({ creada: true });
+  } catch (error) {
+    if (responderErrorEnlace(error, res)) return;
     throw error;
   }
 }

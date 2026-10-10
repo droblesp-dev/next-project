@@ -1,4 +1,13 @@
-const API_BASE = 'http://localhost:3000';
+// FORMULARIO-01: única fuente de verdad para la URL del backend en todo el
+// frontend — antes se repetía como literal en 3 archivos (este, App.tsx y
+// AsistenteComercial.tsx). No existía ninguna variable de entorno para esto
+// (verificado: .env.example no tenía nada equivalente, sin VITE_* en uso en
+// ningún archivo del proyecto) — se agrega `VITE_API_BASE_URL` como la
+// primera, sin inventar un sistema de configuración paralelo: mismo
+// mecanismo estándar de Vite (import.meta.env), con el mismo valor de
+// siempre como fallback si no está definida, para no romper el desarrollo
+// local existente.
+export const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000';
 
 export interface Usuario {
   id: string;

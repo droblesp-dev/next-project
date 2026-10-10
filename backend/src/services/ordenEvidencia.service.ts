@@ -1,3 +1,4 @@
+import { pool } from '../config/db.js';
 import * as evidenciasRepo from '../repositories/ordenEvidencia.repository.js';
 import * as ordenesRepo from '../repositories/ordenes.repository.js';
 import type { OrdenEvidencia } from '../repositories/ordenEvidencia.repository.js';
@@ -28,28 +29,54 @@ export async function listarEvidencias(ordenId: string): Promise<OrdenEvidencia[
   return evidenciasRepo.listarPorOrden(ordenId);
 }
 
-// El límite se verifica ANTES de escribir el archivo a disco (ver
-// ordenEvidencia.controller.ts) — si ya se alcanzó, no se toca el
-// sistema de archivos en absoluto.
+// Bloque 3A: alta de evidencia en UNA transacción, consistente entre BD y disco.
+//   1. BEGIN + bloqueo de la fila de la orden (FOR UPDATE): las subidas de una misma orden se
+//      serializan, así que estado y límite por tipo se comprueban sobre datos que nadie más puede
+//      cambiar hasta el COMMIT (antes: SELECT -> comprobar -> INSERT, y 12 subidas simultáneas
+//      guardaron 9 fotos con un límite de 5).
+//   2. Se comprueban estado y límite, se inserta la fila y SOLO ENTONCES se llama a
+//      `guardarArchivo()` (escritura física, la aporta el controller).
+//   3. Si la escritura falla (o cualquier paso posterior), ROLLBACK: no queda fila. Si el fallo es
+//      posterior a escribir el archivo (p. ej. el COMMIT), la excepción llega al controller, que
+//      elimina el archivo. Solo un corte del proceso entre escribir y confirmar podría dejar un
+//      archivo sin fila (nunca una fila sin archivo).
 export async function agregarEvidencia(
   ordenId: string,
   tipo: 'FOTO' | 'PDF',
-  nombreArchivo: string
+  nombreArchivo: string,
+  guardarArchivo: () => Promise<void>
 ): Promise<OrdenEvidencia> {
-  const orden = await ordenesRepo.findById(ordenId);
-  if (!orden) {
-    throw new OrdenNoEncontradaError();
-  }
-  if (!ESTADOS_PERMITEN_EVIDENCIA.includes(orden.estado)) {
-    throw new EstadoNoPermiteEvidenciaError();
-  }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
 
-  const actuales = await evidenciasRepo.contarPorTipo(ordenId, tipo);
-  if (actuales >= LIMITES_POR_TIPO[tipo]) {
-    throw new LimiteEvidenciasError();
-  }
+    const orden = await ordenesRepo.findEstadoParaActualizar(client, ordenId);
+    if (!orden) {
+      throw new OrdenNoEncontradaError();
+    }
+    if (!ESTADOS_PERMITEN_EVIDENCIA.includes(orden.estado)) {
+      throw new EstadoNoPermiteEvidenciaError();
+    }
 
-  return evidenciasRepo.crear({ ordenId, tipo, nombreArchivo });
+    const actuales = await evidenciasRepo.contarPorTipo(ordenId, tipo, client);
+    if (actuales >= LIMITES_POR_TIPO[tipo]) {
+      throw new LimiteEvidenciasError();
+    }
+
+    const evidencia = await evidenciasRepo.crear({ ordenId, tipo, nombreArchivo }, client);
+    await guardarArchivo();
+    await client.query('COMMIT');
+    return evidencia;
+  } catch (error) {
+    try {
+      await client.query('ROLLBACK');
+    } catch {
+      // la conexión ya falló; se libera abajo
+    }
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function contarEvidenciasTotal(ordenId: string): Promise<number> {

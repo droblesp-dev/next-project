@@ -5,6 +5,7 @@ import { pool } from '../config/db.js';
 import { env } from '../config/env.js';
 import * as cotizacionesRepo from '../repositories/cotizaciones.repository.js';
 import * as solicitudesRepo from '../repositories/solicitudes.repository.js';
+import { crearOrdenAutomatica } from './ordenAutomatica.service.js';
 import type { Cotizacion } from '../repositories/cotizaciones.repository.js';
 
 export class SolicitudNoEncontradaError extends Error {}
@@ -30,6 +31,7 @@ export class MetodoSaldoRequeridoError extends Error {}
 export class MetodoSaldoInvalidoError extends Error {}
 export class ComprobanteSaldoRequeridoError extends Error {}
 export class SaldoNoRechazadoError extends Error {}
+export class CotizacionNoEditableError extends Error {}
 
 const ESTADOS_VALIDOS = ['BORRADOR', 'ENVIADA', 'ACEPTADA', 'RECHAZADA', 'VENCIDA', 'CANCELADA'];
 
@@ -88,33 +90,35 @@ function round2(valor: number): number {
   return Math.round((valor + Number.EPSILON) * 100) / 100;
 }
 
-export interface CrearCotizacionInput {
-  solicitudId: string;
+interface CondicionesComercialesInput {
   valor: number;
-  descripcion: string | null;
-  creadoPor: string;
   ivaPorcentaje?: number;
   anticipoPorcentaje?: number;
   diasVigencia?: number;
   metodoAnticipo?: string | null;
 }
 
-// Fase 7 exige explícitamente que la solicitud exista y esté en estado
-// EN_REVISION antes de permitir crear una cotización. No cambia
-// solicitudes.estado (decisión aprobada 2 de la autorización de Fase 7).
-// Fase D.2 agrega el cálculo automático de subtotal/IVA/total/anticipo/
-// saldo/vigencia — todo se calcula aquí, nunca se confía en un valor
-// derivado enviado por el cliente (solo se reciben los 3 parámetros de
-// entrada: porcentajes y días).
-export async function crearCotizacion(input: CrearCotizacionInput): Promise<Cotizacion> {
-  const solicitud = await solicitudesRepo.findById(input.solicitudId);
-  if (!solicitud) {
-    throw new SolicitudNoEncontradaError();
-  }
-  if (solicitud.estado !== 'EN_REVISION') {
-    throw new SolicitudNoEnRevisionError();
-  }
+interface CondicionesComercialesCalculadas {
+  subtotal: number;
+  ivaPorcentaje: number;
+  ivaValor: number;
+  total: number;
+  anticipoPorcentaje: number;
+  anticipoValor: number;
+  saldoPendiente: number;
+  metodoAnticipo: string | null;
+  estadoAnticipo: string;
+  diasVigencia: number;
+}
 
+// Cálculo + validación de las condiciones comerciales de una cotización
+// (Fase D.2, extraído para Fase "EDICIÓN DE COTIZACIONES BORRADOR" —
+// autorización explícita): compartido entre crearCotizacion() y
+// editarCotizacionBorrador() para que ambas apliquen EXACTAMENTE las mismas
+// reglas, sin duplicarlas. Nunca confía en un total/subtotal/anticipo_valor
+// enviado por el cliente — todo se recalcula aquí a partir únicamente de
+// valor + los 3 porcentajes/días de entrada.
+function calcularCondicionesComerciales(input: CondicionesComercialesInput): CondicionesComercialesCalculadas {
   const ivaPorcentaje = input.ivaPorcentaje ?? IVA_PORCENTAJE_DEFAULT;
   if (!IVA_PORCENTAJES_PERMITIDOS.includes(ivaPorcentaje)) {
     throw new IvaPorcentajeInvalidoError();
@@ -157,11 +161,7 @@ export async function crearCotizacion(input: CrearCotizacionInput): Promise<Coti
   const anticipoValor = round2(total * (anticipoPorcentaje / 100));
   const saldoPendiente = round2(total - anticipoValor);
 
-  return cotizacionesRepo.create(pool, {
-    solicitudId: input.solicitudId,
-    valor: input.valor,
-    descripcion: input.descripcion,
-    creadoPor: input.creadoPor,
+  return {
     subtotal,
     ivaPorcentaje,
     ivaValor,
@@ -172,7 +172,86 @@ export async function crearCotizacion(input: CrearCotizacionInput): Promise<Coti
     metodoAnticipo,
     estadoAnticipo,
     diasVigencia,
+  };
+}
+
+export interface CrearCotizacionInput {
+  solicitudId: string;
+  valor: number;
+  descripcion: string | null;
+  creadoPor: string;
+  ivaPorcentaje?: number;
+  anticipoPorcentaje?: number;
+  diasVigencia?: number;
+  metodoAnticipo?: string | null;
+}
+
+// Fase 7 exige explícitamente que la solicitud exista y esté en estado
+// EN_REVISION antes de permitir crear una cotización. No cambia
+// solicitudes.estado (decisión aprobada 2 de la autorización de Fase 7).
+// Fase D.2 agrega el cálculo automático de subtotal/IVA/total/anticipo/
+// saldo/vigencia — todo se calcula aquí, nunca se confía en un valor
+// derivado enviado por el cliente (solo se reciben los 3 parámetros de
+// entrada: porcentajes y días).
+export async function crearCotizacion(input: CrearCotizacionInput): Promise<Cotizacion> {
+  const solicitud = await solicitudesRepo.findById(input.solicitudId);
+  if (!solicitud) {
+    throw new SolicitudNoEncontradaError();
+  }
+  if (solicitud.estado !== 'EN_REVISION') {
+    throw new SolicitudNoEnRevisionError();
+  }
+
+  const condiciones = calcularCondicionesComerciales(input);
+
+  return cotizacionesRepo.create(pool, {
+    solicitudId: input.solicitudId,
+    valor: input.valor,
+    descripcion: input.descripcion,
+    creadoPor: input.creadoPor,
+    ...condiciones,
   });
+}
+
+export interface EditarCotizacionBorradorInput {
+  valor: number;
+  descripcion: string | null;
+  ivaPorcentaje?: number;
+  anticipoPorcentaje?: number;
+  diasVigencia?: number;
+  metodoAnticipo?: string | null;
+}
+
+// Edición de condiciones comerciales — EXCLUSIVA de BORRADOR (autorización
+// explícita — "IMPLEMENTACIÓN AUTORIZADA — EDICIÓN DE COTIZACIONES
+// BORRADOR"). No importa ni toca solicitudes.repository/service: a
+// diferencia de cambiarAEnviadaConSolicitud(), esta función nunca tiene
+// razón para afectar la solicitud asociada (que permanece EN_REVISION
+// durante todo el ciclo de vida de un BORRADOR). Reutiliza exactamente las
+// mismas reglas/cálculos que crearCotizacion() vía
+// calcularCondicionesComerciales() — ninguna regla duplicada.
+export async function editarCotizacionBorrador(
+  id: string,
+  input: EditarCotizacionBorradorInput
+): Promise<Cotizacion> {
+  const condiciones = calcularCondicionesComerciales(input);
+
+  const actualizada = await cotizacionesRepo.updateCondiciones(id, {
+    valor: input.valor,
+    descripcion: input.descripcion,
+    ...condiciones,
+  });
+  if (actualizada) {
+    return actualizada;
+  }
+
+  // El UPDATE no afectó ninguna fila: no existe, o su estado actual ya no
+  // es BORRADOR (misma técnica de mensaje que el resto del service).
+  const actual = await cotizacionesRepo.findById(id);
+  if (!actual) {
+    throw new CotizacionNoEncontradaError();
+  }
+  throw new CotizacionNoEditableError();
 }
 
 export async function cambiarEstadoCotizacion(id: string, nuevoEstado: string): Promise<Cotizacion> {
@@ -186,6 +265,15 @@ export async function cambiarEstadoCotizacion(id: string, nuevoEstado: string): 
 
   if (estadosOrigenValidos.length === 0) {
     throw new TransicionInvalidaError();
+  }
+
+  // ENVIADA formaliza la cotización y se envía al cliente (decisión
+  // aprobada — "IMPLEMENTACIÓN AUTORIZADA — SOLICITUDES COMERCIAL"): en la
+  // MISMA transacción, la solicitud asociada pasa de EN_REVISION a
+  // COTIZADA. Ninguna otra transición (VENCIDA/CANCELADA) toca la
+  // solicitud, así que sigue el camino simple de siempre.
+  if (nuevoEstado === 'ENVIADA') {
+    return cambiarAEnviadaConSolicitud(id, estadosOrigenValidos);
   }
 
   try {
@@ -202,6 +290,54 @@ export async function cambiarEstadoCotizacion(id: string, nuevoEstado: string): 
 
   // El UPDATE no afectó ninguna fila: no existe, o su estado actual no
   // admite esta transición (misma técnica de mensaje que solicitudes).
+  const actual = await cotizacionesRepo.findById(id);
+  if (!actual) {
+    throw new CotizacionNoEncontradaError();
+  }
+  throw new TransicionInvalidaError();
+}
+
+// Transacción dedicada: cotización -> ENVIADA + (condicionalmente)
+// solicitud EN_REVISION -> COTIZADA. Ambos UPDATE son condicionales (mismo
+// patrón ya usado en todo el proyecto): si la cotización ya cambió de
+// estado entre la verificación y este punto (condición de carrera), el
+// primer UPDATE no afecta filas y no se toca la solicitud. Si la solicitud
+// ya no está en EN_REVISION (caso límite — p. ej. fue cancelada por otra
+// vía mientras tanto), el segundo UPDATE simplemente no afecta filas: la
+// cotización igual queda ENVIADA — la solicitud es una consecuencia de
+// enviar la cotización, nunca una condición bloqueante para poder enviarla.
+// Llamadas repetidas con la cotización ya ENVIADA no reingresan aquí (ya no
+// figura como origen válido), por lo que el efecto es naturalmente
+// idempotente sin lógica adicional.
+async function cambiarAEnviadaConSolicitud(
+  id: string,
+  estadosOrigenValidos: string[]
+): Promise<Cotizacion> {
+  const client = await pool.connect();
+  let actualizado: Cotizacion | null = null;
+  try {
+    await client.query('BEGIN');
+
+    actualizado = await cotizacionesRepo.updateEstado(id, 'ENVIADA', estadosOrigenValidos, client);
+    if (actualizado) {
+      await solicitudesRepo.updateEstado(actualizado.solicitud_id, 'COTIZADA', ['EN_REVISION'], client);
+    }
+
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  if (actualizado) {
+    return actualizado;
+  }
+
+  // El UPDATE de la cotización no afectó ninguna fila: no existe, o su
+  // estado actual no admite esta transición. Se resuelve fuera de la
+  // transacción (ya se confirmó un COMMIT vacío, no queda nada que revertir).
   const actual = await cotizacionesRepo.findById(id);
   if (!actual) {
     throw new CotizacionNoEncontradaError();
@@ -523,6 +659,12 @@ export async function aceptarCotizacionPublica(token: string, codigo: string): P
     if (!actualizada) {
       throw new AccionNoPermitidaError();
     }
+    // Bloque 1.1: sin anticipo, la orden se crea al aceptar. Con anticipo
+    // PENDIENTE se espera a que ADMIN/COMERCIAL lo valide (gestionarAnticipo).
+    // crearOrdenAutomatica nunca lanza: la aceptación ya está confirmada.
+    if (actualizada.estado_anticipo === 'NO_APLICA') {
+      await crearOrdenAutomatica(actualizada.id, 'ACEPTACION');
+    }
     return construirCotizacionPublica(actualizada.id);
   } catch (error) {
     if (isUniqueViolation(error)) {
@@ -595,6 +737,11 @@ export async function gestionarAnticipo(
 
   const actualizada = await cotizacionesRepo.actualizarEstadoAnticipo(id, nuevoEstadoAnticipo, confirmadoPor);
   if (actualizada) {
+    // Bloque 1.1: al validar el anticipo se crea la orden. RECHAZAR no crea
+    // nada. crearOrdenAutomatica nunca lanza: la validación ya está guardada.
+    if (accion === 'VALIDAR') {
+      await crearOrdenAutomatica(actualizada.id, 'ANTICIPO_VALIDADO');
+    }
     return actualizada;
   }
 
