@@ -123,6 +123,20 @@ stages:
 
                 rm -f "$ENV_FILE"
 
+                echo "Esperando a que /api/health responda..."
+                for i in $(seq 1 10); do
+                  if curl -sf "http://localhost:$(devHostPort)/api/health" > /dev/null; then
+                    echo "Health check OK"
+                    exit 0
+                  fi
+                  echo "Intento $i/10 fallido, reintentando en 3s..."
+                  sleep 3
+                done
+
+                echo "El contenedor no respondio en /api/health tras 10 intentos"
+                docker logs nextproject-backend-staging --tail 100
+                exit 1
+
 - stage: DeployProduction
   displayName: 'Deploy Backend to Production'
   dependsOn: Build
@@ -191,3 +205,17 @@ stages:
                   $(HARBOR_REGISTRY)/$(harborProject)/$(imageName):$(Build.BuildId)
 
                 rm -f "$ENV_FILE"
+
+                echo "Esperando a que /api/health responda..."
+                for i in $(seq 1 10); do
+                  if curl -sf "http://localhost:$(prodHostPort)/api/health" > /dev/null; then
+                    echo "Health check OK"
+                    exit 0
+                  fi
+                  echo "Intento $i/10 fallido, reintentando en 3s..."
+                  sleep 3
+                done
+
+                echo "El contenedor no respondio en /api/health tras 10 intentos"
+                docker logs nextproject-backend-prod --tail 100
+                exit 1
