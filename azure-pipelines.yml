@@ -11,6 +11,7 @@ trigger:
     include:
       - backend/*
       - frontend/*
+      - azure-pipelines.yml
 
 pool:
   name: "Zyntra Agent Pool"
@@ -94,6 +95,22 @@ stages:
         steps:
         - script: |
             set -e
+            cat > "$(Agent.TempDirectory)/migrate.sh" <<'SCRIPT'
+            set -e
+            psql -v ON_ERROR_STOP=1 -c "CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, applied_at TIMESTAMPTZ DEFAULT now());"
+            for f in $(ls /migrations/*.sql | sort); do
+              version=$(basename "$f")
+              applied=$(psql -tAc "SELECT 1 FROM schema_migrations WHERE version = '$version'")
+              if [ "$applied" = "1" ]; then
+                echo "Skip $version (ya aplicada)"
+              else
+                echo "Aplicando $version"
+                psql -v ON_ERROR_STOP=1 -f "/migrations/$version"
+                psql -c "INSERT INTO schema_migrations(version) VALUES ('$version')"
+              fi
+            done
+            SCRIPT
+
             docker run --rm \
               -e PGHOST="$DB_HOST" \
               -e PGPORT="$DB_PORT" \
@@ -102,22 +119,9 @@ stages:
               -e PGDATABASE="$DB_NAME" \
               -e PGSSLMODE=require \
               -v $(Build.SourcesDirectory)/backend/database/migrations:/migrations:ro \
+              -v "$(Agent.TempDirectory)/migrate.sh:/migrate.sh:ro" \
               postgres:18-alpine \
-              sh -c '
-                set -e
-                psql -v ON_ERROR_STOP=1 -c "CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, applied_at TIMESTAMPTZ DEFAULT now());"
-                for f in $(ls /migrations/*.sql | sort); do
-                  version=$(basename "$f")
-                  applied=$(psql -v version="$version" -tAc "SELECT 1 FROM schema_migrations WHERE version = :'"'"'version'"'"'")
-                  if [ "$applied" = "1" ]; then
-                    echo "Skip $version (ya aplicada)"
-                  else
-                    echo "Aplicando $version"
-                    psql -v ON_ERROR_STOP=1 -f "/migrations/$version"
-                    psql -v version="$version" -c "INSERT INTO schema_migrations(version) VALUES (:'"'"'version'"'"')"
-                  fi
-                done
-              '
+              sh /migrate.sh
           displayName: "Apply pending SQL migrations"
           env:
             DB_HOST: $(DEV_DB_HOST)
@@ -132,6 +136,22 @@ stages:
         steps:
         - script: |
             set -e
+            cat > "$(Agent.TempDirectory)/migrate.sh" <<'SCRIPT'
+            set -e
+            psql -v ON_ERROR_STOP=1 -c "CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, applied_at TIMESTAMPTZ DEFAULT now());"
+            for f in $(ls /migrations/*.sql | sort); do
+              version=$(basename "$f")
+              applied=$(psql -tAc "SELECT 1 FROM schema_migrations WHERE version = '$version'")
+              if [ "$applied" = "1" ]; then
+                echo "Skip $version (ya aplicada)"
+              else
+                echo "Aplicando $version"
+                psql -v ON_ERROR_STOP=1 -f "/migrations/$version"
+                psql -c "INSERT INTO schema_migrations(version) VALUES ('$version')"
+              fi
+            done
+            SCRIPT
+
             docker run --rm \
               -e PGHOST="$DB_HOST" \
               -e PGPORT="$DB_PORT" \
@@ -140,22 +160,9 @@ stages:
               -e PGDATABASE="$DB_NAME" \
               -e PGSSLMODE=require \
               -v $(Build.SourcesDirectory)/backend/database/migrations:/migrations:ro \
+              -v "$(Agent.TempDirectory)/migrate.sh:/migrate.sh:ro" \
               postgres:18-alpine \
-              sh -c '
-                set -e
-                psql -v ON_ERROR_STOP=1 -c "CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, applied_at TIMESTAMPTZ DEFAULT now());"
-                for f in $(ls /migrations/*.sql | sort); do
-                  version=$(basename "$f")
-                  applied=$(psql -v version="$version" -tAc "SELECT 1 FROM schema_migrations WHERE version = :'"'"'version'"'"'")
-                  if [ "$applied" = "1" ]; then
-                    echo "Skip $version (ya aplicada)"
-                  else
-                    echo "Aplicando $version"
-                    psql -v ON_ERROR_STOP=1 -f "/migrations/$version"
-                    psql -v version="$version" -c "INSERT INTO schema_migrations(version) VALUES (:'"'"'version'"'"')"
-                  fi
-                done
-              '
+              sh /migrate.sh
           displayName: "Apply pending SQL migrations"
           env:
             DB_HOST: $(PROD_DB_HOST)
