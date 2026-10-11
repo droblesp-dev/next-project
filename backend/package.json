@@ -9,7 +9,8 @@
     "start": "node dist/server.js",
     "hash:admin": "tsx scripts/generate-admin-hash.ts",
     "seed:initial": "tsx scripts/seed-initial-data.ts",
-    "seed:usuarios-roles": "tsx scripts/seed-usuarios-roles.ts"
+    "seed:usuarios-roles": "tsx scripts/seed-usuarios-roles.ts",
+    "test": "vitest run"
   },
   "dependencies": {
     "@google/genai": "^2.21.0",
@@ -31,6 +32,7 @@
     "@types/pg": "^8.11.10",
     "@types/swagger-ui-express": "^4.1.8",
     "tsx": "^4.21.0",
-    "typescript": "~5.8.2"
+    "typescript": "~5.8.2",
+    "vitest": "^3.2.7"
   }
 }
