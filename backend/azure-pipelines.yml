@@ -26,6 +26,10 @@ variables:
     value: 'nextproject'
   - name: imageName
     value: 'nextproject-backend'
+  - name: devHostPort
+    value: '5000'
+  - name: prodHostPort
+    value: '5000'
 
 stages:
 - stage: Build
@@ -112,7 +116,7 @@ stages:
                 docker run -d \
                   --name nextproject-backend-staging \
                   --restart always \
-                  -p 5001:3000 \
+                  -p $(devHostPort):3000 \
                   -v "$HOME/nextproject-uploads-staging:/app/uploads" \
                   --env-file "$ENV_FILE" \
                   $(HARBOR_REGISTRY)/$(harborProject)/$(imageName):$(Build.BuildId)
@@ -181,7 +185,7 @@ stages:
                 docker run -d \
                   --name nextproject-backend-prod \
                   --restart always \
-                  -p 5000:3000 \
+                  -p $(prodHostPort):3000 \
                   -v "$HOME/nextproject-uploads-production:/app/uploads" \
                   --env-file "$ENV_FILE" \
                   $(HARBOR_REGISTRY)/$(harborProject)/$(imageName):$(Build.BuildId)
