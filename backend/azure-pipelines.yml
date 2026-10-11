@@ -107,10 +107,13 @@ stages:
                 docker stop nextproject-backend-staging || true
                 docker rm nextproject-backend-staging || true
 
+                mkdir -p "$HOME/nextproject-uploads-staging/comprobantes" "$HOME/nextproject-uploads-staging/evidencias"
+
                 docker run -d \
                   --name nextproject-backend-staging \
                   --restart always \
                   -p 5001:3000 \
+                  -v "$HOME/nextproject-uploads-staging:/app/uploads" \
                   --env-file "$ENV_FILE" \
                   $(HARBOR_REGISTRY)/$(harborProject)/$(imageName):$(Build.BuildId)
 
@@ -173,10 +176,13 @@ stages:
                 docker stop nextproject-backend-prod || true
                 docker rm nextproject-backend-prod || true
 
+                mkdir -p "$HOME/nextproject-uploads-production/comprobantes" "$HOME/nextproject-uploads-production/evidencias"
+
                 docker run -d \
                   --name nextproject-backend-prod \
                   --restart always \
                   -p 5000:3000 \
+                  -v "$HOME/nextproject-uploads-production:/app/uploads" \
                   --env-file "$ENV_FILE" \
                   $(HARBOR_REGISTRY)/$(harborProject)/$(imageName):$(Build.BuildId)
 
