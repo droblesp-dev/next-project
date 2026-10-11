@@ -24,7 +24,7 @@ const SERVICIOS = [
 
 const CLASE_INPUT =
   'w-full bg-background border-0 border-b border-outline text-on-surface px-0 py-2 focus:ring-0 focus:border-primary-container transition-colors font-body-md outline-none';
-const CLASE_LABEL = 'block font-code-sm text-code-sm text-on-surface-variant uppercase mb-2';
+const CLASE_LABEL = "block font-['Inter'] text-[13px] font-semibold text-on-surface-variant uppercase mb-2";
 
 const MENSAJES_ENLACE: Record<'expirado' | 'invalido' | 'usado', { icono: string; titulo: string; texto: string }> = {
   expirado: {
@@ -162,7 +162,7 @@ export default function SolicitudPorEnlace({ token }: SolicitudPorEnlaceProps) {
 
         <div className="bg-surface sharp-border p-6 md:p-8">
           {estado === 'validando' && (
-            <p className="font-code-sm text-code-sm text-on-surface-variant uppercase text-center py-8">
+            <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase text-center py-8">
               VALIDANDO ENLACE...
             </p>
           )}
@@ -186,7 +186,7 @@ export default function SolicitudPorEnlace({ token }: SolicitudPorEnlaceProps) {
               >
                 {MENSAJES_ENLACE[estado as 'expirado' | 'invalido' | 'usado'].icono}
               </span>
-              <h4 className="font-label-caps text-label-caps text-on-surface uppercase">
+              <h4 className="font-['Montserrat'] text-[16px] font-bold text-on-surface uppercase">
                 {MENSAJES_ENLACE[estado as 'expirado' | 'invalido' | 'usado'].titulo}
               </h4>
               <p className="font-body-md text-body-md text-on-surface-variant">
@@ -321,12 +321,12 @@ export default function SolicitudPorEnlace({ token }: SolicitudPorEnlaceProps) {
                 ></textarea>
               </div>
 
-              {submitError && <p className="font-code-sm text-xs text-error uppercase">{submitError}</p>}
+              {submitError && <p className="font-['Inter'] text-[13px] font-normal text-error uppercase">{submitError}</p>}
 
               <button
                 type="submit"
                 disabled={estado === 'enviando'}
-                className="w-full px-6 py-4 bg-primary-container text-on-primary-container font-label-caps text-label-caps hover:bg-primary-fixed-dim transition-colors disabled:opacity-50 cursor-pointer"
+                className="w-full px-6 py-4 bg-primary-container text-on-primary-container font-['Inter'] text-[14px] font-semibold hover:bg-primary-fixed-dim transition-colors disabled:opacity-50 cursor-pointer"
               >
                 {estado === 'enviando' ? 'ENVIANDO...' : 'ENVIAR SOLICITUD'}
               </button>

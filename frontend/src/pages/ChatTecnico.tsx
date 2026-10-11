@@ -204,44 +204,44 @@ export default function ChatTecnico({
         <span className="material-symbols-outlined text-primary-container text-[22px]">{icono}</span>
         <h4 className="font-headline-md text-headline-md text-on-surface uppercase">{titulo}</h4>
       </div>
-      <p className="font-code-sm text-[11px] text-on-surface-variant uppercase mb-2">
+      <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase mb-2">
         Canal directo entre Comercial ↔ Operativo sobre esta solicitud.
       </p>
 
       {modo === 'editable' && (
-        <p className="font-code-sm text-[10px] text-on-surface-variant mb-4">
+        <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant mb-4">
           🤖 NexIA disponible. Inicia tu mensaje con "NexIA".
         </p>
       )}
       {modo === 'solo-lectura' && (
-        <p className="font-code-sm text-xs text-on-surface-variant uppercase border border-outline px-3 py-2 mb-4">
+        <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase border border-outline px-3 py-2 mb-4">
           Conversación en modo solo lectura.
         </p>
       )}
 
       {loadingMensajes && (
-        <p className="font-code-sm text-code-sm text-on-surface-variant uppercase">CARGANDO CONVERSACIÓN...</p>
+        <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">CARGANDO CONVERSACIÓN...</p>
       )}
 
       {!loadingMensajes && modo === 'sin-acceso' && (
-        <p className="font-code-sm text-xs text-error uppercase">
+        <p className="font-['Inter'] text-[13px] font-normal text-error uppercase">
           No tienes autorización para acceder a esta comunicación técnica.
         </p>
       )}
 
       {!loadingMensajes && modo !== 'sin-acceso' && errorMensajes && (
-        <p className="font-code-sm text-xs text-error uppercase">{errorMensajes}</p>
+        <p className="font-['Inter'] text-[13px] font-normal text-error uppercase">{errorMensajes}</p>
       )}
       {!loadingMensajes && modo !== 'sin-acceso' && !errorMensajes && mensajes && mensajes.length === 0 && (
-        <p className="font-code-sm text-code-sm text-on-surface-variant uppercase mb-3">Sin mensajes todavía.</p>
+        <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase mb-3">Sin mensajes todavía.</p>
       )}
       {!loadingMensajes && modo !== 'sin-acceso' && !errorMensajes && mensajes && mensajes.length > 0 && (
         <div className="space-y-2 mb-4 max-h-80 overflow-y-auto">
           {mensajes.map((m) => (
             <div key={m.id} className={`p-3 border border-outline ${claseBurbujaMensaje(m.autor_tipo)}`}>
               <div className="flex justify-between items-baseline mb-1">
-                <span className="font-code-sm text-[10px] text-primary-container uppercase font-bold">{m.autor_tipo}</span>
-                <span className="font-code-sm text-[10px] text-on-surface-variant uppercase">
+                <span className="font-code-sm text-primary-container uppercase font-bold">{m.autor_tipo}</span>
+                <span className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">
                   {new Date(m.creado_en).toLocaleString()}
                 </span>
               </div>
@@ -264,17 +264,17 @@ export default function ChatTecnico({
           />
           <p
             data-chat-contador
-            className={`font-code-sm text-[10px] text-right ${
+            className={`font-['Inter'] text-[13px] font-normal text-right ${
               contenidoNuevo.length >= MENSAJE_MAX_CARACTERES ? 'text-error' : 'text-on-surface-variant'
             }`}
           >
             {contenidoNuevo.length} / {MENSAJE_MAX_CARACTERES}
           </p>
-          {errorEnvioMensaje && <p className="font-code-sm text-xs text-error uppercase">{errorEnvioMensaje}</p>}
+          {errorEnvioMensaje && <p className="font-['Inter'] text-[13px] font-normal text-error uppercase">{errorEnvioMensaje}</p>}
           <button
             disabled={enviandoMensaje || !contenidoNuevo.trim()}
             type="submit"
-            className="inline-flex items-center justify-center px-6 py-2 bg-primary-container text-on-primary-container font-label-caps text-label-caps hover:bg-primary-fixed-dim transition-colors disabled:opacity-50 cursor-pointer"
+            className="inline-flex items-center justify-center px-6 py-2 bg-primary-container text-on-primary-container font-['Inter'] text-[14px] font-semibold hover:bg-primary-fixed-dim transition-colors disabled:opacity-50 cursor-pointer"
           >
             {enviandoMensaje ? 'ENVIANDO...' : 'ENVIAR'}
           </button>
@@ -284,7 +284,7 @@ export default function ChatTecnico({
       {/* Aviso de un intento de envío que el backend rechazó (403/409) cuando el
           composer ya no está visible. */}
       {!mostrarComposer && errorEnvioMensaje && (
-        <p className="font-code-sm text-xs text-error uppercase mt-2">{errorEnvioMensaje}</p>
+        <p className="font-['Inter'] text-[13px] font-normal text-error uppercase mt-2">{errorEnvioMensaje}</p>
       )}
     </div>
   );

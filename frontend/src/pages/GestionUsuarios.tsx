@@ -311,14 +311,14 @@ export default function GestionUsuarios({ token, onSesionInvalida }: GestionUsua
 
   return (
     <div className="space-y-8">
-      <p className="font-code-sm text-xs text-on-surface-variant uppercase max-w-2xl">
+      <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase max-w-2xl">
         Administración y control de las cuentas de acceso de NextProject.
       </p>
 
       {loadingLista && (
-        <p className="font-code-sm text-code-sm text-on-surface-variant uppercase">CARGANDO USUARIOS...</p>
+        <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">CARGANDO USUARIOS...</p>
       )}
-      {!loadingLista && errorLista && <p className="font-code-sm text-xs text-error uppercase">{errorLista}</p>}
+      {!loadingLista && errorLista && <p className="font-['Inter'] text-[13px] font-normal text-error uppercase">{errorLista}</p>}
 
       {!loadingLista && !errorLista && usuarios && (
         <>
@@ -373,7 +373,7 @@ export default function GestionUsuarios({ token, onSesionInvalida }: GestionUsua
             <button
               type="button"
               onClick={() => setMostrarFormularioCrear((v) => !v)}
-              className="w-full flex items-center justify-between font-label-caps text-label-caps text-primary-container tracking-widest uppercase cursor-pointer"
+              className="w-full flex items-center justify-between font-['Inter'] text-[14px] font-semibold text-primary-container tracking-widest uppercase cursor-pointer"
             >
               <span className="flex items-center gap-2">
                 <span className="material-symbols-outlined text-[18px]">
@@ -434,7 +434,7 @@ export default function GestionUsuarios({ token, onSesionInvalida }: GestionUsua
                   <button
                     disabled={creando}
                     type="submit"
-                    className="inline-flex items-center justify-center px-6 py-3 bg-primary-container text-on-primary-container font-label-caps text-label-caps hover:bg-primary-fixed-dim transition-colors disabled:opacity-50 cursor-pointer"
+                    className="inline-flex items-center justify-center px-6 py-3 bg-primary-container text-on-primary-container font-['Inter'] text-[14px] font-semibold hover:bg-primary-fixed-dim transition-colors disabled:opacity-50 cursor-pointer"
                   >
                     {creando ? 'CREANDO...' : 'CREAR USUARIO'}
                   </button>
@@ -497,7 +497,7 @@ export default function GestionUsuarios({ token, onSesionInvalida }: GestionUsua
 
             <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-4 items-end">
               <div>
-                <label className="block font-label-caps text-[10px] text-on-surface-variant uppercase mb-1">
+                <label className="block font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase mb-1">
                   Ordenar por
                 </label>
                 <div className="relative w-full sm:w-64">
@@ -520,7 +520,7 @@ export default function GestionUsuarios({ token, onSesionInvalida }: GestionUsua
                 type="button"
                 onClick={limpiarFiltros}
                 disabled={!hayFiltrosActivos}
-                className="inline-flex items-center justify-center gap-2 px-4 py-2 border border-outline text-on-surface hover:bg-surface-container-high transition-colors font-label-caps text-label-caps disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap"
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 border border-outline text-on-surface hover:bg-surface-container-high transition-colors font-['Inter'] text-[14px] font-semibold disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap"
               >
                 <span className="material-symbols-outlined text-[16px]">restart_alt</span>
                 LIMPIAR FILTROS
@@ -533,11 +533,11 @@ export default function GestionUsuarios({ token, onSesionInvalida }: GestionUsua
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-outline">
-                  <th className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant uppercase">Usuario</th>
-                  <th className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant uppercase">Email</th>
-                  <th className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant uppercase">Rol</th>
-                  <th className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant uppercase">Estado</th>
-                  <th className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant uppercase text-right">
+                  <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Usuario</th>
+                  <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Email</th>
+                  <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Rol</th>
+                  <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Estado</th>
+                  <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase text-right">
                     Acción
                   </th>
                 </tr>
@@ -583,12 +583,12 @@ export default function GestionUsuarios({ token, onSesionInvalida }: GestionUsua
                         type="button"
                         disabled={accionEnCursoId === u.id}
                         onClick={() => handleCambiarActivo(u)}
-                        className="inline-flex items-center px-3 py-1 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-label-caps text-label-caps text-[10px] disabled:opacity-50 cursor-pointer"
+                        className="inline-flex items-center px-3 py-1 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-['Inter'] text-[14px] font-semibold disabled:opacity-50 cursor-pointer"
                       >
                         {u.activo ? 'DESACTIVAR' : 'ACTIVAR'}
                       </button>
                       {errorPorFila[u.id] && (
-                        <p className="font-code-sm text-[10px] text-error uppercase mt-1">{errorPorFila[u.id]}</p>
+                        <p className="font-['Inter'] text-[13px] font-normal text-error uppercase mt-1">{errorPorFila[u.id]}</p>
                       )}
                     </td>
                   </tr>
@@ -600,7 +600,7 @@ export default function GestionUsuarios({ token, onSesionInvalida }: GestionUsua
           {/* TABLA — mobile (tarjetas) */}
           <div className="md:hidden space-y-3">
             {datosPagina.length === 0 && (
-              <p className="font-code-sm text-code-sm text-on-surface-variant uppercase text-center py-6">
+              <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase text-center py-6">
                 Ningún resultado coincide con estos filtros.
               </p>
             )}
@@ -639,13 +639,13 @@ export default function GestionUsuarios({ token, onSesionInvalida }: GestionUsua
                     type="button"
                     disabled={accionEnCursoId === u.id}
                     onClick={() => handleCambiarActivo(u)}
-                    className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-label-caps text-label-caps text-[11px] disabled:opacity-50 cursor-pointer"
+                    className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-['Inter'] text-[14px] font-semibold disabled:opacity-50 cursor-pointer"
                   >
                     {u.activo ? 'DESACTIVAR' : 'ACTIVAR'}
                   </button>
                 </div>
                 {errorPorFila[u.id] && (
-                  <p className="font-code-sm text-[10px] text-error uppercase">{errorPorFila[u.id]}</p>
+                  <p className="font-['Inter'] text-[13px] font-normal text-error uppercase">{errorPorFila[u.id]}</p>
                 )}
               </div>
             ))}
@@ -654,7 +654,7 @@ export default function GestionUsuarios({ token, onSesionInvalida }: GestionUsua
           {/* PAGINACIÓN */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-surface sharp-border p-4">
             <div className="flex items-center gap-3">
-              <span className="font-code-sm text-[11px] text-on-surface-variant uppercase">
+              <span className="font-['Inter'] text-[13px] font-normal text-on-surface-variant">
                 Mostrando {ordenados.length === 0 ? 0 : (paginaEfectiva - 1) * registrosPorPagina + 1}–
                 {Math.min(paginaEfectiva * registrosPorPagina, ordenados.length)} de {ordenados.length} usuarios
               </span>
@@ -662,7 +662,7 @@ export default function GestionUsuarios({ token, onSesionInvalida }: GestionUsua
                 <select
                   value={registrosPorPagina}
                   onChange={(e) => setRegistrosPorPagina(Number(e.target.value))}
-                  className="appearance-none bg-background border border-outline pl-3 pr-11 py-1.5 text-on-surface text-xs font-code-sm focus:border-primary-container focus:outline-hidden cursor-pointer"
+                  className="appearance-none bg-background border border-outline pl-3 pr-11 py-1.5 text-on-surface font-['Inter'] text-[13px] font-normal focus:border-primary-container focus:outline-hidden cursor-pointer"
                 >
                   {REGISTROS_POR_PAGINA_OPCIONES_USUARIO.map((n) => (
                     <option key={n} value={n}>
@@ -688,7 +688,7 @@ export default function GestionUsuarios({ token, onSesionInvalida }: GestionUsua
 
               {paginasVisibles.map((p, idx) =>
                 p === 'ellipsis' ? (
-                  <span key={`ellipsis-${idx}`} className="px-1 font-code-sm text-on-surface-variant">
+                  <span key={`ellipsis-${idx}`} className="px-1 font-['Inter'] text-[13px] font-normal text-on-surface-variant">
                     …
                   </span>
                 ) : (
@@ -696,7 +696,7 @@ export default function GestionUsuarios({ token, onSesionInvalida }: GestionUsua
                     key={p}
                     type="button"
                     onClick={() => setPaginaActual(p)}
-                    className={`inline-flex items-center justify-center w-8 h-8 font-code-sm text-xs transition-colors cursor-pointer ${
+                    className={`inline-flex items-center justify-center w-8 h-8 font-['Inter'] text-[14px] font-semibold transition-colors cursor-pointer ${
                       p === paginaEfectiva
                         ? 'bg-primary-container text-on-primary-container'
                         : 'border border-outline text-on-surface hover:bg-surface-container-high'

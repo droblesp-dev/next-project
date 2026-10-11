@@ -331,7 +331,7 @@ export default function VistaCotizacionPublica({ token }: VistaCotizacionPublica
 
         <div className="bg-surface sharp-border p-6 md:p-8">
           {paso === 'cargando_enlace' && (
-            <p className="font-code-sm text-code-sm text-on-surface-variant uppercase text-center py-8">
+            <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase text-center py-8">
               VALIDANDO ENLACE...
             </p>
           )}
@@ -354,7 +354,7 @@ export default function VistaCotizacionPublica({ token }: VistaCotizacionPublica
 
               <form className="space-y-6" onSubmit={handleVerificarCodigo}>
                 <div>
-                  <label className="block font-code-sm text-code-sm text-on-surface-variant uppercase mb-2">
+                  <label className="block font-['Inter'] text-[13px] font-semibold text-on-surface-variant uppercase mb-2">
                     CÓDIGO DE ACCESO
                   </label>
                   <input
@@ -369,12 +369,12 @@ export default function VistaCotizacionPublica({ token }: VistaCotizacionPublica
                   />
                 </div>
 
-                {errorCodigo && <p className="font-code-sm text-xs text-error uppercase">{errorCodigo}</p>}
+                {errorCodigo && <p className="font-['Inter'] text-[13px] font-normal text-error uppercase">{errorCodigo}</p>}
 
                 <button
                   disabled={paso === 'verificando' || codigoInput.length !== 6}
                   type="submit"
-                  className="w-full inline-flex items-center justify-center px-6 py-4 bg-primary-container text-on-primary-container font-label-caps text-label-caps hover:bg-primary-fixed-dim transition-colors disabled:opacity-50 cursor-pointer"
+                  className="w-full inline-flex items-center justify-center px-6 py-4 bg-primary-container text-on-primary-container font-['Inter'] text-[14px] font-semibold hover:bg-primary-fixed-dim transition-colors disabled:opacity-50 cursor-pointer"
                 >
                   {paso === 'verificando' ? 'VERIFICANDO...' : 'VER COTIZACIÓN'}
                 </button>
@@ -426,20 +426,20 @@ export default function VistaCotizacionPublica({ token }: VistaCotizacionPublica
 
               {cotizacion.solicitud.especificaciones && (
                 <div>
-                  <p className="font-code-sm text-code-sm text-on-surface-variant uppercase mb-1">Especificaciones</p>
+                  <p className="font-['Inter'] text-[13px] font-semibold text-on-surface-variant uppercase mb-1">Especificaciones</p>
                   <p className="font-body-md text-body-md text-on-surface">{cotizacion.solicitud.especificaciones}</p>
                 </div>
               )}
 
               {cotizacion.descripcion && (
                 <div>
-                  <p className="font-code-sm text-code-sm text-on-surface-variant uppercase mb-1">Observaciones</p>
+                  <p className="font-['Inter'] text-[13px] font-semibold text-on-surface-variant uppercase mb-1">Observaciones</p>
                   <p className="font-body-md text-body-md text-on-surface">{cotizacion.descripcion}</p>
                 </div>
               )}
 
               {accionMensaje && (
-                <p className="font-code-sm text-code-sm text-primary-container uppercase border-t border-outline pt-4">
+                <p className="font-['Inter'] text-[13px] font-normal text-primary-container uppercase border-t border-outline pt-4">
                   {accionMensaje}
                 </p>
               )}
@@ -454,7 +454,7 @@ export default function VistaCotizacionPublica({ token }: VistaCotizacionPublica
                           setAccionError(null);
                           setAccionConfirmando('aceptar');
                         }}
-                        className="flex-1 inline-flex items-center justify-center px-6 py-3 bg-primary-container text-on-primary-container font-label-caps text-label-caps hover:bg-primary-fixed-dim transition-colors cursor-pointer"
+                        className="flex-1 inline-flex items-center justify-center px-6 py-3 bg-primary-container text-on-primary-container font-['Inter'] text-[14px] font-semibold hover:bg-primary-fixed-dim transition-colors cursor-pointer"
                       >
                         ACEPTAR COTIZACIÓN
                       </button>
@@ -464,7 +464,7 @@ export default function VistaCotizacionPublica({ token }: VistaCotizacionPublica
                           setAccionError(null);
                           setAccionConfirmando('rechazar');
                         }}
-                        className="flex-1 inline-flex items-center justify-center px-6 py-3 border border-error text-error hover:bg-error hover:text-on-error transition-colors cursor-pointer"
+                        className="flex-1 inline-flex items-center justify-center px-6 py-3 border border-error text-error hover:bg-error hover:text-on-error transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
                       >
                         RECHAZAR COTIZACIÓN
                       </button>
@@ -483,7 +483,7 @@ export default function VistaCotizacionPublica({ token }: VistaCotizacionPublica
                           type="button"
                           disabled={accionEnCurso}
                           onClick={() => handleEjecutarAccion(accionConfirmando)}
-                          className="flex-1 inline-flex items-center justify-center px-6 py-3 bg-primary-container text-on-primary-container font-label-caps text-label-caps hover:bg-primary-fixed-dim transition-colors disabled:opacity-50 cursor-pointer"
+                          className="flex-1 inline-flex items-center justify-center px-6 py-3 bg-primary-container text-on-primary-container font-['Inter'] text-[14px] font-semibold hover:bg-primary-fixed-dim transition-colors disabled:opacity-50 cursor-pointer"
                         >
                           {accionEnCurso ? 'PROCESANDO...' : 'SÍ, CONFIRMAR'}
                         </button>
@@ -491,7 +491,7 @@ export default function VistaCotizacionPublica({ token }: VistaCotizacionPublica
                           type="button"
                           disabled={accionEnCurso}
                           onClick={() => setAccionConfirmando(null)}
-                          className="flex-1 inline-flex items-center justify-center px-6 py-3 border border-outline text-on-surface hover:bg-surface-container-high transition-colors disabled:opacity-50 cursor-pointer"
+                          className="flex-1 inline-flex items-center justify-center px-6 py-3 border border-outline text-on-surface hover:bg-surface-container-high transition-colors font-['Inter'] text-[14px] font-semibold disabled:opacity-50 cursor-pointer"
                         >
                           CANCELAR
                         </button>
@@ -500,13 +500,13 @@ export default function VistaCotizacionPublica({ token }: VistaCotizacionPublica
                   )}
 
                   {accionError && (
-                    <p className="font-code-sm text-xs text-error uppercase">{accionError}</p>
+                    <p className="font-['Inter'] text-[13px] font-normal text-error uppercase">{accionError}</p>
                   )}
                 </div>
               )}
 
               {cotizacion.estado === 'ACEPTADA' && cotizacion.estado_anticipo === 'NO_APLICA' && (
-                <p className="font-code-sm text-code-sm text-primary-container uppercase border-t border-outline pt-4">
+                <p className="font-['Inter'] text-[13px] font-normal text-primary-container uppercase border-t border-outline pt-4">
                   No se requiere anticipo. Su cotización fue aceptada.
                 </p>
               )}
@@ -537,13 +537,13 @@ export default function VistaCotizacionPublica({ token }: VistaCotizacionPublica
                   </dl>
 
                   {cotizacion.estado_anticipo === 'VALIDADO' && (
-                    <p className="font-code-sm text-code-sm text-primary-container uppercase">
+                    <p className="font-['Inter'] text-[13px] font-normal text-primary-container uppercase">
                       Anticipo confirmado por Comercial.
                     </p>
                   )}
 
                   {cotizacion.estado_anticipo === 'RECHAZADO' && (
-                    <p className="font-code-sm text-code-sm text-error uppercase">
+                    <p className="font-['Inter'] text-[13px] font-normal text-error uppercase">
                       El anticipo fue rechazado. Contacte a su asesor comercial.
                     </p>
                   )}
@@ -580,18 +580,18 @@ export default function VistaCotizacionPublica({ token }: VistaCotizacionPublica
                           </div>
                         </dl>
                       ) : (
-                        <p className="font-code-sm text-xs text-error uppercase">
+                        <p className="font-['Inter'] text-[13px] font-normal text-error uppercase">
                           Datos bancarios no configurados. Contacte a su asesor comercial.
                         </p>
                       )}
 
                       {cotizacion.comprobante_recibido ? (
-                        <p className="font-code-sm text-code-sm text-primary-container uppercase">
+                        <p className="font-['Inter'] text-[13px] font-normal text-primary-container uppercase">
                           Comprobante recibido. Pendiente de revisión por Comercial.
                         </p>
                       ) : (
                         <div className="space-y-3">
-                          <label className="block font-code-sm text-code-sm text-on-surface-variant uppercase mb-1">
+                          <label className="block font-['Inter'] text-[13px] font-semibold text-on-surface-variant uppercase mb-1">
                             Comprobante de transferencia (PDF, JPG o PNG, máx. 5 MB)
                           </label>
                           <input
@@ -601,13 +601,13 @@ export default function VistaCotizacionPublica({ token }: VistaCotizacionPublica
                             className="block w-full text-on-surface font-body-md text-sm"
                           />
                           {errorArchivo && (
-                            <p className="font-code-sm text-xs text-error uppercase">{errorArchivo}</p>
+                            <p className="font-['Inter'] text-[13px] font-normal text-error uppercase">{errorArchivo}</p>
                           )}
                           <button
                             type="button"
                             disabled={!archivoComprobante || subiendoComprobante}
                             onClick={handleSubirComprobante}
-                            className="w-full inline-flex items-center justify-center px-6 py-3 bg-primary-container text-on-primary-container font-label-caps text-label-caps hover:bg-primary-fixed-dim transition-colors disabled:opacity-50 cursor-pointer"
+                            className="w-full inline-flex items-center justify-center px-6 py-3 bg-primary-container text-on-primary-container font-['Inter'] text-[14px] font-semibold hover:bg-primary-fixed-dim transition-colors disabled:opacity-50 cursor-pointer"
                           >
                             {subiendoComprobante ? 'SUBIENDO...' : 'SUBIR COMPROBANTE'}
                           </button>
@@ -636,13 +636,13 @@ export default function VistaCotizacionPublica({ token }: VistaCotizacionPublica
                   </dl>
 
                   {cotizacion.estado_saldo === 'VALIDADO' && (
-                    <p className="font-code-sm text-code-sm text-primary-container uppercase">
+                    <p className="font-['Inter'] text-[13px] font-normal text-primary-container uppercase">
                       Saldo confirmado por Comercial.
                     </p>
                   )}
 
                   {cotizacion.estado_saldo === 'RECHAZADO' && (
-                    <p className="font-code-sm text-code-sm text-error uppercase">
+                    <p className="font-['Inter'] text-[13px] font-normal text-error uppercase">
                       El pago del saldo fue rechazado. Contacte a su asesor comercial.
                     </p>
                   )}
@@ -650,7 +650,7 @@ export default function VistaCotizacionPublica({ token }: VistaCotizacionPublica
                   {cotizacion.estado_saldo === 'PENDIENTE' && (
                     <div className="space-y-4">
                       {cotizacion.saldo_comprobante_recibido ? (
-                        <p className="font-code-sm text-code-sm text-primary-container uppercase">
+                        <p className="font-['Inter'] text-[13px] font-normal text-primary-container uppercase">
                           Comprobante recibido. Pendiente de revisión por Comercial.
                         </p>
                       ) : (
@@ -686,7 +686,7 @@ export default function VistaCotizacionPublica({ token }: VistaCotizacionPublica
                           )}
 
                           <div className="space-y-3">
-                            <label className="block font-code-sm text-code-sm text-on-surface-variant uppercase mb-1">
+                            <label className="block font-['Inter'] text-[13px] font-semibold text-on-surface-variant uppercase mb-1">
                               Comprobante de transferencia del saldo (PDF, JPG o PNG, máx. 5 MB)
                             </label>
                             <input
@@ -696,13 +696,13 @@ export default function VistaCotizacionPublica({ token }: VistaCotizacionPublica
                               className="block w-full text-on-surface font-body-md text-sm"
                             />
                             {errorArchivoSaldo && (
-                              <p className="font-code-sm text-xs text-error uppercase">{errorArchivoSaldo}</p>
+                              <p className="font-['Inter'] text-[13px] font-normal text-error uppercase">{errorArchivoSaldo}</p>
                             )}
                             <button
                               type="button"
                               disabled={!archivoComprobanteSaldo || subiendoComprobanteSaldo}
                               onClick={handleSubirComprobanteSaldo}
-                              className="w-full inline-flex items-center justify-center px-6 py-3 bg-primary-container text-on-primary-container font-label-caps text-label-caps hover:bg-primary-fixed-dim transition-colors disabled:opacity-50 cursor-pointer"
+                              className="w-full inline-flex items-center justify-center px-6 py-3 bg-primary-container text-on-primary-container font-['Inter'] text-[14px] font-semibold hover:bg-primary-fixed-dim transition-colors disabled:opacity-50 cursor-pointer"
                             >
                               {subiendoComprobanteSaldo ? 'SUBIENDO...' : 'SUBIR COMPROBANTE'}
                             </button>

@@ -34,7 +34,7 @@ export default function Login({ mensajeInicial, onLoginSuccess, onVolver }: Logi
         <button
           type="button"
           onClick={onVolver}
-          className="mb-6 inline-flex items-center font-label-caps text-label-caps text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
+          className="mb-6 inline-flex items-center font-['Inter'] text-[14px] font-semibold text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
         >
           <span className="material-symbols-outlined mr-1 text-[18px]">arrow_back</span>
           VOLVER AL SITIO
@@ -51,7 +51,7 @@ export default function Login({ mensajeInicial, onLoginSuccess, onVolver }: Logi
 
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div>
-              <label className="block font-code-sm text-code-sm text-on-surface-variant uppercase mb-2">
+              <label className="block font-['Inter'] text-[13px] font-semibold text-on-surface-variant uppercase mb-2">
                 CORREO ELECTRÓNICO
               </label>
               <input
@@ -66,7 +66,7 @@ export default function Login({ mensajeInicial, onLoginSuccess, onVolver }: Logi
             </div>
 
             <div>
-              <label className="block font-code-sm text-code-sm text-on-surface-variant uppercase mb-2">
+              <label className="block font-['Inter'] text-[13px] font-semibold text-on-surface-variant uppercase mb-2">
                 CONTRASEÑA
               </label>
               <input
@@ -81,13 +81,13 @@ export default function Login({ mensajeInicial, onLoginSuccess, onVolver }: Logi
             </div>
 
             {error && (
-              <p className="font-code-sm text-xs text-error uppercase">{error}</p>
+              <p className="font-['Inter'] text-[13px] font-normal text-error uppercase">{error}</p>
             )}
 
             <button
               disabled={loading}
               type="submit"
-              className="w-full inline-flex items-center justify-center px-6 py-4 bg-primary-container text-on-primary-container font-label-caps text-label-caps hover:bg-primary-fixed-dim transition-colors disabled:opacity-50 cursor-pointer"
+              className="w-full inline-flex items-center justify-center px-6 py-4 bg-primary-container text-on-primary-container font-['Inter'] text-[14px] font-semibold hover:bg-primary-fixed-dim transition-colors disabled:opacity-50 cursor-pointer"
             >
               {loading ? 'INGRESANDO...' : 'INGRESAR'}
             </button>

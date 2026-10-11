@@ -504,7 +504,7 @@ export default function App({ onAcceso }: AppProps) {
             {navLinks.map((link) => (
               <a
                 key={link.id}
-                className={`font-label-caps text-label-caps !text-[14px] transition-colors ${activeNav === link.id
+                className={`font-['Inter'] text-[14px] font-semibold transition-colors ${activeNav === link.id
                   ? 'text-primary-container border-b-2 border-primary-container pb-1'
                   : 'text-on-surface-variant hover:text-on-surface'
                   }`}
@@ -524,7 +524,7 @@ export default function App({ onAcceso }: AppProps) {
             <button
               type="button"
               onClick={onAcceso}
-              className="inline-flex items-center justify-center px-3 py-2 text-on-surface-variant hover:text-on-surface transition-colors font-label-caps text-label-caps !text-[14px] cursor-pointer"
+              className="inline-flex items-center justify-center px-3 py-2 text-on-surface-variant hover:text-on-surface transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
             >
               <span className="material-symbols-outlined mr-1 text-[16px]">login</span>
               ACCESO
@@ -547,7 +547,7 @@ export default function App({ onAcceso }: AppProps) {
             {navLinks.map((link) => (
               <a
                 key={link.id}
-                className={`block font-label-caps text-label-caps !text-[14px] py-2 ${activeNav === link.id ? 'text-primary-container font-bold' : 'text-on-surface-variant'
+                className={`block font-['Inter'] text-[14px] font-semibold py-2 ${activeNav === link.id ? 'text-primary-container font-bold' : 'text-on-surface-variant'
                   }`}
                 href={link.href}
                 onClick={() => {
@@ -567,7 +567,7 @@ export default function App({ onAcceso }: AppProps) {
                   setMobileMenuOpen(false);
                   onAcceso();
                 }}
-                className="w-full inline-flex items-center justify-center px-4 py-2 border border-outline text-on-surface hover:bg-surface-container-high transition-colors font-label-caps text-label-caps !text-[14px] cursor-pointer"
+                className="w-full inline-flex items-center justify-center px-4 py-2 border border-outline text-on-surface hover:bg-surface-container-high transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
               >
                 <span className="material-symbols-outlined mr-2 text-[18px]">login</span>
                 ACCESO
@@ -622,7 +622,7 @@ export default function App({ onAcceso }: AppProps) {
               Fabricamos, reparamos y recuperamos componentes industriales a medida, según las necesidades técnicas de cada proyecto.            </p>
             <div className="flex flex-col sm:flex-row gap-4">
               <a
-                className="inline-flex items-center justify-center px-6 py-4 bg-primary-container text-on-primary-container font-label-caps text-label-caps hover:bg-primary-fixed-dim transition-colors"
+                className="inline-flex items-center justify-center px-6 py-4 bg-primary-container text-on-primary-container font-['Inter'] text-[14px] font-semibold hover:bg-primary-fixed-dim transition-colors"
                 href="#cotizacion"
                 onClick={() => setActiveNav('cotizacion')}
               >
@@ -630,7 +630,7 @@ export default function App({ onAcceso }: AppProps) {
                 SOLICITAR COTIZACIÓN
               </a>
               <a
-                className="inline-flex items-center justify-center px-6 py-4 border border-outline text-on-surface hover:bg-surface-container-high transition-colors font-label-caps text-label-caps"
+                className="inline-flex items-center justify-center px-6 py-4 border border-outline text-on-surface hover:bg-surface-container-high transition-colors font-['Inter'] text-[14px] font-semibold"
                 href="#servicios"
                 onClick={() => setActiveNav('servicios')}
               >
@@ -706,7 +706,7 @@ export default function App({ onAcceso }: AppProps) {
             <p className="font-body-md text-body-md text-on-surface-variant mb-8">
               Nuestro compromiso es ofrecer soluciones precisas y funcionales, adaptadas a las necesidades de cada proyecto, desde la fabricación de componentes hasta la recuperación de piezas para prolongar su vida útil.
             </p>
-            <ul className="space-y-4 font-code-sm text-code-sm text-on-surface uppercase">
+            <ul className="space-y-4 font-['Inter'] text-[13px] font-normal text-on-surface uppercase">
               <li className="flex items-center border-b border-outline pb-2">
                 <span className="material-symbols-outlined text-primary-container mr-4 text-[18px]">check_box</span>
                 MECANIZADO CONVENCIONAL: Torno y fresado industrial
@@ -750,7 +750,7 @@ export default function App({ onAcceso }: AppProps) {
               </p>
               <button
                 onClick={() => handleSelectServiceFromCard('TORNO INDUSTRIAL')}
-                className="inline-flex items-center justify-between w-full border border-outline px-4 py-2 font-label-caps text-label-caps text-on-surface group-hover:bg-primary-container group-hover:text-on-primary-container group-hover:border-primary-container transition-all cursor-pointer text-left"
+                className="inline-flex items-center justify-between w-full border border-outline px-4 py-2 font-['Inter'] text-[14px] font-semibold text-on-surface group-hover:bg-primary-container group-hover:text-on-primary-container group-hover:border-primary-container transition-all cursor-pointer text-left"
               >
                 SOLICITAR COTIZACIÓN
                 <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
@@ -771,7 +771,7 @@ export default function App({ onAcceso }: AppProps) {
               </p>
               <button
                 onClick={() => handleSelectServiceFromCard('FRESADO INDUSTRIAL')}
-                className="inline-flex items-center justify-between w-full border border-outline px-4 py-2 font-label-caps text-label-caps text-on-surface group-hover:bg-primary-container group-hover:text-on-primary-container group-hover:border-primary-container transition-all cursor-pointer text-left"
+                className="inline-flex items-center justify-between w-full border border-outline px-4 py-2 font-['Inter'] text-[14px] font-semibold text-on-surface group-hover:bg-primary-container group-hover:text-on-primary-container group-hover:border-primary-container transition-all cursor-pointer text-left"
               >
                 SOLICITAR COTIZACIÓN
                 <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
@@ -792,7 +792,7 @@ export default function App({ onAcceso }: AppProps) {
               </p>
               <button
                 onClick={() => handleSelectServiceFromCard('FABRICACIÓN A MEDIDA')}
-                className="inline-flex items-center justify-between w-full border border-outline px-4 py-2 font-label-caps text-label-caps text-on-surface group-hover:bg-primary-container group-hover:text-on-primary-container group-hover:border-primary-container transition-all cursor-pointer text-left"
+                className="inline-flex items-center justify-between w-full border border-outline px-4 py-2 font-['Inter'] text-[14px] font-semibold text-on-surface group-hover:bg-primary-container group-hover:text-on-primary-container group-hover:border-primary-container transition-all cursor-pointer text-left"
               >
                 SOLICITAR COTIZACIÓN
                 <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
@@ -813,7 +813,7 @@ export default function App({ onAcceso }: AppProps) {
               </p>
               <button
                 onClick={() => handleSelectServiceFromCard('REPARACIÓN Y RECUPERACIÓN')}
-                className="inline-flex items-center justify-between w-full border border-outline px-4 py-2 font-label-caps text-label-caps text-on-surface group-hover:bg-primary-container group-hover:text-on-primary-container group-hover:border-primary-container transition-all cursor-pointer text-left"
+                className="inline-flex items-center justify-between w-full border border-outline px-4 py-2 font-['Inter'] text-[14px] font-semibold text-on-surface group-hover:bg-primary-container group-hover:text-on-primary-container group-hover:border-primary-container transition-all cursor-pointer text-left"
               >
                 SOLICITAR COTIZACIÓN
                 <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
@@ -837,7 +837,7 @@ export default function App({ onAcceso }: AppProps) {
             <p className="font-body-md text-body-md text-on-surface-variant mb-8">
               Atendemos requerimientos de fabricación, reposición y recuperación de componentes para diferentes aplicaciones industriales.
             </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-code-sm text-code-sm text-on-surface uppercase">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-['Inter'] text-[13px] font-normal text-on-surface uppercase">
               <div className="flex items-center border-b border-outline pb-2">
                 <span className="material-symbols-outlined text-primary-container mr-3 text-[18px]">check_box</span>
                 REPUESTOS INDUSTRIALES
@@ -895,43 +895,43 @@ export default function App({ onAcceso }: AppProps) {
               <span className="material-symbols-outlined text-primary-container text-4xl mb-4 group-hover:scale-110 transition-transform">
                 factory
               </span>
-              <span className="font-label-caps text-label-caps text-on-surface uppercase">INDUSTRIA</span>
+              <span className="font-['Inter'] text-[13px] font-normal text-on-surface uppercase">INDUSTRIA</span>
             </div>
             <div className="bg-surface sharp-border p-6 flex flex-col items-center justify-center text-center group hover:border-primary-container transition-colors w-full md:w-[calc(33.333%-1rem)] lg:w-[calc(25%-1rem)]">
               <span className="material-symbols-outlined text-primary-container text-4xl mb-4 group-hover:scale-110 transition-transform">
                 engineering
               </span>
-              <span className="font-label-caps text-label-caps text-on-surface uppercase">MANTENIMIENTO INDUSTRIAL</span>
+              <span className="font-['Inter'] text-[13px] font-normal text-on-surface uppercase">MANTENIMIENTO INDUSTRIAL</span>
             </div>
             <div className="bg-surface sharp-border p-6 flex flex-col items-center justify-center text-center group hover:border-primary-container transition-colors w-full md:w-[calc(33.333%-1rem)] lg:w-[calc(25%-1rem)]">
               <span className="material-symbols-outlined text-primary-container text-4xl mb-4 group-hover:scale-110 transition-transform">
                 precision_manufacturing
               </span>
-              <span className="font-label-caps text-label-caps text-on-surface uppercase">MAQUINARIA</span>
+              <span className="font-['Inter'] text-[13px] font-normal text-on-surface uppercase">MAQUINARIA</span>
             </div>
             <div className="bg-surface sharp-border p-6 flex flex-col items-center justify-center text-center group hover:border-primary-container transition-colors w-full md:w-[calc(33.333%-1rem)] lg:w-[calc(25%-1rem)]">
               <span className="material-symbols-outlined text-primary-container text-4xl mb-4 group-hover:scale-110 transition-transform">
                 construction
               </span>
-              <span className="font-label-caps text-label-caps text-on-surface uppercase">CONSTRUCCIÓN</span>
+              <span className="font-['Inter'] text-[13px] font-normal text-on-surface uppercase">CONSTRUCCIÓN</span>
             </div>
             <div className="bg-surface sharp-border p-6 flex flex-col items-center justify-center text-center group hover:border-primary-container transition-colors w-full md:w-[calc(33.333%-1rem)] lg:w-[calc(25%-1rem)]">
               <span className="material-symbols-outlined text-primary-container text-4xl mb-4 group-hover:scale-110 transition-transform">
                 agriculture
               </span>
-              <span className="font-label-caps text-label-caps text-on-surface uppercase">AGROINDUSTRIA</span>
+              <span className="font-['Inter'] text-[13px] font-normal text-on-surface uppercase">AGROINDUSTRIA</span>
             </div>
             <div className="bg-surface sharp-border p-6 flex flex-col items-center justify-center text-center group hover:border-primary-container transition-colors w-full md:w-[calc(33.333%-1rem)] lg:w-[calc(25%-1rem)]">
               <span className="material-symbols-outlined text-primary-container text-4xl mb-4 group-hover:scale-110 transition-transform">
                 local_shipping
               </span>
-              <span className="font-label-caps text-label-caps text-on-surface uppercase">TRANSPORTE</span>
+              <span className="font-['Inter'] text-[13px] font-normal text-on-surface uppercase">TRANSPORTE</span>
             </div>
             <div className="bg-surface sharp-border p-6 flex flex-col items-center justify-center text-center group hover:border-primary-container transition-colors w-full md:w-[calc(33.333%-1rem)] lg:w-[calc(25%-1rem)]">
               <span className="material-symbols-outlined text-primary-container text-4xl mb-4 group-hover:scale-110 transition-transform">
                 handyman
               </span>
-              <span className="font-label-caps text-label-caps text-on-surface uppercase">CONTRATISTAS</span>
+              <span className="font-['Inter'] text-[13px] font-normal text-on-surface uppercase">CONTRATISTAS</span>
             </div>
           </div>
         </div>
@@ -959,7 +959,7 @@ export default function App({ onAcceso }: AppProps) {
               </div>
               <div className="ml-6 md:ml-0 md:mt-4 md:text-center">
                 <h4 className="font-label-caps text-label-caps text-on-surface uppercase">SOLICITUD</h4>
-                <p className="font-code-sm text-code-sm text-on-surface-variant mt-1">Recepción del requerimiento</p>
+                <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant mt-1">Recepción del requerimiento</p>
               </div>
             </div>
 
@@ -970,7 +970,7 @@ export default function App({ onAcceso }: AppProps) {
               </div>
               <div className="ml-6 md:ml-0 md:mt-4 md:text-center">
                 <h4 className="font-label-caps text-label-caps text-on-surface uppercase">EVALUACIÓN</h4>
-                <p className="font-code-sm text-code-sm text-on-surface-variant mt-1">Análisis técnico</p>
+                <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant mt-1">Análisis técnico</p>
               </div>
             </div>
 
@@ -981,7 +981,7 @@ export default function App({ onAcceso }: AppProps) {
               </div>
               <div className="ml-6 md:ml-0 md:mt-4 md:text-center">
                 <h4 className="font-label-caps text-label-caps text-on-surface uppercase">COTIZACIÓN</h4>
-                <p className="font-code-sm text-code-sm text-on-surface-variant mt-1">Propuesta comercial</p>
+                <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant mt-1">Propuesta comercial</p>
               </div>
             </div>
 
@@ -992,7 +992,7 @@ export default function App({ onAcceso }: AppProps) {
               </div>
               <div className="ml-6 md:ml-0 md:mt-4 md:text-center">
                 <h4 className="font-label-caps text-label-caps text-on-surface uppercase">FABRICACIÓN</h4>
-                <p className="font-code-sm text-code-sm text-on-surface-variant mt-1">Ejecución del trabajo</p>
+                <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant mt-1">Ejecución del trabajo</p>
               </div>
             </div>
 
@@ -1003,7 +1003,7 @@ export default function App({ onAcceso }: AppProps) {
               </div>
               <div className="ml-6 md:ml-0 md:mt-4 md:text-center">
                 <h4 className="font-label-caps text-label-caps text-on-surface uppercase">CONTROL</h4>
-                <p className="font-code-sm text-code-sm text-on-surface-variant mt-1">Revisión de calidad</p>
+                <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant mt-1">Revisión de calidad</p>
               </div>
             </div>
 
@@ -1014,7 +1014,7 @@ export default function App({ onAcceso }: AppProps) {
               </div>
               <div className="ml-6 md:ml-0 md:mt-4 md:text-center">
                 <h4 className="font-label-caps text-label-caps text-on-surface uppercase">ENTREGA</h4>
-                <p className="font-code-sm text-code-sm text-on-surface-variant mt-1">Entrega del trabajo terminado</p>
+                <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant mt-1">Entrega del trabajo terminado</p>
               </div>
             </div>
           </div>
@@ -1033,7 +1033,7 @@ export default function App({ onAcceso }: AppProps) {
             </div>
             <div className="mt-6 md:mt-0">
               <a
-                className="inline-flex items-center justify-center px-4 py-2 bg-primary-container text-on-primary-container font-label-caps text-label-caps hover:bg-primary-fixed-dim transition-colors"
+                className="inline-flex items-center justify-center px-4 py-2 bg-primary-container text-on-primary-container font-['Inter'] text-[14px] font-semibold hover:bg-primary-fixed-dim transition-colors"
                 href="#cotizacion"
                 onClick={() => setActiveNav('cotizacion')}
               >
@@ -1118,22 +1118,22 @@ export default function App({ onAcceso }: AppProps) {
             <div className="bg-background sharp-border p-8 text-center border-t-4 border-t-primary-container">
               <span className="material-symbols-outlined text-primary-container text-4xl mb-4">straighten</span>
               <h4 className="font-headline-md text-headline-md text-on-surface uppercase mb-2">PRECISIÓN</h4>
-              <p className="font-code-sm text-code-sm text-on-surface-variant uppercase">En cada detalle</p>
+              <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">En cada detalle</p>
             </div>
             <div className="bg-background sharp-border p-8 text-center border-t-4 border-t-primary-container">
               <span className="material-symbols-outlined text-primary-container text-4xl mb-4">verified</span>
               <h4 className="font-headline-md text-headline-md text-on-surface uppercase mb-2">CALIDAD</h4>
-              <p className="font-code-sm text-code-sm text-on-surface-variant uppercase">En cada trabajo</p>
+              <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">En cada trabajo</p>
             </div>
             <div className="bg-background sharp-border p-8 text-center border-t-4 border-t-primary-container">
               <span className="material-symbols-outlined text-primary-container text-4xl mb-4">handshake</span>
               <h4 className="font-headline-md text-headline-md text-on-surface uppercase mb-2">COMPROMISO</h4>
-              <p className="font-code-sm text-code-sm text-on-surface-variant uppercase">Con cada proyecto</p>
+              <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">Con cada proyecto</p>
             </div>
             <div className="bg-background sharp-border p-8 text-center border-t-4 border-t-primary-container">
               <span className="material-symbols-outlined text-primary-container text-4xl mb-4">shield</span>
               <h4 className="font-headline-md text-headline-md text-on-surface uppercase mb-2">CONFIANZA</h4>
-              <p className="font-code-sm text-code-sm text-on-surface-variant uppercase">En nuestra relación con el cliente</p>
+              <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">En nuestra relación con el cliente</p>
             </div>
           </div>
         </div>
@@ -1162,7 +1162,7 @@ export default function App({ onAcceso }: AppProps) {
                     CONTACTO COMERCIAL
                   </h3>
                   <h2 className="font-headline-lg text-headline-lg-mobile md:text-headline-lg font-bold text-on-surface uppercase">
-                    SOLICITAR COTIZACIÓN
+                    CONECTA CON NEXTPROJECT
                   </h2>
                 </div>
                 <p className="font-body-md text-body-md text-on-surface-variant max-w-lg mb-8">
@@ -1173,7 +1173,7 @@ export default function App({ onAcceso }: AppProps) {
                 <div className="flex flex-col sm:flex-row sm:items-center gap-6">
                   {/* Ver servicios — visible y con presencia real, mismo estilo del hero, más grande */}
                   <a
-                    className="w-full sm:w-auto inline-flex items-center justify-center px-8 py-5 border-2 border-outline text-on-surface hover:bg-surface-container-high transition-colors font-label-caps text-label-caps"
+                    className="w-full sm:w-auto inline-flex items-center justify-center px-8 py-5 border-2 border-outline text-on-surface hover:bg-surface-container-high transition-colors font-['Inter'] text-[14px] font-semibold"
                     href="#servicios"
                     onClick={() => setActiveNav('servicios')}
                   >
@@ -1183,8 +1183,8 @@ export default function App({ onAcceso }: AppProps) {
                   </a>
 
                   <div>
-                    <p className="font-code-sm text-code-sm text-on-surface-variant uppercase mb-2">
-                      Síguenos en redes sociales
+                    <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase mb-2">
+                      Encuéntranos en
                     </p>
                     {/* [TEMPORAL] Los 5 enlazan hoy a la plataforma general (ver SOCIAL_LINKS
                         arriba) mientras no exista la cuenta oficial de NextProject. La rama
@@ -1578,7 +1578,7 @@ export default function App({ onAcceso }: AppProps) {
                 </div>
 
                 {submitError && (
-                  <p className="font-code-sm text-xs text-error uppercase text-center">
+                  <p className="font-['Inter'] text-[13px] font-normal text-error uppercase text-center">
                     {submitError}
                   </p>
                 )}
@@ -1622,7 +1622,7 @@ export default function App({ onAcceso }: AppProps) {
             <button
               type="button"
               onClick={() => setModalType('asistente_comercial')}
-              className="w-full sm:w-auto shrink-0 inline-flex items-center justify-center px-8 py-4 border-2 border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors font-label-caps text-label-caps cursor-pointer"
+              className="w-full sm:w-auto shrink-0 inline-flex items-center justify-center px-8 py-4 border-2 border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
             >
               <span className="material-symbols-outlined mr-2 text-[20px]">support_agent</span>
               HABLAR CON UN ASESOR
@@ -1648,14 +1648,14 @@ export default function App({ onAcceso }: AppProps) {
               <div className="flex items-start">
                 <span className="material-symbols-outlined text-primary-container mr-4 text-[24px]">location_on</span>
                 <div>
-                  <h4 className="font-label-caps text-label-caps text-on-surface uppercase mb-1">UBICACIÓN</h4>
+                  <h4 className="font-['Inter'] text-[13px] font-semibold text-on-surface uppercase mb-1">UBICACIÓN</h4>
                   <p className="font-body-md text-body-md text-on-surface-variant">Shushufindi – Sucumbíos – Ecuador</p>
                 </div>
               </div>
               <div className="flex items-start">
                 <span className="material-symbols-outlined text-primary-container mr-4 text-[24px]">phone</span>
                 <div>
-                  <h4 className="font-label-caps text-label-caps text-on-surface uppercase mb-1">TELÉFONO / WHATSAPP</h4>
+                  <h4 className="font-['Inter'] text-[13px] font-semibold text-on-surface uppercase mb-1">TELÉFONO / WHATSAPP</h4>
                   <a
                     href={construirEnlaceWhatsApp()}
                     target="_blank"
@@ -1669,7 +1669,7 @@ export default function App({ onAcceso }: AppProps) {
               <div className="flex items-start">
                 <span className="material-symbols-outlined text-primary-container mr-4 text-[24px]">email</span>
                 <div>
-                  <h4 className="font-label-caps text-label-caps text-on-surface uppercase mb-1">CORREO ELECTRÓNICO</h4>
+                  <h4 className="font-['Inter'] text-[13px] font-semibold text-on-surface uppercase mb-1">CORREO ELECTRÓNICO</h4>
                   <a
                     href="mailto:nextproject.mecanizado@gmail.com"
                     className="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors"
@@ -1693,7 +1693,7 @@ export default function App({ onAcceso }: AppProps) {
               Shushufindi, Sucumbíos, Ecuador
             </p>
             <a
-              className="relative z-10 inline-flex items-center justify-center px-6 py-3 border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors font-label-caps text-label-caps cursor-pointer"
+              className="relative z-10 inline-flex items-center justify-center px-6 py-3 border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
               href="https://www.google.com/maps/search/?api=1&query=Shushufindi+Sucumbios+Ecuador"
               target="_blank"
               rel="noopener noreferrer"
@@ -1714,7 +1714,7 @@ export default function App({ onAcceso }: AppProps) {
               <span>NEXT</span>
               <span className="text-primary-container">PROJECT</span>
             </div>
-            <p className="font-code-sm text-code-sm text-on-surface-variant max-w-xs mt-2">
+            <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant max-w-xs mt-2">
               Centro de mecanizado industrial de precisión. Soluciones técnicas para maquinaria y equipos pesados.
             </p>
           </div>
@@ -1726,13 +1726,13 @@ export default function App({ onAcceso }: AppProps) {
             </h4>
             <button
               onClick={() => setModalType('terminos')}
-              className="font-code-sm text-code-sm text-on-surface-variant hover:text-primary underline transition-colors w-max text-left cursor-pointer"
+              className="font-['Inter'] text-[14px] font-semibold text-on-surface-variant hover:text-primary underline transition-colors w-max text-left cursor-pointer"
             >
               TÉRMINOS DE SERVICIO
             </button>
             <button
               onClick={() => setModalType('privacidad')}
-              className="font-code-sm text-code-sm text-on-surface-variant hover:text-primary underline transition-colors w-max text-left cursor-pointer"
+              className="font-['Inter'] text-[14px] font-semibold text-on-surface-variant hover:text-primary underline transition-colors w-max text-left cursor-pointer"
             >
               POLÍTICA DE PRIVACIDAD
             </button>
@@ -1743,12 +1743,12 @@ export default function App({ onAcceso }: AppProps) {
             <h4 className="font-label-caps text-label-caps text-on-surface mb-2 border-b border-outline inline-block w-max pb-1">
               LEGAL
             </h4>
-            <span className="font-code-sm text-code-sm text-primary">
+            <span className="font-['Inter'] text-[13px] font-normal text-primary">
               © 2026 NEXTPROJECT CENTRO DE MECANIZADO INDUSTRIAL. TODOS LOS DERECHOS RESERVADOS.
             </span>
             <div className="mt-4 flex items-center space-x-2 text-on-surface-variant">
               <span className="material-symbols-outlined text-[16px]">location_on</span>
-              <span className="font-code-sm text-code-sm uppercase">SHUSHUFINDI, SUCUMBÍOS, ECUADOR</span>
+              <span className="font-['Inter'] text-[13px] font-normal uppercase">SHUSHUFINDI, SUCUMBÍOS, ECUADOR</span>
             </div>
           </div>
         </div>
@@ -1757,7 +1757,11 @@ export default function App({ onAcceso }: AppProps) {
       {/* MODAL DIALOGS (Terms / Privacy / Gallery) */}
       {modalType && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
-          <div className="bg-surface sharp-border border-t-4 border-t-primary-container max-w-2xl w-full p-6 md:p-8 max-h-[85vh] overflow-y-auto">
+          <div
+            className={`bg-surface sharp-border border-t-4 border-t-primary-container max-w-2xl w-full ${
+              modalType === 'asistente_comercial' ? 'px-12 md:px-14 py-6 md:py-8' : 'p-6 md:p-8'
+            } max-h-[85vh] overflow-y-auto`}
+          >
             <div className="flex justify-between items-center pb-4 border-b border-outline mb-6">
               <h3 className="font-headline-md text-headline-md uppercase text-on-surface flex items-center gap-2 flex-wrap">
                 {modalType === 'terminos' && 'TÉRMINOS DE SERVICIO'}
@@ -1831,7 +1835,7 @@ export default function App({ onAcceso }: AppProps) {
                 </p>
 
                 <div className="space-y-2">
-                  <label className="block font-code-sm text-xs text-on-surface-variant uppercase">
+                  <label className="block font-['Inter'] text-[13px] font-semibold text-on-surface-variant uppercase">
                     Describe tu requerimiento o pieza
                   </label>
                   <textarea
@@ -1876,7 +1880,7 @@ export default function App({ onAcceso }: AppProps) {
                         setAiAnalyzing(false);
                       }
                     }}
-                    className="w-full sm:w-auto px-6 py-2.5 bg-primary-container text-on-primary-container font-label-caps text-xs uppercase hover:bg-primary-fixed-dim transition-colors inline-flex items-center justify-center cursor-pointer disabled:opacity-50"
+                    className="w-full sm:w-auto px-6 py-2.5 bg-primary-container text-on-primary-container font-['Inter'] text-[14px] font-semibold uppercase hover:bg-primary-fixed-dim transition-colors inline-flex items-center justify-center cursor-pointer disabled:opacity-50"
                   >
                     {aiAnalyzing ? (
                       <>
@@ -1893,7 +1897,7 @@ export default function App({ onAcceso }: AppProps) {
                 </div>
 
                 {aiError && (
-                  <p className="font-code-sm text-xs text-error">{aiError}</p>
+                  <p className="font-['Inter'] text-[13px] font-normal text-error">{aiError}</p>
                 )}
 
                 {aiSugerencia && (
@@ -1907,7 +1911,7 @@ export default function App({ onAcceso }: AppProps) {
                     <pre className="font-code-sm text-xs text-on-surface whitespace-pre-wrap leading-relaxed">
                       {aiSugerencia}
                     </pre>
-                    <p className="font-code-sm text-[10px] text-on-surface-variant">
+                    <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant">
                       Tú decides si la incorporas — puedes editarla después en el formulario.
                     </p>
                     <div className="pt-2 flex flex-col sm:flex-row gap-2">
@@ -1938,7 +1942,7 @@ export default function App({ onAcceso }: AppProps) {
                             }
                           });
                         }}
-                        className="px-4 py-2 bg-primary-container text-on-primary-container font-label-caps text-xs uppercase hover:bg-primary-fixed-dim transition-colors cursor-pointer"
+                        className="px-4 py-2 bg-primary-container text-on-primary-container font-['Inter'] text-[14px] font-semibold uppercase hover:bg-primary-fixed-dim transition-colors cursor-pointer"
                       >
                         APLICAR AL FORMULARIO
                       </button>
@@ -1998,7 +2002,7 @@ export default function App({ onAcceso }: AppProps) {
                       alt="Torno convencional de precisión"
                       className="w-full h-44 object-cover"
                     />
-                    <p className="font-label-caps text-xs text-on-surface mt-2 uppercase">Mecanizado en Torno - Ejes y Bujes</p>
+                    <p className="font-['Inter'] text-[13px] font-normal text-on-surface mt-2 uppercase">Mecanizado en Torno - Ejes y Bujes</p>
                   </div>
                   <div className="sharp-border p-2 bg-background">
                     <img
@@ -2006,7 +2010,7 @@ export default function App({ onAcceso }: AppProps) {
                       alt="Fresado industrial de piezas"
                       className="w-full h-44 object-cover"
                     />
-                    <p className="font-label-caps text-xs text-on-surface mt-2 uppercase">Fresado de Planos y Ranurados</p>
+                    <p className="font-['Inter'] text-[13px] font-normal text-on-surface mt-2 uppercase">Fresado de Planos y Ranurados</p>
                   </div>
                   <div className="sharp-border p-2 bg-background">
                     <img
@@ -2014,7 +2018,7 @@ export default function App({ onAcceso }: AppProps) {
                       alt="Fabricación de componentes a medida"
                       className="w-full h-44 object-cover"
                     />
-                    <p className="font-label-caps text-xs text-on-surface mt-2 uppercase">Fabricación Bajo Plano Técnico</p>
+                    <p className="font-['Inter'] text-[13px] font-normal text-on-surface mt-2 uppercase">Fabricación Bajo Plano Técnico</p>
                   </div>
                   <div className="sharp-border p-2 bg-background">
                     <img
@@ -2022,7 +2026,7 @@ export default function App({ onAcceso }: AppProps) {
                       alt="Recuperación y rectificación de piezas"
                       className="w-full h-44 object-cover"
                     />
-                    <p className="font-label-caps text-xs text-on-surface mt-2 uppercase">Recuperación y Ajuste Dimensional</p>
+                    <p className="font-['Inter'] text-[13px] font-normal text-on-surface mt-2 uppercase">Recuperación y Ajuste Dimensional</p>
                   </div>
                 </div>
               </div>
@@ -2031,7 +2035,7 @@ export default function App({ onAcceso }: AppProps) {
             <div className="mt-6 pt-4 border-t border-outline flex justify-end">
               <button
                 onClick={() => setModalType(null)}
-                className="px-6 py-2 bg-primary-container text-on-primary-container font-label-caps text-label-caps hover:bg-primary-fixed-dim transition-colors cursor-pointer"
+                className="px-6 py-2 bg-primary-container text-on-primary-container font-['Inter'] text-[14px] font-semibold hover:bg-primary-fixed-dim transition-colors cursor-pointer"
               >
                 CERRAR
               </button>

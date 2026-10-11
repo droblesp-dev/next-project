@@ -423,7 +423,7 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
         <button
           type="button"
           onClick={() => setAlertaSeleccionada(null)}
-          className="mb-6 inline-flex items-center font-label-caps text-label-caps text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
+          className="mb-6 inline-flex items-center font-['Inter'] text-[14px] font-semibold text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
         >
           <span className="material-symbols-outlined mr-1 text-[18px]">arrow_back</span>
           VOLVER AL LISTADO
@@ -435,7 +435,7 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
               <h3 className="font-headline-md text-headline-md text-on-surface uppercase">
                 {alertaSeleccionada.tipo} · {alertaSeleccionada.condicion}
               </h3>
-              <p className="font-code-sm text-code-sm text-on-surface-variant uppercase mt-1">
+              <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase mt-1">
                 {new Date(alertaSeleccionada.creado_en).toLocaleString()}
               </p>
             </div>
@@ -479,7 +479,7 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
                 </div>
               </dl>
             ) : (
-              <p className="font-code-sm text-code-sm text-on-surface-variant uppercase">
+              <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">
                 {estadoApoyo === 'cargando' ? 'Cargando datos de la orden…' : 'No se pudo obtener la orden relacionada.'}
               </p>
             )}
@@ -488,7 +488,7 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
               <button
                 type="button"
                 onClick={() => onVerOrden(alertaSeleccionada.orden_id)}
-                className="mt-4 inline-flex items-center px-4 py-2 border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors font-label-caps text-label-caps cursor-pointer"
+                className="mt-4 inline-flex items-center px-4 py-2 border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
               >
                 VER ORDEN
               </button>
@@ -505,15 +505,15 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
   if (esAdmin) {
     return (
       <div className="space-y-8">
-        <p className="font-code-sm text-xs text-on-surface-variant uppercase max-w-2xl">
+        <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase max-w-2xl">
           Vista de supervisión: consulte las alertas generadas por el sistema y su contexto. Esta vista no permite
           atenderlas — esa acción es responsabilidad de Operativo.
         </p>
 
-        {loading && <p className="font-code-sm text-code-sm text-on-surface-variant uppercase">CARGANDO ALERTAS...</p>}
-        {!loading && error && <p className="font-code-sm text-xs text-error uppercase">{error}</p>}
+        {loading && <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">CARGANDO ALERTAS...</p>}
+        {!loading && error && <p className="font-['Inter'] text-[13px] font-normal text-error uppercase">{error}</p>}
         {!loading && !error && alertas && alertas.length === 0 && (
-          <p className="font-code-sm text-code-sm text-on-surface-variant uppercase">NO HAY ALERTAS REGISTRADAS.</p>
+          <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">NO HAY ALERTAS REGISTRADAS.</p>
         )}
 
         {!loading && !error && alertas && alertas.length > 0 && (
@@ -613,7 +613,7 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
 
               <div className="grid grid-cols-2 lg:grid-cols-[180px_180px_1fr_auto] gap-4 items-end">
                 <div>
-                  <label className="block font-label-caps text-[10px] text-on-surface-variant uppercase mb-1">
+                  <label className="block font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase mb-1">
                     Fecha desde
                   </label>
                   <input
@@ -624,7 +624,7 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
                   />
                 </div>
                 <div>
-                  <label className="block font-label-caps text-[10px] text-on-surface-variant uppercase mb-1">
+                  <label className="block font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase mb-1">
                     Fecha hasta
                   </label>
                   <input
@@ -635,7 +635,7 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
                   />
                 </div>
                 <div>
-                  <label className="block font-label-caps text-[10px] text-on-surface-variant uppercase mb-1">
+                  <label className="block font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase mb-1">
                     Ordenar por
                   </label>
                   <div className="relative">
@@ -656,7 +656,7 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
                   type="button"
                   onClick={limpiarFiltrosAdmin}
                   disabled={!hayFiltrosActivosAdmin}
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2 border border-outline text-on-surface hover:bg-surface-container-high transition-colors font-label-caps text-label-caps disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap"
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2 border border-outline text-on-surface hover:bg-surface-container-high transition-colors font-['Inter'] text-[14px] font-semibold disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap"
                 >
                   <span className="material-symbols-outlined text-[16px]">restart_alt</span>
                   LIMPIAR FILTROS
@@ -669,14 +669,14 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-outline">
-                    <th className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant uppercase">Tipo</th>
-                    <th className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant uppercase">Condición</th>
-                    <th className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant uppercase">Orden</th>
-                    <th className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant uppercase">Cliente</th>
-                    <th className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant uppercase">Servicio</th>
-                    <th className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant uppercase">Estado</th>
-                    <th className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant uppercase">Fecha</th>
-                    <th className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant uppercase text-right">
+                    <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Tipo</th>
+                    <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Condición</th>
+                    <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Orden</th>
+                    <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Cliente</th>
+                    <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Servicio</th>
+                    <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Estado</th>
+                    <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Fecha</th>
+                    <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase text-right">
                       Acción
                     </th>
                   </tr>
@@ -710,7 +710,7 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
                           <button
                             type="button"
                             onClick={() => setAlertaSeleccionada(a)}
-                            className="inline-flex items-center px-3 py-1 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-label-caps text-label-caps text-[10px] cursor-pointer"
+                            className="inline-flex items-center px-3 py-1 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
                           >
                             VER
                           </button>
@@ -725,7 +725,7 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
             {/* TABLA — mobile (tarjetas) */}
             <div className="md:hidden space-y-3">
               {datosPaginaAdmin.length === 0 && (
-                <p className="font-code-sm text-code-sm text-on-surface-variant uppercase text-center py-6">
+                <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase text-center py-6">
                   Ningún resultado coincide con estos filtros.
                 </p>
               )}
@@ -762,7 +762,7 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
                       <button
                         type="button"
                         onClick={() => setAlertaSeleccionada(a)}
-                        className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-label-caps text-label-caps text-[11px] cursor-pointer"
+                        className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
                       >
                         VER
                       </button>
@@ -775,7 +775,7 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
             {/* PAGINACIÓN */}
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-surface sharp-border p-4">
               <div className="flex items-center gap-3">
-                <span className="font-code-sm text-[11px] text-on-surface-variant uppercase">
+                <span className="font-['Inter'] text-[13px] font-normal text-on-surface-variant">
                   Mostrando {ordenadasAdmin.length === 0 ? 0 : (paginaEfectivaAdmin - 1) * registrosPorPaginaAdmin + 1}–
                   {Math.min(paginaEfectivaAdmin * registrosPorPaginaAdmin, ordenadasAdmin.length)} de{' '}
                   {ordenadasAdmin.length} alertas
@@ -784,7 +784,7 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
                   <select
                     value={registrosPorPaginaAdmin}
                     onChange={(e) => setRegistrosPorPaginaAdmin(Number(e.target.value))}
-                    className="appearance-none bg-background border border-outline pl-3 pr-11 py-1.5 text-on-surface text-xs font-code-sm focus:border-primary-container focus:outline-hidden cursor-pointer"
+                    className="appearance-none bg-background border border-outline pl-3 pr-11 py-1.5 text-on-surface font-['Inter'] text-[13px] font-normal focus:border-primary-container focus:outline-hidden cursor-pointer"
                   >
                     {REGISTROS_POR_PAGINA_OPCIONES_ALERTA.map((n) => (
                       <option key={n} value={n}>
@@ -810,7 +810,7 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
 
                 {paginasVisiblesAdmin.map((p, idx) =>
                   p === 'ellipsis' ? (
-                    <span key={`ellipsis-${idx}`} className="px-1 font-code-sm text-on-surface-variant">
+                    <span key={`ellipsis-${idx}`} className="px-1 font-['Inter'] text-[13px] font-normal text-on-surface-variant">
                       …
                     </span>
                   ) : (
@@ -818,7 +818,7 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
                       key={p}
                       type="button"
                       onClick={() => setPaginaActualAdmin(p)}
-                      className={`inline-flex items-center justify-center w-8 h-8 font-code-sm text-xs transition-colors cursor-pointer ${
+                      className={`inline-flex items-center justify-center w-8 h-8 font-['Inter'] text-[14px] font-semibold transition-colors cursor-pointer ${
                         p === paginaEfectivaAdmin
                           ? 'bg-primary-container text-on-primary-container'
                           : 'border border-outline text-on-surface hover:bg-surface-container-high'
@@ -852,10 +852,10 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
   // (una alerta ya CANCELADA por obsoleta — decisiones 6A/7A — o ya ATENDIDA no ofrece la acción).
   return (
     <div>
-      {loading && <p className="font-code-sm text-code-sm text-on-surface-variant uppercase">CARGANDO ALERTAS...</p>}
-      {!loading && error && <p className="font-code-sm text-xs text-error uppercase">{error}</p>}
+      {loading && <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">CARGANDO ALERTAS...</p>}
+      {!loading && error && <p className="font-['Inter'] text-[13px] font-normal text-error uppercase">{error}</p>}
       {!loading && !error && alertas && alertas.length === 0 && (
-        <p className="font-code-sm text-code-sm text-on-surface-variant uppercase">NO HAY ALERTAS REGISTRADAS.</p>
+        <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">NO HAY ALERTAS REGISTRADAS.</p>
       )}
       {!loading && !error && alertas && alertas.length > 0 && (
         <div className="space-y-3">
@@ -869,7 +869,7 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
                   <span className="font-code-sm text-[10px] text-on-surface-variant uppercase">{a.estado}</span>
                 </div>
                 <p className="font-body-md text-body-md text-on-surface">{a.mensaje}</p>
-                <p className="font-code-sm text-[10px] text-on-surface-variant uppercase mt-1">
+                <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase mt-1">
                   {new Date(a.creado_en).toLocaleString()}
                 </p>
               </div>
@@ -877,7 +877,7 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
                 <button
                   type="button"
                   onClick={() => onVerOrden(a.orden_id)}
-                  className="px-4 py-2 border border-outline text-on-surface hover:bg-surface-container-high transition-colors font-label-caps text-label-caps text-[10px] cursor-pointer"
+                  className="px-4 py-2 border border-outline text-on-surface hover:bg-surface-container-high transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
                 >
                   VER ORDEN
                 </button>
@@ -886,7 +886,7 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
                     type="button"
                     disabled={procesando === a.id}
                     onClick={() => handleAtender(a.id)}
-                    className="px-4 py-2 border border-outline text-on-surface hover:bg-surface-container-high transition-colors font-label-caps text-label-caps text-[10px] disabled:opacity-50 cursor-pointer"
+                    className="px-4 py-2 border border-outline text-on-surface hover:bg-surface-container-high transition-colors font-['Inter'] text-[14px] font-semibold disabled:opacity-50 cursor-pointer"
                   >
                     ATENDER
                   </button>

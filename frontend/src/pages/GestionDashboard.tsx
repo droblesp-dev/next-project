@@ -166,7 +166,7 @@ function BarrasEstados({ titulo, datos }: { titulo: string; datos: ConteoPorEsta
     <div className="bg-surface sharp-border p-6 h-full">
       <p className="font-label-caps text-label-caps text-primary-container uppercase mb-4">{titulo}</p>
       {datos.length === 0 ? (
-        <p className="font-code-sm text-code-sm text-on-surface-variant uppercase">Sin datos.</p>
+        <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">Sin datos.</p>
       ) : (
         <div className="space-y-2.5">
           {datos.map((d) => {
@@ -207,7 +207,7 @@ function FilaEstadosCompacta({ titulo, datos }: { titulo: string; datos: ConteoP
     <div className="bg-surface sharp-border p-6">
       <p className="font-label-caps text-label-caps text-primary-container uppercase mb-4">{titulo}</p>
       {datos.length === 0 ? (
-        <p className="font-code-sm text-code-sm text-on-surface-variant uppercase">Sin datos.</p>
+        <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">Sin datos.</p>
       ) : (
         <div className="flex flex-wrap lg:flex-nowrap justify-center gap-4">
           {datos.map((d) => {
@@ -245,7 +245,7 @@ function BloquesCompactos({ titulo, datos }: { titulo: string; datos: ConteoPorE
     <div className="bg-surface sharp-border p-6 h-full">
       <p className="font-label-caps text-label-caps text-primary-container uppercase mb-4">{titulo}</p>
       {datos.length === 0 ? (
-        <p className="font-code-sm text-code-sm text-on-surface-variant uppercase">Sin datos.</p>
+        <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">Sin datos.</p>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
           {datos.map((d) => {
@@ -308,11 +308,11 @@ export default function GestionDashboard({ token, onSesionInvalida }: GestionDas
   }, [token]);
 
   if (loading) {
-    return <p className="font-code-sm text-code-sm text-on-surface-variant uppercase">CARGANDO DASHBOARD...</p>;
+    return <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">CARGANDO DASHBOARD...</p>;
   }
 
   if (error || !resumen) {
-    return <p className="font-code-sm text-xs text-error uppercase">{error ?? 'No se pudo cargar el dashboard.'}</p>;
+    return <p className="font-['Inter'] text-[13px] font-normal text-error uppercase">{error ?? 'No se pudo cargar el dashboard.'}</p>;
   }
 
   return (
@@ -414,7 +414,7 @@ export default function GestionDashboard({ token, onSesionInvalida }: GestionDas
             </p>
           </div>
           {resumen.analisisIa === null ? (
-            <p className="font-code-sm text-code-sm text-on-surface-variant uppercase">
+            <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">
               [PENDIENTE] No existen ejecuciones registradas del módulo de IA.
             </p>
           ) : (

@@ -106,7 +106,7 @@ export default function AppRoot() {
   if (vista === 'validando') {
     return (
       <div className="bg-background min-h-screen flex items-center justify-center">
-        <p className="font-code-sm text-code-sm text-on-surface-variant uppercase">CARGANDO...</p>
+        <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">CARGANDO...</p>
       </div>
     );
   }

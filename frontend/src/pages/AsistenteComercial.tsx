@@ -54,6 +54,16 @@ export default function AsistenteComercial({ onIrFormulario }: AsistenteComercia
   const [telefonoTocado, setTelefonoTocado] = useState(false);
   const [emailTocado, setEmailTocado] = useState(false);
 
+  // VALIDACIONES-ASISTENTE-01 (autorización explícita — corrección derivada de la auditoría
+  // integral de validaciones): antes, el mensaje de error general se fijaba una sola vez con
+  // `setError(...)` dentro de `handleEnviar` y quedaba "congelado" en pantalla aunque el usuario
+  // corrigiera el campo que lo causó — solo se actualizaba en el siguiente clic en ENVIAR.
+  // `intentoEnvio` solo marca que YA hubo al menos un intento de envío (nunca antes de eso se
+  // muestra ningún error general); el mensaje en sí (`errorValidacion`, más abajo) se recalcula
+  // en cada render a partir del estado actual de los campos, igual que ya hacían `telefonoEsInvalido`
+  // y `emailEsInvalido`.
+  const [intentoEnvio, setIntentoEnvio] = useState(false);
+
   // ASISTENTE-COMERCIAL-02 (autorización explícita — hallazgo de la auditoría
   // ASISTENTE-COMERCIAL-01): mismo patrón que `enviandoRef` en App.tsx — guarda
   // SÍNCRONA e inmediata (no depende de ningún re-render de React), fijada
@@ -69,36 +79,26 @@ export default function AsistenteComercial({ onIrFormulario }: AsistenteComercia
       return;
     }
 
-    // ASISTENTE-COMERCIAL-02: validación local — mismo mensaje que el
-    // formulario principal para el mismo caso. No depende únicamente de
-    // `type="tel"`/`type="email"` del navegador (que no validan formato EC
-    // ni bloquean varios números).
-    // ASISTENTE-COMERCIAL-06 (autorización explícita): el correo ya no es
-    // opcional — vacío se trata como un caso de validación propio, con su
-    // propio mensaje ("obligatorio"), distinto del de formato inválido.
-    const resultadoTelefono = normalizarTelefonoEc(telefono);
-    const emailTrim = email.trim();
-    const emailVacio = emailTrim === '';
-    const emailFormatoInvalido = !emailVacio && !EMAIL_REGEX.test(emailTrim);
-    if (!resultadoTelefono.valido || emailVacio || emailFormatoInvalido) {
-      // FORMULARIO-UX-08.1 (autorización explícita): "Al enviar: ejecutar nuevamente la
-      // validación existente" — además, se marcan ambos campos como "tocados" para que el
-      // indicador visual en línea se active aunque el usuario no haya salido de ningún campo.
+    // VALIDACIONES-ASISTENTE-01 (autorización explícita): marca que ya hubo un intento de envío
+    // — a partir de aquí, `errorValidacion` (derivado más abajo) puede mostrarse. El TEXTO del
+    // mensaje ya no se fija aquí: se recalcula en cada render a partir del estado actual de los
+    // campos, así que si el usuario corrige el campo que falló, el mensaje avanza o desaparece de
+    // inmediato sin necesidad de un nuevo clic en ENVIAR.
+    setIntentoEnvio(true);
+
+    if (!telefonoEsValido || emailVacio || !emailEsValido) {
+      // FORMULARIO-UX-08.1 (autorización explícita): se marcan ambos campos como "tocados" para
+      // que el indicador visual en línea se active aunque el usuario no haya salido de ningún
+      // campo.
       setTelefonoTocado(true);
       setEmailTocado(true);
     }
-    if (!resultadoTelefono.valido) {
-      setError('Ingresa un solo número de contacto válido de Ecuador.');
+    if (nombreEstaVacio || !telefonoEsValido || emailVacio || !emailEsValido) {
       return;
     }
-    if (emailVacio) {
-      setError('El correo electrónico es obligatorio.');
-      return;
-    }
-    if (emailFormatoInvalido) {
-      setError('Ingresa un correo electrónico válido.');
-      return;
-    }
+
+    const telefonoNormalizado = normalizarTelefonoEc(telefono).normalizado;
+    const emailTrim = email.trim();
 
     enviandoRef.current = true;
     setEnviando(true);
@@ -108,7 +108,7 @@ export default function AsistenteComercial({ onIrFormulario }: AsistenteComercia
       const response = await fetch(`${API_BASE}/api/leads`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nombre, telefono: resultadoTelefono.normalizado, email: emailTrim, fuente }),
+        body: JSON.stringify({ nombre, telefono: telefonoNormalizado, email: emailTrim, fuente }),
       });
 
       if (!response.ok) {
@@ -143,19 +143,39 @@ export default function AsistenteComercial({ onIrFormulario }: AsistenteComercia
 
   // FORMULARIO-UX-08.1 (autorización explícita): validez derivada en cada render, igual que
   // App.tsx.
-  // ASISTENTE-COMERCIAL-06 (autorización explícita): el correo ya NO es opcional aquí — se
-  // distingue "vacío" (mensaje de obligatoriedad) de "formato inválido" (mensaje de formato),
-  // igual que exige el bloque. Mismo patrón de "tocado" que el teléfono.
+  const nombreEstaVacio = nombre.trim() === '';
+
   const telefonoVacio = telefono.trim() === '';
   const telefonoEsValido = !telefonoVacio && normalizarTelefonoEc(telefono).valido;
   const telefonoEsInvalido = telefonoTocado && !telefonoVacio && !telefonoEsValido;
   const telefonoMostrarValido = telefonoTocado && telefonoEsValido;
 
+  // VALIDACIONES-ASISTENTE-01 (autorización explícita — corrección derivada de la auditoría
+  // integral de validaciones): el correo ahora sigue EXACTAMENTE el mismo patrón que el teléfono
+  // — un campo vacío nunca se marca en rojo por sí solo (ni al perder el foco ni al enviar), solo
+  // el formato inválido lo hace. `emailFaltaObligatorio` (que sí ponía el campo vacío en rojo al
+  // perder el foco) se elimina; la distinción "vacío" vs "formato inválido" para el mensaje
+  // GENERAL de envío se conserva en `errorValidacion`, más abajo.
   const emailVacio = email.trim() === '';
   const emailEsValido = !emailVacio && EMAIL_REGEX.test(email.trim());
-  const emailFaltaObligatorio = emailTocado && emailVacio;
   const emailEsInvalido = emailTocado && !emailVacio && !emailEsValido;
   const emailMostrarValido = emailTocado && emailEsValido;
+
+  // VALIDACIONES-ASISTENTE-01 (autorización explícita): mensaje general de envío, derivado en
+  // cada render — nunca se "congela". Antes de cualquier intento de envío, siempre es `null` (no
+  // se muestran errores prematuros). Mantiene el mismo orden de validación que antes: nombre,
+  // teléfono, correo (vacío primero, formato inválido después).
+  const errorValidacion = !intentoEnvio
+    ? null
+    : nombreEstaVacio
+      ? 'El nombre es obligatorio.'
+      : !telefonoEsValido
+        ? 'Ingresa un solo número de contacto válido de Ecuador.'
+        : emailVacio
+          ? 'El correo electrónico es obligatorio.'
+          : !emailEsValido
+            ? 'Ingresa un correo electrónico válido.'
+            : null;
 
   if (paso === 'menu') {
     return (
@@ -167,21 +187,21 @@ export default function AsistenteComercial({ onIrFormulario }: AsistenteComercia
           <button
             type="button"
             onClick={onIrFormulario}
-            className="w-full text-left px-4 py-3 bg-surface-container-high hover:bg-outline/40 border border-outline transition-colors font-code-sm text-sm"
+            className="w-full text-left px-4 py-3 bg-surface-container-high hover:bg-outline/40 border border-outline transition-colors font-['Inter'] text-[14px] font-semibold"
           >
             1. SOLICITAR COTIZACIÓN
           </button>
           <button
             type="button"
             onClick={() => setPaso('servicio')}
-            className="w-full text-left px-4 py-3 bg-surface-container-high hover:bg-outline/40 border border-outline transition-colors font-code-sm text-sm"
+            className="w-full text-left px-4 py-3 bg-surface-container-high hover:bg-outline/40 border border-outline transition-colors font-['Inter'] text-[14px] font-semibold"
           >
             2. CONSULTAR UN SERVICIO
           </button>
           <button
             type="button"
             onClick={() => setPaso('asesor')}
-            className="w-full text-left px-4 py-3 bg-primary-container text-on-primary-container hover:bg-primary-fixed-dim transition-colors font-code-sm text-sm"
+            className="w-full text-left px-4 py-3 bg-primary-container text-on-primary-container hover:bg-primary-fixed-dim transition-colors font-['Inter'] text-[14px] font-semibold"
           >
             3. HABLAR CON UN ASESOR
           </button>
@@ -202,21 +222,21 @@ export default function AsistenteComercial({ onIrFormulario }: AsistenteComercia
           <button
             type="button"
             onClick={onIrFormulario}
-            className="px-4 py-2 bg-primary-container text-on-primary-container font-label-caps text-xs uppercase hover:bg-primary-fixed-dim transition-colors cursor-pointer"
+            className="px-4 py-2 bg-primary-container text-on-primary-container font-['Inter'] text-[14px] font-semibold hover:bg-primary-fixed-dim transition-colors cursor-pointer"
           >
             SOLICITAR COTIZACIÓN
           </button>
           <button
             type="button"
             onClick={() => setPaso('asesor')}
-            className="px-4 py-2 border border-outline text-on-surface font-label-caps text-xs uppercase hover:bg-surface-container-high transition-colors cursor-pointer"
+            className="px-4 py-2 border border-outline text-on-surface font-['Inter'] text-[14px] font-semibold hover:bg-surface-container-high transition-colors cursor-pointer"
           >
             HABLAR CON UN ASESOR
           </button>
           <button
             type="button"
             onClick={() => setPaso('menu')}
-            className="px-4 py-2 text-on-surface-variant font-label-caps text-xs uppercase hover:text-on-surface transition-colors cursor-pointer"
+            className="px-4 py-2 text-on-surface-variant font-['Inter'] text-[14px] font-semibold hover:text-on-surface transition-colors cursor-pointer"
           >
             VOLVER
           </button>
@@ -234,7 +254,7 @@ export default function AsistenteComercial({ onIrFormulario }: AsistenteComercia
             el flujo real no garantiza — "por el medio que proporcionaste" es siempre cierto,
             cualquiera sea el teléfono/correo que el usuario haya dejado. */}
         <p className="font-body-md text-sm text-on-surface">
-          Gracias, {nombre || 'recibimos tu mensaje'}. Recibimos tu mensaje. En breve, un asesor comercial se pondrá en contacto contigo para responder tus consultas y ayudarte con tu requerimiento.
+          {nombre.trim() ? `Gracias, ${nombre.trim()}. ` : ''}Recibimos tu mensaje. En breve, un asesor comercial se pondrá en contacto contigo para responder tus consultas y ayudarte con tu requerimiento.
         </p>
       </div>
     );
@@ -246,21 +266,21 @@ export default function AsistenteComercial({ onIrFormulario }: AsistenteComercia
     // `handleEnviar` pudiera mostrar "Ingresa un correo electrónico válido."; `required` en
     // nombre/teléfono se conserva (semántica/accesibilidad), solo deja de bloquear por sí solo.
     <form className="space-y-4" onSubmit={handleEnviar} noValidate>
-      <p className="font-body-md text-sm text-on-surface-variant">
+      <p className="font-body-md text-sm text-on-surface-variant pl-2">
         Déjenos sus datos y un asesor comercial le contactará.
       </p>
       <div>
-        <label className="block font-code-sm text-xs text-on-surface-variant uppercase mb-1">Nombre</label>
+        <label className="block font-['Inter'] text-[13px] font-semibold text-on-surface-variant uppercase mb-1 pl-2">Nombre *</label>
         <input
           value={nombre}
           onChange={(e) => setNombre(e.target.value)}
           required
-          className="w-full bg-background border-0 border-b border-outline text-on-surface px-0 py-2 focus:ring-0 focus:border-primary-container transition-colors font-body-md outline-none"
+          className="w-full bg-background border-0 border-b border-outline text-on-surface px-0 pl-2 py-2 focus:ring-0 focus:border-primary-container transition-colors font-body-md outline-none"
           type="text"
         />
       </div>
       <div>
-        <label className="block font-code-sm text-xs text-on-surface-variant uppercase mb-1">Teléfono / WhatsApp</label>
+        <label className="block font-['Inter'] text-[13px] font-semibold text-on-surface-variant uppercase mb-1 pl-2">Teléfono / WhatsApp *</label>
         <input
           value={telefono}
           onChange={(e) => setTelefono(e.target.value)}
@@ -269,7 +289,7 @@ export default function AsistenteComercial({ onIrFormulario }: AsistenteComercia
           maxLength={20}
           aria-invalid={telefonoEsInvalido}
           aria-describedby="asesor-telefono-ayuda"
-          className="w-full bg-background border-0 border-b border-outline text-on-surface px-0 py-2 focus:ring-0 focus:border-primary-container transition-colors font-body-md outline-none"
+          className="w-full bg-background border-0 border-b border-outline text-on-surface px-0 pl-2 py-2 focus:ring-0 focus:border-primary-container transition-colors font-body-md outline-none"
           placeholder="Ej. 099 999 9999"
           type="tel"
         />
@@ -280,7 +300,7 @@ export default function AsistenteComercial({ onIrFormulario }: AsistenteComercia
         <p
           id="asesor-telefono-ayuda"
           aria-live="polite"
-          className={`font-code-sm text-[10px] mt-1 flex items-center gap-1 ${
+          className={`font-['Inter'] text-[13px] font-normal mt-1 pl-2 flex items-center gap-1 ${
             telefonoEsInvalido ? 'text-error' : telefonoMostrarValido ? 'text-primary-container' : 'text-on-surface-variant'
           }`}
         >
@@ -295,68 +315,82 @@ export default function AsistenteComercial({ onIrFormulario }: AsistenteComercia
         </p>
       </div>
       <div>
-        <label className="block font-code-sm text-xs text-on-surface-variant uppercase mb-1">Correo electrónico *</label>
+        <label className="block font-['Inter'] text-[13px] font-semibold text-on-surface-variant uppercase mb-1 pl-2">Correo electrónico *</label>
         <input
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           onBlur={() => setEmailTocado(true)}
           required
-          aria-invalid={emailEsInvalido || emailFaltaObligatorio}
+          aria-invalid={emailEsInvalido}
           aria-describedby="asesor-email-ayuda"
-          className="w-full bg-background border-0 border-b border-outline text-on-surface px-0 py-2 focus:ring-0 focus:border-primary-container transition-colors font-body-md outline-none"
+          className="w-full bg-background border-0 border-b border-outline text-on-surface px-0 pl-2 py-2 focus:ring-0 focus:border-primary-container transition-colors font-body-md outline-none"
           placeholder="Ej. nombre@empresa.com"
           type="email"
         />
-        {/* ASISTENTE-COMERCIAL-06 (autorización explícita): correo ahora OBLIGATORIO — se
-            distingue "vacío tras tocar" (mensaje de obligatoriedad) de "formato inválido"
-            (mensaje de formato), sin mezclarlos. Mientras se escribe (no tocado) o válido, se
-            conserva el texto de ayuda/confirmación ya existente. */}
+        {/* VALIDACIONES-ASISTENTE-01 (autorización explícita): mismo patrón de 3 estados que el
+            teléfono — vacío/neutro, formato inválido en rojo, válido en verde con texto de
+            confirmación propio ("Correo válido."), en vez de repetir el texto instructivo. */}
         <p
           id="asesor-email-ayuda"
           aria-live="polite"
-          className={`font-code-sm text-[10px] mt-1 flex items-center gap-1 ${
-            emailEsInvalido || emailFaltaObligatorio
-              ? 'text-error'
-              : emailMostrarValido
-                ? 'text-primary-container'
-                : 'text-on-surface-variant'
+          className={`font-['Inter'] text-[13px] font-normal mt-1 pl-2 flex items-center gap-1 ${
+            emailEsInvalido ? 'text-error' : emailMostrarValido ? 'text-primary-container' : 'text-on-surface-variant'
           }`}
         >
           {emailMostrarValido && (
             <span className="material-symbols-outlined text-[12px]" aria-hidden="true">check_circle</span>
           )}
-          {emailFaltaObligatorio ? 'El correo electrónico es obligatorio.' : 'Ingresa un correo electrónico válido.'}
+          {emailEsInvalido
+            ? 'Ingresa un correo electrónico válido.'
+            : emailMostrarValido
+              ? 'Correo válido.'
+              : 'Ingresa un correo electrónico válido.'}
         </p>
       </div>
       <div>
-        <label className="block font-code-sm text-xs text-on-surface-variant uppercase mb-1">¿Cómo nos encontró?</label>
-        <select
-          value={fuente}
-          onChange={(e) => setFuente(e.target.value)}
-          className="w-full bg-background border-0 border-b border-outline text-on-surface px-0 py-2 focus:ring-0 focus:border-primary-container transition-colors font-body-md outline-none cursor-pointer"
-        >
-          {FUENTES.map((f) => (
-            <option key={f.value} value={f.value}>
-              {f.label}
-            </option>
-          ))}
-        </select>
+        <label className="block font-['Inter'] text-[13px] font-semibold text-on-surface-variant uppercase mb-1 pl-2">¿Cómo nos encontró?</label>
+        <div className="relative">
+          <select
+            value={fuente}
+            onChange={(e) => setFuente(e.target.value)}
+            className="w-full appearance-none bg-background border-0 border-b border-outline text-on-surface px-0 pl-2 pr-8 py-2 focus:ring-0 focus:border-primary-container transition-colors font-body-md outline-none cursor-pointer"
+          >
+            {FUENTES.map((f) => (
+              <option key={f.value} value={f.value}>
+                {f.label}
+              </option>
+            ))}
+          </select>
+          <span className="material-symbols-outlined pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[18px] text-on-surface-variant">
+            expand_more
+          </span>
+        </div>
       </div>
 
-      {error && <p className="font-code-sm text-xs text-error uppercase">{error}</p>}
+      {/* VALIDACIONES-ASISTENTE-01 (autorización explícita): `errorValidacion` (derivado, se
+          recalcula en cada render) tiene prioridad — mientras exista un campo local inválido,
+          muestra siempre el primero según el orden nombre→teléfono→correo, y se actualiza o
+          desaparece de inmediato al corregir el campo, sin esperar un nuevo envío. `error` (el
+          mensaje del backend/red, fijado solo tras un intento real de envío) se muestra únicamente
+          cuando ya no queda ningún problema de validación local. */}
+      {(errorValidacion || error) && (
+        <p className="font-['Inter'] text-[13px] font-normal text-error uppercase pl-2">
+          {errorValidacion || error}
+        </p>
+      )}
 
       <div className="flex gap-3">
         <button
           disabled={enviando}
           type="submit"
-          className="px-4 py-2 bg-primary-container text-on-primary-container font-label-caps text-xs uppercase hover:bg-primary-fixed-dim transition-colors disabled:opacity-50 cursor-pointer"
+          className="px-4 py-2 bg-primary-container text-on-primary-container font-['Inter'] text-[14px] font-semibold hover:bg-primary-fixed-dim transition-colors disabled:opacity-50 cursor-pointer"
         >
           {enviando ? 'ENVIANDO...' : 'ENVIAR'}
         </button>
         <button
           type="button"
           onClick={() => setPaso('menu')}
-          className="px-4 py-2 text-on-surface-variant font-label-caps text-xs uppercase hover:text-on-surface transition-colors cursor-pointer"
+          className="px-4 py-2 text-on-surface-variant font-['Inter'] text-[14px] font-semibold hover:text-on-surface transition-colors cursor-pointer"
         >
           VOLVER
         </button>

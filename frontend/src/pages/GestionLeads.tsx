@@ -1338,7 +1338,7 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
             {/* PAGINACIÓN */}
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-surface sharp-border p-4">
               <div className="flex items-center gap-3">
-                <span className="font-code-sm text-[11px] text-on-surface-variant uppercase">
+                <span className="font-['Inter'] text-[13px] font-normal text-on-surface-variant">
                   Mostrando {ordenadasAdmin.length === 0 ? 0 : (paginaEfectivaAdmin - 1) * registrosPorPaginaAdmin + 1}–
                   {Math.min(paginaEfectivaAdmin * registrosPorPaginaAdmin, ordenadasAdmin.length)} de{' '}
                   {ordenadasAdmin.length} leads
@@ -1347,7 +1347,7 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
                   <select
                     value={registrosPorPaginaAdmin}
                     onChange={(e) => setRegistrosPorPaginaAdmin(Number(e.target.value))}
-                    className="appearance-none bg-background border border-outline pl-3 pr-11 py-1.5 text-on-surface text-xs font-code-sm focus:border-primary-container focus:outline-hidden cursor-pointer"
+                    className="appearance-none bg-background border border-outline pl-3 pr-11 py-1.5 text-on-surface font-['Inter'] text-[13px] font-normal focus:border-primary-container focus:outline-hidden cursor-pointer"
                   >
                     {REGISTROS_POR_PAGINA_OPCIONES_LEAD.map((n) => (
                       <option key={n} value={n}>
@@ -1373,7 +1373,7 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
 
                 {paginasVisiblesAdmin.map((p, idx) =>
                   p === 'ellipsis' ? (
-                    <span key={`ellipsis-${idx}`} className="px-1 font-code-sm text-on-surface-variant">
+                    <span key={`ellipsis-${idx}`} className="px-1 font-['Inter'] text-[13px] font-normal text-on-surface-variant">
                       …
                     </span>
                   ) : (
@@ -1381,7 +1381,7 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
                       key={p}
                       type="button"
                       onClick={() => setPaginaActualAdmin(p)}
-                      className={`inline-flex items-center justify-center w-8 h-8 font-code-sm text-xs transition-colors cursor-pointer ${
+                      className={`inline-flex items-center justify-center w-8 h-8 font-['Inter'] text-[14px] font-semibold transition-colors cursor-pointer ${
                         p === paginaEfectivaAdmin
                           ? 'bg-primary-container text-on-primary-container'
                           : 'border border-outline text-on-surface hover:bg-surface-container-high'
@@ -2588,7 +2588,7 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
               {/* PAGINACIÓN */}
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-surface sharp-border p-4">
                 <div className="flex items-center gap-3">
-                  <span className="font-code-sm text-[11px] text-on-surface-variant uppercase">
+                  <span className="font-['Inter'] text-[13px] font-normal text-on-surface-variant">
                     Mostrando {ordenadasAdmin.length === 0 ? 0 : (paginaEfectivaAdmin - 1) * registrosPorPaginaAdmin + 1}–
                     {Math.min(paginaEfectivaAdmin * registrosPorPaginaAdmin, ordenadasAdmin.length)} de{' '}
                     {ordenadasAdmin.length}
@@ -2598,7 +2598,7 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
                     value={registrosPorPaginaAdmin}
                     onChange={(e) => setRegistrosPorPaginaAdmin(Number(e.target.value))}
                     aria-label="Leads por página"
-                    className="appearance-none bg-background border border-outline pl-3 pr-11 py-1.5 text-on-surface text-xs font-code-sm focus:border-primary-container focus:outline-hidden cursor-pointer"
+                    className="appearance-none bg-background border border-outline pl-3 pr-11 py-1.5 text-on-surface font-['Inter'] text-[13px] font-normal focus:border-primary-container focus:outline-hidden cursor-pointer"
                   >
                     {REGISTROS_POR_PAGINA_OPCIONES_LEAD.map((n) => (
                       <option key={n} value={n}>
@@ -2625,7 +2625,7 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
 
                   {paginasVisiblesAdmin.map((p, idx) =>
                     p === 'ellipsis' ? (
-                      <span key={`ellipsis-${idx}`} className="px-1 font-code-sm text-on-surface-variant">
+                      <span key={`ellipsis-${idx}`} className="px-1 font-['Inter'] text-[13px] font-normal text-on-surface-variant">
                         …
                       </span>
                     ) : (
@@ -2633,7 +2633,7 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
                         key={p}
                         type="button"
                         onClick={() => setPaginaActualAdmin(p)}
-                        className={`inline-flex items-center justify-center w-8 h-8 font-code-sm text-xs transition-colors cursor-pointer ${
+                        className={`inline-flex items-center justify-center w-8 h-8 font-['Inter'] text-[14px] font-semibold transition-colors cursor-pointer ${
                           p === paginaEfectivaAdmin
                             ? 'bg-primary-container text-on-primary-container'
                             : 'border border-outline text-on-surface hover:bg-surface-container-high'

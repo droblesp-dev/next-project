@@ -1130,7 +1130,7 @@ export default function GestionOrdenes({
           <button
             type="button"
             onClick={() => setMostrandoCancelar(true)}
-            className="inline-flex items-center px-4 py-2 border border-error text-error hover:bg-error-container/20 transition-colors font-label-caps text-label-caps cursor-pointer"
+            className="inline-flex items-center px-4 py-2 border border-error text-error hover:bg-error-container/20 transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
           >
             CANCELAR ORDEN
           </button>
@@ -1156,7 +1156,7 @@ export default function GestionOrdenes({
               <button
                 type="submit"
                 disabled={cancelando || !motivoCancelacion.trim()}
-                className="inline-flex items-center px-4 py-2 border border-error text-error hover:bg-error-container/20 transition-colors font-label-caps text-label-caps disabled:opacity-50 cursor-pointer"
+                className="inline-flex items-center px-4 py-2 border border-error text-error hover:bg-error-container/20 transition-colors font-['Inter'] text-[14px] font-semibold disabled:opacity-50 cursor-pointer"
               >
                 {cancelando ? 'CANCELANDO...' : 'CONFIRMAR CANCELACIÓN'}
               </button>
@@ -1166,14 +1166,14 @@ export default function GestionOrdenes({
                   setMostrandoCancelar(false);
                   setMotivoCancelacion('');
                 }}
-                className="inline-flex items-center px-4 py-2 border border-outline text-on-surface hover:bg-surface-container-high transition-colors font-label-caps text-label-caps cursor-pointer"
+                className="inline-flex items-center px-4 py-2 border border-outline text-on-surface hover:bg-surface-container-high transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
               >
                 VOLVER
               </button>
             </div>
           </form>
         )}
-        {mensajeCancelar && <p className="font-code-sm text-xs text-error uppercase mt-3">{mensajeCancelar}</p>}
+        {mensajeCancelar && <p className="font-['Inter'] text-[13px] font-normal text-error uppercase mt-3">{mensajeCancelar}</p>}
       </div>
     );
   }
@@ -1199,16 +1199,16 @@ export default function GestionOrdenes({
           <button
             type="submit"
             disabled={reprogramando || !fechaEntregaReprogramada}
-            className="inline-flex items-center px-4 py-2 border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors font-label-caps text-label-caps disabled:opacity-50 cursor-pointer"
+            className="inline-flex items-center px-4 py-2 border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors font-['Inter'] text-[14px] font-semibold disabled:opacity-50 cursor-pointer"
           >
             {reprogramando ? 'GUARDANDO...' : 'REPROGRAMAR'}
           </button>
         </form>
-        <p className="font-code-sm text-[10px] text-on-surface-variant uppercase mt-2">
+        <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase mt-2">
           Reprogramar no marca la orden como entregada; la fecha real se registra al confirmar la entrega.
         </p>
         {mensajeReprogramar && (
-          <p className="font-code-sm text-xs text-on-surface-variant uppercase mt-2">{mensajeReprogramar}</p>
+          <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase mt-2">{mensajeReprogramar}</p>
         )}
       </div>
     );
@@ -1228,17 +1228,17 @@ export default function GestionOrdenes({
             <button
               type="button"
               onClick={() => onVerComunicacion(solicitudId)}
-              className="inline-flex items-center px-4 py-2 border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors font-label-caps text-label-caps cursor-pointer"
+              className="inline-flex items-center px-4 py-2 border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
             >
               <span className="material-symbols-outlined mr-2 text-[18px]">forum</span>
               VER COMUNICACIÓN TÉCNICA
             </button>
-            <p className="font-code-sm text-[10px] text-on-surface-variant uppercase mt-2">
+            <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase mt-2">
               Es la misma conversación de la solicitud de esta orden.
             </p>
           </>
         ) : (
-          <p className="font-code-sm text-xs text-on-surface-variant uppercase">
+          <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">
             {estadoApoyo === 'cargando'
               ? 'Cargando…'
               : 'Comunicación técnica no disponible desde esta vista: no se pudo determinar la solicitud asociada.'}
@@ -1265,7 +1265,7 @@ export default function GestionOrdenes({
             setOrdenSeleccionada(null);
             setMensajeResponsable(null);
           }}
-          className="mb-6 inline-flex items-center font-label-caps text-label-caps text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
+          className="mb-6 inline-flex items-center font-['Inter'] text-[14px] font-semibold text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
         >
           <span className="material-symbols-outlined mr-1 text-[18px]">arrow_back</span>
           VOLVER AL LISTADO
@@ -1353,32 +1353,32 @@ export default function GestionOrdenes({
           <div className="border-t border-outline pt-4">
             <p className="font-label-caps text-[10px] text-primary-container uppercase mb-2">Ficha técnica</p>
             {loadingFicha && (
-              <p className="font-code-sm text-code-sm text-on-surface-variant uppercase">CARGANDO FICHA...</p>
+              <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">CARGANDO FICHA...</p>
             )}
-            {!loadingFicha && errorFicha && <p className="font-code-sm text-xs text-error uppercase">{errorFicha}</p>}
+            {!loadingFicha && errorFicha && <p className="font-['Inter'] text-[13px] font-normal text-error uppercase">{errorFicha}</p>}
             {!loadingFicha && !errorFicha && ficha && (
               <div className="space-y-3">
                 {ficha.tiene_inconsistencia && (
-                  <p className="font-code-sm text-xs text-error uppercase border border-error px-3 py-2">
+                  <p className="font-['Inter'] text-[13px] font-normal text-error uppercase border border-error px-3 py-2">
                     NexIA detectó una inconsistencia — revise el contenido y la alerta generada.
                   </p>
                 )}
                 <pre className="font-code-sm text-xs text-on-surface whitespace-pre-wrap bg-background border border-outline p-4">
                   {ficha.contenido}
                 </pre>
-                <p className="font-code-sm text-[10px] text-on-surface-variant uppercase">
+                <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">
                   Generada el {new Date(ficha.generado_en).toLocaleString()}
                 </p>
               </div>
             )}
             {!loadingFicha && !errorFicha && !ficha && (
-              <p className="font-code-sm text-code-sm text-on-surface-variant uppercase">Ficha técnica aún no disponible.</p>
+              <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">Ficha técnica aún no disponible.</p>
             )}
           </div>
 
           <div className="border-t border-outline pt-4">
             <p className="font-label-caps text-[10px] text-primary-container uppercase mb-2">Evidencias</p>
-            {errorEvidencias && <p className="font-code-sm text-xs text-error uppercase mb-2">{errorEvidencias}</p>}
+            {errorEvidencias && <p className="font-['Inter'] text-[13px] font-normal text-error uppercase mb-2">{errorEvidencias}</p>}
             {evidencias && evidencias.length > 0 && (
               <ul className="space-y-1">
                 {evidencias.map((ev) => (
@@ -1392,7 +1392,7 @@ export default function GestionOrdenes({
                     <button
                       type="button"
                       onClick={() => handleVerEvidencia(ev.id)}
-                      className="shrink-0 inline-flex items-center px-2 py-1 border border-outline text-on-surface hover:bg-surface-container-high transition-colors font-label-caps text-label-caps text-[10px] cursor-pointer"
+                      className="shrink-0 inline-flex items-center px-2 py-1 border border-outline text-on-surface hover:bg-surface-container-high transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
                     >
                       VER
                     </button>
@@ -1401,7 +1401,7 @@ export default function GestionOrdenes({
               </ul>
             )}
             {evidencias && evidencias.length === 0 && (
-              <p className="font-code-sm text-xs text-on-surface-variant uppercase">Sin evidencias registradas todavía.</p>
+              <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">Sin evidencias registradas todavía.</p>
             )}
           </div>
 
@@ -1448,18 +1448,18 @@ export default function GestionOrdenes({
               <button
                 disabled={asignando || !responsableElegido}
                 type="submit"
-                className="inline-flex items-center px-4 py-2 border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors font-label-caps text-label-caps disabled:opacity-50 cursor-pointer"
+                className="inline-flex items-center px-4 py-2 border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors font-['Inter'] text-[14px] font-semibold disabled:opacity-50 cursor-pointer"
               >
                 {asignando ? 'ASIGNANDO...' : 'ASIGNAR'}
               </button>
             </form>
             {responsables !== null && responsables.length === 0 && (
-              <p className="font-code-sm text-xs text-on-surface-variant uppercase mt-2">
+              <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase mt-2">
                 No hay usuarios OPERATIVO activos disponibles.
               </p>
             )}
             {mensajeResponsable && (
-              <p className="font-code-sm text-xs text-on-surface-variant uppercase mt-3">{mensajeResponsable}</p>
+              <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase mt-3">{mensajeResponsable}</p>
             )}
           </div>
 
@@ -1487,7 +1487,7 @@ export default function GestionOrdenes({
             setMensajeCambio(null);
             setMensajeResponsable(null);
           }}
-          className="mb-6 inline-flex items-center font-label-caps text-label-caps text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
+          className="mb-6 inline-flex items-center font-['Inter'] text-[14px] font-semibold text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
         >
           <span className="material-symbols-outlined mr-1 text-[18px]">arrow_back</span>
           VOLVER AL LISTADO
@@ -1628,13 +1628,13 @@ export default function GestionOrdenes({
                   type="button"
                   disabled={actualizandoAvance}
                   onClick={handleActualizarAvance}
-                  className="inline-flex items-center px-4 py-2 bg-primary-container text-on-primary-container font-label-caps text-label-caps hover:bg-primary-fixed-dim transition-colors disabled:opacity-50 cursor-pointer"
+                  className="inline-flex items-center px-4 py-2 bg-primary-container text-on-primary-container font-['Inter'] text-[14px] font-semibold hover:bg-primary-fixed-dim transition-colors disabled:opacity-50 cursor-pointer"
                 >
                   {actualizandoAvance ? 'ACTUALIZANDO...' : 'ACTUALIZAR AVANCE'}
                 </button>
               </div>
               {mensajeAvance && (
-                <p className="font-code-sm text-xs text-on-surface-variant uppercase mt-3">{mensajeAvance}</p>
+                <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase mt-3">{mensajeAvance}</p>
               )}
             </div>
           )}
@@ -1650,7 +1650,7 @@ export default function GestionOrdenes({
               <p className="font-label-caps text-[10px] text-primary-container uppercase mb-3">Evidencias</p>
               {errorEvidencias && <p className="font-code-sm text-xs text-error uppercase mb-2">{errorEvidencias}</p>}
               {evidencias && evidencias.length === 0 && (
-                <p className="font-code-sm text-xs text-on-surface-variant uppercase">
+                <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">
                   Sin evidencias registradas todavía.
                 </p>
               )}
@@ -1667,7 +1667,7 @@ export default function GestionOrdenes({
                       <button
                         type="button"
                         onClick={() => handleVerEvidencia(ev.id)}
-                        className="shrink-0 inline-flex items-center px-2 py-1 border border-outline text-on-surface hover:bg-surface-container-high transition-colors font-label-caps text-label-caps text-[10px] cursor-pointer"
+                        className="shrink-0 inline-flex items-center px-2 py-1 border border-outline text-on-surface hover:bg-surface-container-high transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
                       >
                         VER
                       </button>
@@ -1682,7 +1682,7 @@ export default function GestionOrdenes({
             <div className="border-t border-outline pt-4">
               <p className="font-code-sm text-code-sm text-on-surface-variant uppercase mb-3">Evidencias</p>
 
-              {errorEvidencias && <p className="font-code-sm text-xs text-error uppercase mb-2">{errorEvidencias}</p>}
+              {errorEvidencias && <p className="font-['Inter'] text-[13px] font-normal text-error uppercase mb-2">{errorEvidencias}</p>}
 
               {evidencias && evidencias.length > 0 && (
                 <ul className="mb-3 space-y-1">
@@ -1694,7 +1694,7 @@ export default function GestionOrdenes({
                       <button
                         type="button"
                         onClick={() => handleVerEvidencia(ev.id)}
-                        className="shrink-0 inline-flex items-center px-2 py-1 border border-outline text-on-surface hover:bg-surface-container-high transition-colors font-label-caps text-label-caps text-[10px] cursor-pointer"
+                        className="shrink-0 inline-flex items-center px-2 py-1 border border-outline text-on-surface hover:bg-surface-container-high transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
                       >
                         VER
                       </button>
@@ -1703,7 +1703,7 @@ export default function GestionOrdenes({
                 </ul>
               )}
               {evidencias && evidencias.length === 0 && (
-                <p className="font-code-sm text-xs text-on-surface-variant uppercase mb-3">
+                <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase mb-3">
                   Sin evidencias registradas todavía.
                 </p>
               )}
@@ -1718,16 +1718,16 @@ export default function GestionOrdenes({
                 <button
                   disabled={subiendoEvidencia || !archivoEvidencia}
                   type="submit"
-                  className="inline-flex items-center px-4 py-2 bg-primary-container text-on-primary-container font-label-caps text-label-caps hover:bg-primary-fixed-dim transition-colors disabled:opacity-50 cursor-pointer"
+                  className="inline-flex items-center px-4 py-2 bg-primary-container text-on-primary-container font-['Inter'] text-[14px] font-semibold hover:bg-primary-fixed-dim transition-colors disabled:opacity-50 cursor-pointer"
                 >
                   {subiendoEvidencia ? 'SUBIENDO...' : 'SUBIR EVIDENCIA'}
                 </button>
               </form>
-              <p className="font-code-sm text-[10px] text-on-surface-variant uppercase mt-2">
+              <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase mt-2">
                 Máximo 5 fotos y 2 PDF por orden. No se requieren ambos formatos.
               </p>
               {mensajeEvidencia && (
-                <p className="font-code-sm text-xs text-on-surface-variant uppercase mt-3">{mensajeEvidencia}</p>
+                <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase mt-3">{mensajeEvidencia}</p>
               )}
             </div>
           )}
@@ -1763,19 +1763,19 @@ export default function GestionOrdenes({
                     type="button"
                     disabled={cambiando}
                     onClick={() => handleCambiarEstado(destino)}
-                    className="inline-flex items-center px-4 py-2 border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors font-label-caps text-label-caps disabled:opacity-50 cursor-pointer"
+                    className="inline-flex items-center px-4 py-2 border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors font-['Inter'] text-[14px] font-semibold disabled:opacity-50 cursor-pointer"
                   >
                     {destino}
                   </button>
                 ))}
                 {(TRANSICIONES[ordenSeleccionada.estado] ?? []).length === 0 && (
-                  <p className="font-code-sm text-code-sm text-on-surface-variant uppercase">
+                  <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">
                     Este estado no admite más transiciones.
                   </p>
                 )}
               </div>
               {mensajeCambio && (
-                <p className="font-code-sm text-xs text-on-surface-variant uppercase mt-3">{mensajeCambio}</p>
+                <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase mt-3">{mensajeCambio}</p>
               )}
             </div>
           )}
@@ -1802,18 +1802,18 @@ export default function GestionOrdenes({
                 <button
                   disabled={asignando || !responsableElegido}
                   type="submit"
-                  className="inline-flex items-center px-4 py-2 bg-primary-container text-on-primary-container font-label-caps text-label-caps hover:bg-primary-fixed-dim transition-colors disabled:opacity-50 cursor-pointer"
+                  className="inline-flex items-center px-4 py-2 bg-primary-container text-on-primary-container font-['Inter'] text-[14px] font-semibold hover:bg-primary-fixed-dim transition-colors disabled:opacity-50 cursor-pointer"
                 >
                   {asignando ? 'ASIGNANDO...' : 'ASIGNAR'}
                 </button>
               </form>
               {responsables !== null && responsables.length === 0 && (
-                <p className="font-code-sm text-xs text-on-surface-variant uppercase mt-2">
+                <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase mt-2">
                   No hay usuarios OPERATIVO activos disponibles.
                 </p>
               )}
               {mensajeResponsable && (
-                <p className="font-code-sm text-xs text-on-surface-variant uppercase mt-3">{mensajeResponsable}</p>
+                <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase mt-3">{mensajeResponsable}</p>
               )}
             </div>
           )}
@@ -1822,23 +1822,23 @@ export default function GestionOrdenes({
             <p className="font-label-caps text-[10px] text-primary-container uppercase mb-3">Ficha técnica</p>
 
             {loadingFicha && (
-              <p className="font-code-sm text-code-sm text-on-surface-variant uppercase">CARGANDO FICHA...</p>
+              <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">CARGANDO FICHA...</p>
             )}
             {!loadingFicha && errorFicha && (
-              <p className="font-code-sm text-xs text-error uppercase">{errorFicha}</p>
+              <p className="font-['Inter'] text-[13px] font-normal text-error uppercase">{errorFicha}</p>
             )}
 
             {!loadingFicha && !errorFicha && ficha && (
               <div className="space-y-3">
                 {ficha.tiene_inconsistencia && (
-                  <p className="font-code-sm text-xs text-error uppercase border border-error px-3 py-2">
+                  <p className="font-['Inter'] text-[13px] font-normal text-error uppercase border border-error px-3 py-2">
                     NexIA detectó una inconsistencia — revise el contenido y la alerta generada.
                   </p>
                 )}
                 <pre className="font-code-sm text-xs text-on-surface whitespace-pre-wrap bg-background border border-outline p-4">
                   {ficha.contenido}
                 </pre>
-                <p className="font-code-sm text-[10px] text-on-surface-variant uppercase">
+                <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">
                   Generada el {new Date(ficha.generado_en).toLocaleString()}
                 </p>
               </div>
@@ -1846,7 +1846,7 @@ export default function GestionOrdenes({
 
             {!loadingFicha && !errorFicha && !ficha && (
               <div className="space-y-3">
-                <p className="font-code-sm text-code-sm text-on-surface-variant uppercase">
+                <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">
                   Sin ficha técnica generada todavía.
                 </p>
                 {puedeEjecutarOrden && (
@@ -1855,12 +1855,12 @@ export default function GestionOrdenes({
                       type="button"
                       disabled={generandoFicha}
                       onClick={handleGenerarFicha}
-                      className="inline-flex items-center px-4 py-2 bg-primary-container text-on-primary-container font-label-caps text-label-caps hover:bg-primary-fixed-dim transition-colors disabled:opacity-50 cursor-pointer"
+                      className="inline-flex items-center px-4 py-2 bg-primary-container text-on-primary-container font-['Inter'] text-[14px] font-semibold hover:bg-primary-fixed-dim transition-colors disabled:opacity-50 cursor-pointer"
                     >
                       {generandoFicha ? 'GENERANDO...' : 'GENERAR FICHA TÉCNICA'}
                     </button>
                     {mensajeGenerarFicha && (
-                      <p className="font-code-sm text-xs text-error uppercase">{mensajeGenerarFicha}</p>
+                      <p className="font-['Inter'] text-[13px] font-normal text-error uppercase">{mensajeGenerarFicha}</p>
                     )}
                   </>
                 )}
@@ -1900,7 +1900,7 @@ export default function GestionOrdenes({
                       type="button"
                       disabled={confirmandoEntrega}
                       onClick={handleConfirmarEntrega}
-                      className="inline-flex items-center px-4 py-2 border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors font-label-caps text-label-caps disabled:opacity-50 cursor-pointer"
+                      className="inline-flex items-center px-4 py-2 border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors font-['Inter'] text-[14px] font-semibold disabled:opacity-50 cursor-pointer"
                     >
                       {confirmandoEntrega ? 'CONFIRMANDO...' : 'CONFIRMAR ENTREGA'}
                     </button>
@@ -1909,16 +1909,16 @@ export default function GestionOrdenes({
                     type="button"
                     disabled={cerrando}
                     onClick={handleCerrarOrden}
-                    className="inline-flex items-center px-4 py-2 bg-primary-container text-on-primary-container font-label-caps text-label-caps hover:bg-primary-fixed-dim transition-colors disabled:opacity-50 cursor-pointer"
+                    className="inline-flex items-center px-4 py-2 bg-primary-container text-on-primary-container font-['Inter'] text-[14px] font-semibold hover:bg-primary-fixed-dim transition-colors disabled:opacity-50 cursor-pointer"
                   >
                     {cerrando ? 'CERRANDO...' : 'CERRAR ORDEN'}
                   </button>
                 </div>
               )}
 
-              {mensajeEntrega && <p className="font-code-sm text-xs text-on-surface-variant uppercase">{mensajeEntrega}</p>}
-              {mensajeCerrar && <p className="font-code-sm text-xs text-on-surface-variant uppercase">{mensajeCerrar}</p>}
-              <p className="font-code-sm text-[10px] text-on-surface-variant uppercase">
+              {mensajeEntrega && <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">{mensajeEntrega}</p>}
+              {mensajeCerrar && <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">{mensajeCerrar}</p>}
+              <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">
                 El saldo se valida/rechaza desde el módulo de Cotizaciones.
               </p>
             </div>
@@ -1936,18 +1936,18 @@ export default function GestionOrdenes({
   if (esAdmin) {
     return (
       <div className="space-y-8">
-        <p className="font-code-sm text-xs text-on-surface-variant uppercase max-w-2xl">
+        <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase max-w-2xl">
           Vista de supervisión: consulte el estado, el progreso y la información de las órdenes registradas. Esta
           vista no permite crear, ejecutar ni cerrar órdenes — esas acciones son responsabilidad de Comercial y
           Operativo.
         </p>
 
         {loadingLista && (
-          <p className="font-code-sm text-code-sm text-on-surface-variant uppercase">CARGANDO ÓRDENES...</p>
+          <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">CARGANDO ÓRDENES...</p>
         )}
-        {!loadingLista && errorLista && <p className="font-code-sm text-xs text-error uppercase">{errorLista}</p>}
+        {!loadingLista && errorLista && <p className="font-['Inter'] text-[13px] font-normal text-error uppercase">{errorLista}</p>}
         {!loadingLista && !errorLista && ordenes && ordenes.length === 0 && (
-          <p className="font-code-sm text-code-sm text-on-surface-variant uppercase">NO HAY ÓRDENES REGISTRADAS.</p>
+          <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">NO HAY ÓRDENES REGISTRADAS.</p>
         )}
 
         {!loadingLista && !errorLista && ordenes && ordenes.length > 0 && (
@@ -2040,7 +2040,7 @@ export default function GestionOrdenes({
 
               <div className="grid grid-cols-2 lg:grid-cols-[180px_180px_1fr_auto] gap-4 items-end">
                 <div>
-                  <label className="block font-label-caps text-[10px] text-on-surface-variant uppercase mb-1">
+                  <label className="block font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase mb-1">
                     Fecha desde
                   </label>
                   <input
@@ -2051,7 +2051,7 @@ export default function GestionOrdenes({
                   />
                 </div>
                 <div>
-                  <label className="block font-label-caps text-[10px] text-on-surface-variant uppercase mb-1">
+                  <label className="block font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase mb-1">
                     Fecha hasta
                   </label>
                   <input
@@ -2062,7 +2062,7 @@ export default function GestionOrdenes({
                   />
                 </div>
                 <div>
-                  <label className="block font-label-caps text-[10px] text-on-surface-variant uppercase mb-1">
+                  <label className="block font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase mb-1">
                     Ordenar por
                   </label>
                   <div className="relative">
@@ -2085,7 +2085,7 @@ export default function GestionOrdenes({
                   type="button"
                   onClick={limpiarFiltrosAdmin}
                   disabled={!hayFiltrosActivosAdmin}
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2 border border-outline text-on-surface hover:bg-surface-container-high transition-colors font-label-caps text-label-caps disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap"
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2 border border-outline text-on-surface hover:bg-surface-container-high transition-colors font-['Inter'] text-[14px] font-semibold disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap"
                 >
                   <span className="material-symbols-outlined text-[16px]">restart_alt</span>
                   LIMPIAR FILTROS
@@ -2098,14 +2098,14 @@ export default function GestionOrdenes({
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-outline">
-                    <th className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant uppercase">Código</th>
-                    <th className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant uppercase">Cliente</th>
-                    <th className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant uppercase">Servicio</th>
-                    <th className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant uppercase">Responsable</th>
-                    <th className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant uppercase">Avance</th>
-                    <th className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant uppercase">Estado</th>
-                    <th className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant uppercase">Fecha</th>
-                    <th className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant uppercase text-right">
+                    <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Código</th>
+                    <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Cliente</th>
+                    <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Servicio</th>
+                    <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Responsable</th>
+                    <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Avance</th>
+                    <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Estado</th>
+                    <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Fecha</th>
+                    <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase text-right">
                       Acción
                     </th>
                   </tr>
@@ -2150,7 +2150,7 @@ export default function GestionOrdenes({
                           <button
                             type="button"
                             onClick={() => abrirDetalle(o.id)}
-                            className="inline-flex items-center px-3 py-1 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-label-caps text-label-caps text-[10px] cursor-pointer"
+                            className="inline-flex items-center px-3 py-1 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
                           >
                             VER
                           </button>
@@ -2165,7 +2165,7 @@ export default function GestionOrdenes({
             {/* TABLA — mobile (tarjetas) */}
             <div className="md:hidden space-y-3">
               {datosPaginaAdmin.length === 0 && (
-                <p className="font-code-sm text-code-sm text-on-surface-variant uppercase text-center py-6">
+                <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase text-center py-6">
                   Ningún resultado coincide con estos filtros.
                 </p>
               )}
@@ -2209,7 +2209,7 @@ export default function GestionOrdenes({
                       <button
                         type="button"
                         onClick={() => abrirDetalle(o.id)}
-                        className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-label-caps text-label-caps text-[11px] cursor-pointer"
+                        className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
                       >
                         VER
                       </button>
@@ -2222,7 +2222,7 @@ export default function GestionOrdenes({
             {/* PAGINACIÓN */}
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-surface sharp-border p-4">
               <div className="flex items-center gap-3">
-                <span className="font-code-sm text-[11px] text-on-surface-variant uppercase">
+                <span className="font-['Inter'] text-[13px] font-normal text-on-surface-variant">
                   Mostrando {ordenadasAdmin.length === 0 ? 0 : (paginaEfectivaAdmin - 1) * registrosPorPaginaAdmin + 1}–
                   {Math.min(paginaEfectivaAdmin * registrosPorPaginaAdmin, ordenadasAdmin.length)} de{' '}
                   {ordenadasAdmin.length} órdenes
@@ -2231,7 +2231,7 @@ export default function GestionOrdenes({
                   <select
                     value={registrosPorPaginaAdmin}
                     onChange={(e) => setRegistrosPorPaginaAdmin(Number(e.target.value))}
-                    className="appearance-none bg-background border border-outline pl-3 pr-11 py-1.5 text-on-surface text-xs font-code-sm focus:border-primary-container focus:outline-hidden cursor-pointer"
+                    className="appearance-none bg-background border border-outline pl-3 pr-11 py-1.5 text-on-surface font-['Inter'] text-[13px] font-normal focus:border-primary-container focus:outline-hidden cursor-pointer"
                   >
                     {REGISTROS_POR_PAGINA_OPCIONES_ORDEN.map((n) => (
                       <option key={n} value={n}>
@@ -2257,7 +2257,7 @@ export default function GestionOrdenes({
 
                 {paginasVisiblesAdmin.map((p, idx) =>
                   p === 'ellipsis' ? (
-                    <span key={`ellipsis-${idx}`} className="px-1 font-code-sm text-on-surface-variant">
+                    <span key={`ellipsis-${idx}`} className="px-1 font-['Inter'] text-[13px] font-normal text-on-surface-variant">
                       …
                     </span>
                   ) : (
@@ -2265,7 +2265,7 @@ export default function GestionOrdenes({
                       key={p}
                       type="button"
                       onClick={() => setPaginaActualAdmin(p)}
-                      className={`inline-flex items-center justify-center w-8 h-8 font-code-sm text-xs transition-colors cursor-pointer ${
+                      className={`inline-flex items-center justify-center w-8 h-8 font-['Inter'] text-[14px] font-semibold transition-colors cursor-pointer ${
                         p === paginaEfectivaAdmin
                           ? 'bg-primary-container text-on-primary-container'
                           : 'border border-outline text-on-surface hover:bg-surface-container-high'
@@ -2298,14 +2298,14 @@ export default function GestionOrdenes({
           ÓRDENES COMERCIAL", punto 2): AreaPrivada.tsx ya renderiza
           "GESTIÓN" + "GESTIÓN DE ÓRDENES" como cabecera de la sección — no
           se repite ese título aquí, solo el subtítulo descriptivo. */}
-      <p className="font-code-sm text-xs text-on-surface-variant uppercase">
+      <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">
         Administra y supervisa el ciclo comercial de las órdenes.
       </p>
 
       {loadingLista && (
-        <p className="font-code-sm text-code-sm text-on-surface-variant uppercase">CARGANDO ÓRDENES...</p>
+        <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">CARGANDO ÓRDENES...</p>
       )}
-      {!loadingLista && errorLista && <p className="font-code-sm text-xs text-error uppercase">{errorLista}</p>}
+      {!loadingLista && errorLista && <p className="font-['Inter'] text-[13px] font-normal text-error uppercase">{errorLista}</p>}
 
       {!loadingLista && !errorLista && (
         <>
@@ -2385,7 +2385,7 @@ export default function GestionOrdenes({
 
               {mostrandoFormularioCrearOrden && (
                 <div className="mt-4 space-y-4">
-                  <p className="font-code-sm text-xs text-on-surface-variant uppercase">
+                  <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">
                     Seleccione una cotización aceptada para crear una nueva orden.
                   </p>
 
@@ -2411,7 +2411,7 @@ export default function GestionOrdenes({
                           <button
                             type="button"
                             onClick={() => setMostrandoBuscadorCotizacion(true)}
-                            className="shrink-0 font-label-caps text-[10px] text-on-surface-variant hover:text-on-surface uppercase underline cursor-pointer"
+                            className="shrink-0 font-['Inter'] text-[14px] font-semibold text-on-surface-variant hover:text-on-surface uppercase underline cursor-pointer"
                           >
                             Cambiar
                           </button>
@@ -2477,17 +2477,17 @@ export default function GestionOrdenes({
                         </div>
                         <div className="max-h-56 overflow-y-auto border border-outline divide-y divide-outline">
                           {estadoApoyo === 'cargando' && (
-                            <p className="p-3 font-code-sm text-xs text-on-surface-variant uppercase">
+                            <p className="p-3 font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">
                               Cargando cotizaciones…
                             </p>
                           )}
                           {estadoApoyo === 'error' && (
-                            <p className="p-3 font-code-sm text-xs text-error uppercase">
+                            <p className="p-3 font-['Inter'] text-[13px] font-normal text-error uppercase">
                               No se pudieron cargar las cotizaciones.
                             </p>
                           )}
                           {estadoApoyo === 'disponible' && cotizacionesElegibles.length === 0 && (
-                            <p className="p-3 font-code-sm text-xs text-on-surface-variant uppercase">
+                            <p className="p-3 font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">
                               Ninguna cotización ACEPTADA disponible coincide (ya con anticipo resuelto y sin orden
                               existente).
                             </p>
@@ -2540,13 +2540,13 @@ export default function GestionOrdenes({
                       <button
                         disabled={creando || !cotizacionIdNueva.trim()}
                         type="submit"
-                        className="inline-flex items-center justify-center px-6 py-3 bg-primary-container text-on-primary-container font-label-caps text-label-caps hover:bg-primary-fixed-dim transition-colors disabled:opacity-50 cursor-pointer"
+                        className="inline-flex items-center justify-center px-6 py-3 bg-primary-container text-on-primary-container font-['Inter'] text-[14px] font-semibold hover:bg-primary-fixed-dim transition-colors disabled:opacity-50 cursor-pointer"
                       >
                         {creando ? 'CREANDO...' : 'CREAR ORDEN'}
                       </button>
                     </div>
                     {mensajeCrear && (
-                      <p className="md:col-span-3 font-code-sm text-xs text-on-surface-variant uppercase">{mensajeCrear}</p>
+                      <p className="md:col-span-3 font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">{mensajeCrear}</p>
                     )}
                   </form>
                 </div>
@@ -2555,7 +2555,7 @@ export default function GestionOrdenes({
           )}
 
           {!ordenes || ordenes.length === 0 ? (
-            <p className="font-code-sm text-code-sm text-on-surface-variant uppercase">NO HAY ÓRDENES REGISTRADAS.</p>
+            <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">NO HAY ÓRDENES REGISTRADAS.</p>
           ) : (
             <>
               {/* FILTROS — mismo patrón/lógica ya usados en la vista ADMIN
@@ -2594,7 +2594,7 @@ export default function GestionOrdenes({
 
                 <div className="grid grid-cols-2 lg:grid-cols-[180px_180px_1fr_auto] gap-4 items-end">
                   <div>
-                    <label className="block font-label-caps text-[10px] text-on-surface-variant uppercase mb-1">
+                    <label className="block font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase mb-1">
                       Fecha desde
                     </label>
                     <input
@@ -2605,7 +2605,7 @@ export default function GestionOrdenes({
                     />
                   </div>
                   <div>
-                    <label className="block font-label-caps text-[10px] text-on-surface-variant uppercase mb-1">
+                    <label className="block font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase mb-1">
                       Fecha hasta
                     </label>
                     <input
@@ -2616,7 +2616,7 @@ export default function GestionOrdenes({
                     />
                   </div>
                   <div>
-                    <label className="block font-label-caps text-[10px] text-on-surface-variant uppercase mb-1">
+                    <label className="block font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase mb-1">
                       Ordenar por
                     </label>
                     <div className="relative">
@@ -2639,7 +2639,7 @@ export default function GestionOrdenes({
                     type="button"
                     onClick={limpiarFiltrosAdmin}
                     disabled={!hayFiltrosActivosAdmin}
-                    className="inline-flex items-center justify-center gap-2 px-4 py-2 border border-outline text-on-surface hover:bg-surface-container-high transition-colors font-label-caps text-label-caps disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap"
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2 border border-outline text-on-surface hover:bg-surface-container-high transition-colors font-['Inter'] text-[14px] font-semibold disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap"
                   >
                     <span className="material-symbols-outlined text-[16px]">restart_alt</span>
                     LIMPIAR FILTROS
@@ -2652,16 +2652,16 @@ export default function GestionOrdenes({
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="border-b border-outline">
-                      <th className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant uppercase">Código</th>
-                      <th className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant uppercase">Cliente</th>
-                      <th className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant uppercase">Servicio</th>
-                      <th className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant uppercase">Estado</th>
-                      <th className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant uppercase">Avance</th>
-                      <th className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant uppercase">
+                      <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Código</th>
+                      <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Cliente</th>
+                      <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Servicio</th>
+                      <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Estado</th>
+                      <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Avance</th>
+                      <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">
                         Fecha de entrega
                       </th>
-                      <th className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant uppercase">Creada</th>
-                      <th className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant uppercase text-right">
+                      <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Creada</th>
+                      <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase text-right">
                         Acción
                       </th>
                     </tr>
@@ -2706,7 +2706,7 @@ export default function GestionOrdenes({
                             <button
                               type="button"
                               onClick={() => abrirDetalle(o.id)}
-                              className="inline-flex items-center px-3 py-1 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-label-caps text-label-caps text-[10px] cursor-pointer"
+                              className="inline-flex items-center px-3 py-1 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
                             >
                               VER DETALLE
                             </button>
@@ -2721,7 +2721,7 @@ export default function GestionOrdenes({
               {/* TABLA — mobile (tarjetas) */}
               <div className="md:hidden space-y-3">
                 {datosPaginaAdmin.length === 0 && (
-                  <p className="font-code-sm text-code-sm text-on-surface-variant uppercase text-center py-6">
+                  <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase text-center py-6">
                     Ningún resultado coincide con estos filtros.
                   </p>
                 )}
@@ -2765,7 +2765,7 @@ export default function GestionOrdenes({
                         <button
                           type="button"
                           onClick={() => abrirDetalle(o.id)}
-                          className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-label-caps text-label-caps text-[11px] cursor-pointer"
+                          className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
                         >
                           VER DETALLE
                         </button>
@@ -2778,7 +2778,7 @@ export default function GestionOrdenes({
               {/* PAGINACIÓN */}
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-surface sharp-border p-4">
                 <div className="flex items-center gap-3">
-                  <span className="font-code-sm text-[11px] text-on-surface-variant uppercase">
+                  <span className="font-['Inter'] text-[13px] font-normal text-on-surface-variant">
                     Mostrando {ordenadasAdmin.length === 0 ? 0 : (paginaEfectivaAdmin - 1) * registrosPorPaginaAdmin + 1}–
                     {Math.min(paginaEfectivaAdmin * registrosPorPaginaAdmin, ordenadasAdmin.length)} de{' '}
                     {ordenadasAdmin.length} órdenes
@@ -2787,7 +2787,7 @@ export default function GestionOrdenes({
                     <select
                       value={registrosPorPaginaAdmin}
                       onChange={(e) => setRegistrosPorPaginaAdmin(Number(e.target.value))}
-                      className="appearance-none bg-background border border-outline pl-3 pr-11 py-1.5 text-on-surface text-xs font-code-sm focus:border-primary-container focus:outline-hidden cursor-pointer"
+                      className="appearance-none bg-background border border-outline pl-3 pr-11 py-1.5 text-on-surface font-['Inter'] text-[13px] font-normal focus:border-primary-container focus:outline-hidden cursor-pointer"
                     >
                       {REGISTROS_POR_PAGINA_OPCIONES_ORDEN.map((n) => (
                         <option key={n} value={n}>
@@ -2813,7 +2813,7 @@ export default function GestionOrdenes({
 
                   {paginasVisiblesAdmin.map((p, idx) =>
                     p === 'ellipsis' ? (
-                      <span key={`ellipsis-${idx}`} className="px-1 font-code-sm text-on-surface-variant">
+                      <span key={`ellipsis-${idx}`} className="px-1 font-['Inter'] text-[13px] font-normal text-on-surface-variant">
                         …
                       </span>
                     ) : (
@@ -2821,7 +2821,7 @@ export default function GestionOrdenes({
                         key={p}
                         type="button"
                         onClick={() => setPaginaActualAdmin(p)}
-                        className={`inline-flex items-center justify-center w-8 h-8 font-code-sm text-xs transition-colors cursor-pointer ${
+                        className={`inline-flex items-center justify-center w-8 h-8 font-['Inter'] text-[14px] font-semibold transition-colors cursor-pointer ${
                           p === paginaEfectivaAdmin
                             ? 'bg-primary-container text-on-primary-container'
                             : 'border border-outline text-on-surface hover:bg-surface-container-high'
