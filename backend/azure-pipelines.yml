@@ -108,8 +108,8 @@ stages:
                 echo '$(HARBOR_PASSWORD)' | docker login $(HARBOR_REGISTRY) -u '$(HARBOR_USERNAME)' --password-stdin
                 docker pull $(HARBOR_REGISTRY)/$(harborProject)/$(imageName):$(Build.BuildId)
 
-                docker stop nextproject-backend-staging || true
-                docker rm nextproject-backend-staging || true
+                docker stop nextproject-backend-staging 2>/dev/null || true
+                docker rm nextproject-backend-staging 2>/dev/null || true
 
                 mkdir -p "$HOME/nextproject-uploads-staging/comprobantes" "$HOME/nextproject-uploads-staging/evidencias"
 
@@ -191,8 +191,8 @@ stages:
                 echo '$(HARBOR_PASSWORD)' | docker login $(HARBOR_REGISTRY) -u '$(HARBOR_USERNAME)' --password-stdin
                 docker pull $(HARBOR_REGISTRY)/$(harborProject)/$(imageName):$(Build.BuildId)
 
-                docker stop nextproject-backend-prod || true
-                docker rm nextproject-backend-prod || true
+                docker stop nextproject-backend-prod 2>/dev/null || true
+                docker rm nextproject-backend-prod 2>/dev/null || true
 
                 mkdir -p "$HOME/nextproject-uploads-production/comprobantes" "$HOME/nextproject-uploads-production/evidencias"
 
