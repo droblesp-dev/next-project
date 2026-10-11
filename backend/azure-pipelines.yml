@@ -22,8 +22,6 @@ pool:
 
 variables:
   - group: next-project-backend-secrets
-  - name: harborRegistry
-    value: 'hub.zyntra-ts.com'
   - name: harborProject
     value: 'nextproject'
   - name: imageName
@@ -37,19 +35,19 @@ stages:
     displayName: 'Docker Build & Push'
     steps:
     - script: |
-        echo "$(HARBOR_PASSWORD)" | docker login $(harborRegistry) -u "$(HARBOR_USERNAME)" --password-stdin
+        echo "$(HARBOR_PASSWORD)" | docker login $(HARBOR_REGISTRY) -u "$(HARBOR_USERNAME)" --password-stdin
       displayName: 'Docker Login to Harbor'
 
     - script: |
         docker build \
-          -t $(harborRegistry)/$(harborProject)/$(imageName):$(Build.BuildId) \
-          -t $(harborRegistry)/$(harborProject)/$(imageName):$(Build.SourceBranchName) \
+          -t $(HARBOR_REGISTRY)/$(harborProject)/$(imageName):$(Build.BuildId) \
+          -t $(HARBOR_REGISTRY)/$(harborProject)/$(imageName):$(Build.SourceBranchName) \
           ./backend
       displayName: 'Docker Build'
 
     - script: |
-        docker push $(harborRegistry)/$(harborProject)/$(imageName):$(Build.BuildId)
-        docker push $(harborRegistry)/$(harborProject)/$(imageName):$(Build.SourceBranchName)
+        docker push $(HARBOR_REGISTRY)/$(harborProject)/$(imageName):$(Build.BuildId)
+        docker push $(HARBOR_REGISTRY)/$(harborProject)/$(imageName):$(Build.SourceBranchName)
       displayName: 'Docker Push'
 
 - stage: DeployStaging
@@ -103,8 +101,8 @@ stages:
                 NEXT_PROJECT_WHATSAPP=$(DEV_NEXT_PROJECT_WHATSAPP)
                 EOF
 
-                echo "$(HARBOR_PASSWORD)" | docker login $(harborRegistry) -u "$(HARBOR_USERNAME)" --password-stdin
-                docker pull $(harborRegistry)/$(harborProject)/$(imageName):$(Build.BuildId)
+                echo "$(HARBOR_PASSWORD)" | docker login $(HARBOR_REGISTRY) -u "$(HARBOR_USERNAME)" --password-stdin
+                docker pull $(HARBOR_REGISTRY)/$(harborProject)/$(imageName):$(Build.BuildId)
 
                 docker stop nextproject-backend-staging || true
                 docker rm nextproject-backend-staging || true
@@ -114,7 +112,7 @@ stages:
                   --restart always \
                   -p 5001:3000 \
                   --env-file "$ENV_FILE" \
-                  $(harborRegistry)/$(harborProject)/$(imageName):$(Build.BuildId)
+                  $(HARBOR_REGISTRY)/$(harborProject)/$(imageName):$(Build.BuildId)
 
                 rm -f "$ENV_FILE"
 
@@ -169,8 +167,8 @@ stages:
                 NEXT_PROJECT_WHATSAPP=$(PROD_NEXT_PROJECT_WHATSAPP)
                 EOF
 
-                echo "$(HARBOR_PASSWORD)" | docker login $(harborRegistry) -u "$(HARBOR_USERNAME)" --password-stdin
-                docker pull $(harborRegistry)/$(harborProject)/$(imageName):$(Build.BuildId)
+                echo "$(HARBOR_PASSWORD)" | docker login $(HARBOR_REGISTRY) -u "$(HARBOR_USERNAME)" --password-stdin
+                docker pull $(HARBOR_REGISTRY)/$(harborProject)/$(imageName):$(Build.BuildId)
 
                 docker stop nextproject-backend-prod || true
                 docker rm nextproject-backend-prod || true
@@ -180,6 +178,6 @@ stages:
                   --restart always \
                   -p 5000:3000 \
                   --env-file "$ENV_FILE" \
-                  $(harborRegistry)/$(harborProject)/$(imageName):$(Build.BuildId)
+                  $(HARBOR_REGISTRY)/$(harborProject)/$(imageName):$(Build.BuildId)
 
                 rm -f "$ENV_FILE"
