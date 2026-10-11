@@ -121,9 +121,9 @@ const ICONO_CLASIFICACION: Record<string, string> = {
 function BadgeClasificacion({ valor, compacto = false }: { valor: string; compacto?: boolean }) {
   return (
     <span
-      className={`inline-flex items-center gap-1 ${compacto ? 'px-2 py-0.5' : 'px-2.5 py-1'} font-code-sm text-[10px] uppercase ${claseBadgeClasificacion(valor)}`}
+      className={`inline-flex items-center gap-1 whitespace-nowrap ${compacto ? 'px-2 py-0.5' : 'px-2.5 py-1'} font-code-sm text-[11px]! leading-tight uppercase ${claseBadgeClasificacion(valor)}`}
     >
-      <span className="material-symbols-outlined text-[13px]" aria-hidden="true">
+      <span className="material-symbols-outlined text-[14px]!" aria-hidden="true">
         {ICONO_CLASIFICACION[valor] ?? 'label'}
       </span>
       {valor}
@@ -134,9 +134,9 @@ function BadgeClasificacion({ valor, compacto = false }: { valor: string; compac
 function BadgeEstadoLead({ valor, compacto = false }: { valor: string; compacto?: boolean }) {
   return (
     <span
-      className={`inline-flex items-center gap-1 ${compacto ? 'px-2 py-0.5' : 'px-2.5 py-1'} font-code-sm text-[10px] uppercase ${claseBadgeEstadoLead(valor)}`}
+      className={`inline-flex items-center gap-1 whitespace-nowrap ${compacto ? 'px-2 py-0.5' : 'px-2.5 py-1'} font-code-sm text-[11px]! leading-tight uppercase ${claseBadgeEstadoLead(valor)}`}
     >
-      <span className="material-symbols-outlined text-[13px]" aria-hidden="true">
+      <span className="material-symbols-outlined text-[14px]!" aria-hidden="true">
         {valor === 'DESCARTADO' ? 'block' : 'radio_button_checked'}
       </span>
       {valor}
@@ -217,7 +217,7 @@ function EmbudoKpis({
   return (
     <section className="space-y-3" aria-label="Resumen de leads">
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
-        <h3 className="font-label-caps text-[11px] text-on-surface-variant uppercase">
+        <h3 className="font-label-caps text-[11px] text-on-surface-variant uppercase min-w-0 break-words">
           Embudo por clasificación · solo leads activos
         </h3>
         <dl className="flex flex-wrap items-center gap-x-5 gap-y-1 font-code-sm text-[11px] uppercase text-on-surface-variant">
@@ -236,14 +236,14 @@ function EmbudoKpis({
         </dl>
       </div>
 
-      <ol className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+      <ol className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
         {ETAPAS_EMBUDO.map((e, i) => (
           <li
             key={e.clave}
-            className={`bg-surface sharp-border border-t-4 ${e.borde} p-3 min-w-0 ${i === ETAPAS_EMBUDO.length - 1 ? 'col-span-2 sm:col-span-1' : ''}`}
+            className={`bg-surface sharp-border border-t-4 ${e.borde} p-3 min-w-0 ${i === ETAPAS_EMBUDO.length - 1 ? 'col-span-2 lg:col-span-1' : ''}`}
           >
-            <p className="flex items-center gap-1.5 font-label-caps text-[10px] text-on-surface-variant uppercase">
-              <span className="material-symbols-outlined text-[15px]" aria-hidden="true">
+            <p className="flex items-center gap-1.5 font-label-caps text-[10px] text-on-surface-variant uppercase wrap-anywhere max-[359px]:gap-1 max-[359px]:tracking-normal!">
+              <span className="material-symbols-outlined text-[18px]! shrink-0" aria-hidden="true">
                 {e.icono}
               </span>
               {e.etiqueta}
@@ -937,16 +937,16 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
             setMensajeAccion(null);
             setSeguimientos(null);
           }}
-          className="mb-6 inline-flex items-center font-['Inter'] text-[14px] font-semibold text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
+          className="min-h-11 -mt-2.5 mb-3.5 inline-flex items-center font-['Inter'] text-[14px] font-semibold text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
         >
           <span className="material-symbols-outlined mr-1 text-[18px]">arrow_back</span>
           VOLVER AL LISTADO
         </button>
 
         <div className="bg-surface sharp-border p-6 space-y-5">
-          <div className="flex justify-between items-start border-b border-outline pb-4">
-            <h3 className="font-headline-md text-headline-md text-on-surface uppercase">{leadSeleccionado.nombre}</h3>
-            <div className="flex flex-col items-end gap-1">
+          <div className="flex flex-wrap justify-between items-start gap-x-4 gap-y-3 border-b border-outline pb-4">
+            <h3 className="min-w-0 flex-1 basis-52 font-headline-md text-headline-md text-on-surface uppercase wrap-anywhere">{leadSeleccionado.nombre}</h3>
+            <div className="flex flex-col items-start sm:items-end gap-1">
               <BadgeClasificacion valor={leadSeleccionado.clasificacion} />
               <BadgeEstadoLead valor={leadSeleccionado.estado} />
             </div>
@@ -1015,7 +1015,7 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
                   </div>
                   <div>
                     <dt className="text-on-surface-variant uppercase">Estado de la solicitud</dt>
-                    <dd className="text-on-surface">{solicitud.estado}</dd>
+                    <dd className="text-on-surface">{solicitud.estado.replace(/_/g, ' ')}</dd>
                   </div>
                 </dl>
               ) : (
@@ -1048,7 +1048,7 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
                           {new Date(s.fecha).toLocaleString()}
                         </span>
                       </div>
-                      {s.observacion && <p className="font-body-md text-body-md text-on-surface">{s.observacion}</p>}
+                      {s.observacion && <p className="font-body-md text-body-md text-on-surface wrap-anywhere">{s.observacion}</p>}
                       <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase mt-1">
                         Registrado por: {nombreComercialAdmin(s.comercial_id)}
                       </p>
@@ -1179,7 +1179,7 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 lg:grid-cols-[180px_180px_1fr_auto] gap-4 items-end">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[180px_180px_1fr_auto] gap-4 items-end">
                 <div>
                   <label className="block font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase mb-1">
                     Fecha desde
@@ -1233,7 +1233,7 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
             </div>
 
             {/* TABLA — desktop */}
-            <div className="hidden md:block overflow-x-auto bg-surface sharp-border">
+            <div className="hidden xl:block overflow-x-auto bg-surface sharp-border">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-outline">
@@ -1259,7 +1259,7 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
                   )}
                   {datosPaginaAdmin.map((l) => (
                     <tr key={l.id} className="border-b border-outline hover:bg-surface-container-high transition-colors">
-                      <td className="py-3 px-4 font-body-md text-body-md text-on-surface">{l.nombre}</td>
+                      <td className="py-3 px-4 font-body-md text-body-md text-on-surface wrap-anywhere">{l.nombre}</td>
                       <td className="py-3 px-4 font-body-md text-body-md text-on-surface">{empresaAdmin(l.cliente_id)}</td>
                       <td className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant uppercase">{l.fuente}</td>
                       <td className="py-3 px-4">
@@ -1290,7 +1290,7 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
             </div>
 
             {/* TABLA — mobile (tarjetas) */}
-            <div className="md:hidden space-y-3">
+            <div className="xl:hidden space-y-3">
               {datosPaginaAdmin.length === 0 && (
                 <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase text-center py-6">
                   Ningún resultado coincide con estos filtros.
@@ -1299,9 +1299,9 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
               {datosPaginaAdmin.map((l) => (
                 <div key={l.id} className="bg-surface sharp-border border-l-4 border-l-primary-container p-4 space-y-3">
                   <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="font-body-md text-body-md text-on-surface font-medium">{l.nombre}</p>
-                      <p className="font-code-sm text-[11px] text-on-surface-variant uppercase mt-0.5">
+                    <div className="min-w-0">
+                      <p className="font-body-md text-body-md text-on-surface font-medium wrap-anywhere">{l.nombre}</p>
+                      <p className="font-code-sm text-[11px] text-on-surface-variant uppercase mt-0.5 break-words">
                         {empresaAdmin(l.cliente_id)} · {l.fuente}
                       </p>
                     </div>
@@ -1311,12 +1311,12 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
                     </div>
                   </div>
 
-                  <dl className="grid grid-cols-2 gap-2 font-code-sm text-[11px]">
-                    <div>
+                  <dl className="grid grid-cols-2 gap-2 font-code-sm text-[11px] wrap-anywhere">
+                    <div className="min-w-0">
                       <dt className="text-on-surface-variant uppercase">Comercial</dt>
-                      <dd className="text-on-surface">{nombreComercialAdmin(l.comercial_id)}</dd>
+                      <dd className="text-on-surface break-words">{nombreComercialAdmin(l.comercial_id)}</dd>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <dt className="text-on-surface-variant uppercase">Creado</dt>
                       <dd className="text-on-surface">{new Date(l.creado_en).toLocaleDateString()}</dd>
                     </div>
@@ -1337,7 +1337,7 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
 
             {/* PAGINACIÓN */}
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-surface sharp-border p-4">
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-3 gap-y-2">
                 <span className="font-['Inter'] text-[13px] font-normal text-on-surface-variant">
                   Mostrando {ordenadasAdmin.length === 0 ? 0 : (paginaEfectivaAdmin - 1) * registrosPorPaginaAdmin + 1}–
                   {Math.min(paginaEfectivaAdmin * registrosPorPaginaAdmin, ordenadasAdmin.length)} de{' '}
@@ -1457,7 +1457,7 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
     const filaVinculo = (etiqueta: string, valor: string) => (
       <div>
         <p className="font-label-caps text-[10px] text-on-surface-variant uppercase">{etiqueta}</p>
-        <p className="font-body-md text-sm text-on-surface">{valor}</p>
+        <p className="font-body-md text-sm text-on-surface wrap-anywhere">{valor}</p>
       </div>
     );
 
@@ -1505,7 +1505,7 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
                 className={claseFilaLista(clienteIdInput === c.id)}
               >
                 <span>
-                  <span className="block font-body-md text-sm text-on-surface">{etiquetaCliente(c)}</span>
+                  <span className="block font-body-md text-sm text-on-surface wrap-anywhere">{etiquetaCliente(c)}</span>
                   {c.email && <span className="block font-code-sm text-[11px] text-on-surface-variant">{c.email}</span>}
                 </span>
                 {clienteIdInput === c.id && (
@@ -1555,12 +1555,12 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
                   className={claseFilaLista(activa)}
                 >
                   <span>
-                    <span className="block font-body-md text-sm text-on-surface">{s.servicio}</span>
+                    <span className="block font-body-md text-sm text-on-surface wrap-anywhere">{s.servicio}</span>
                     {!tieneCliente && cli && (
                       <span className="block font-code-sm text-[11px] text-on-surface-variant">{etiquetaCliente(cli)}</span>
                     )}
                     <span className="block font-code-sm text-[10px] text-on-surface-variant uppercase mt-0.5">
-                      {s.estado} · {new Date(s.creado_en).toLocaleDateString()}
+                      {s.estado.replace(/_/g, ' ')} · {new Date(s.creado_en).toLocaleDateString()}
                     </span>
                   </span>
                   {activa && (
@@ -1816,7 +1816,7 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
                       <span
                         className={`inline-flex px-2 py-0.5 font-code-sm text-[10px] uppercase ${CLASE_ESTADO_COTIZACION[c.estado] ?? 'border border-outline text-on-surface-variant'}`}
                       >
-                        {c.estado}
+                        {c.estado.replace(/_/g, ' ')}
                       </span>
                       <span className="font-code-sm text-sm text-on-surface">
                         $
@@ -1871,7 +1871,7 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
             setSeguimientos(null);
             setConfirmandoDescarte(false);
           }}
-          className="mb-6 inline-flex items-center font-['Inter'] text-[14px] font-semibold text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
+          className="min-h-11 -mt-2.5 mb-3.5 inline-flex items-center font-['Inter'] text-[14px] font-semibold text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
         >
           <span className="material-symbols-outlined mr-1 text-[18px]">arrow_back</span>
           VOLVER AL LISTADO
@@ -1880,7 +1880,7 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
         <div className="bg-surface sharp-border p-4 sm:p-6 space-y-6">
           {/* Cabecera: nombre + clasificación y estado */}
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-            <h3 className="font-headline-md text-headline-md text-on-surface uppercase break-words min-w-0">
+            <h3 className="font-headline-md text-headline-md text-on-surface uppercase wrap-anywhere min-w-0">
               {leadSeleccionado.nombre}
             </h3>
             <div className="flex flex-wrap gap-2 shrink-0">
@@ -2186,7 +2186,7 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
                             {new Date(s.fecha).toLocaleString()}
                           </span>
                         </div>
-                        {s.observacion && <p className="font-body-md text-body-md text-on-surface">{s.observacion}</p>}
+                        {s.observacion && <p className="font-body-md text-body-md text-on-surface wrap-anywhere">{s.observacion}</p>}
                         <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase mt-1">
                           Registrado por: {registradoPorMostrable(s.comercial_id)}
                         </p>
@@ -2260,8 +2260,8 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
     if (!c) return <span className="text-sm text-on-surface-variant">{estadoApoyo === 'cargando' ? 'Cargando…' : '—'}</span>;
     return (
       <>
-        <p className="text-sm text-on-surface">{c.nombre}</p>
-        {c.empresa?.trim() && <p className="font-code-sm text-[11px] text-on-surface-variant">{c.empresa}</p>}
+        <p className="text-sm text-on-surface wrap-anywhere">{c.nombre}</p>
+        {c.empresa?.trim() && <p className="font-code-sm text-[11px] text-on-surface-variant wrap-anywhere">{c.empresa}</p>}
       </>
     );
   };
@@ -2270,9 +2270,9 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
     const texto = comercialMostrable(comercialId);
     if (texto === 'Yo') return <span className="font-code-sm text-xs text-primary-container uppercase">Yo</span>;
     if (texto === 'Sin asignar') {
-      return <span className="font-code-sm text-xs text-on-surface-variant/60 italic whitespace-nowrap">Sin asignar</span>;
+      return <span className="font-code-sm text-xs text-on-surface-variant/60 italic">Sin asignar</span>;
     }
-    return <span className="font-code-sm text-xs text-on-surface-variant whitespace-nowrap">{texto}</span>;
+    return <span className="font-code-sm text-xs text-on-surface-variant break-words">{texto}</span>;
   };
 
   const claseSelectFiltro =
@@ -2434,7 +2434,7 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
                     type="button"
                     onClick={limpiarFiltrosAdmin}
                     disabled={!hayFiltrosActivosAdmin}
-                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-on-surface-variant hover:text-on-surface disabled:opacity-40 disabled:cursor-not-allowed font-['Inter'] text-[14px] font-semibold cursor-pointer whitespace-nowrap"
+                    className="sm:col-span-2 lg:col-span-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 text-on-surface-variant hover:text-on-surface disabled:opacity-40 disabled:cursor-not-allowed font-['Inter'] text-[14px] font-semibold cursor-pointer whitespace-nowrap"
                   >
                     <span className="material-symbols-outlined text-[16px]" aria-hidden="true">
                       restart_alt
@@ -2451,7 +2451,7 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
               </div>
 
               {/* TABLA — escritorio */}
-              <div className="hidden md:block bg-surface sharp-border overflow-hidden">
+              <div className="relative hidden xl:block bg-surface sharp-border overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="border-b border-outline bg-surface-container-high/40">
@@ -2485,7 +2485,7 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
                         }`}
                       >
                         <td className="py-3.5 px-4 align-top">
-                          <p className="font-body-md text-body-md font-medium text-on-surface">{l.nombre}</p>
+                          <p className="font-body-md text-body-md font-medium text-on-surface wrap-anywhere">{l.nombre}</p>
                           <p className="mt-0.5 flex flex-wrap items-center gap-x-2 font-code-sm text-[11px] text-on-surface-variant">
                             <span className="inline-flex items-center gap-1">
                               <span className="material-symbols-outlined text-[13px]" aria-hidden="true">
@@ -2529,7 +2529,7 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
               </div>
 
               {/* TARJETAS — móvil */}
-              <div className="md:hidden space-y-3">
+              <div className="xl:hidden space-y-3">
                 {datosPaginaAdmin.length === 0 && (
                   <p className="font-body-md text-sm text-on-surface-variant text-center py-6">
                     Ningún lead coincide con estos filtros.
@@ -2543,7 +2543,7 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
                     }`}
                   >
                     <div>
-                      <p className="font-body-md text-body-md font-medium text-on-surface">{l.nombre}</p>
+                      <p className="font-body-md text-body-md font-medium text-on-surface wrap-anywhere">{l.nombre}</p>
                       <p className="mt-0.5 flex items-center gap-1 font-code-sm text-[11px] text-on-surface-variant">
                         <span className="material-symbols-outlined text-[13px]" aria-hidden="true">
                           call
@@ -2587,7 +2587,7 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
 
               {/* PAGINACIÓN */}
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-surface sharp-border p-4">
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-3 gap-y-2">
                   <span className="font-['Inter'] text-[13px] font-normal text-on-surface-variant">
                     Mostrando {ordenadasAdmin.length === 0 ? 0 : (paginaEfectivaAdmin - 1) * registrosPorPaginaAdmin + 1}–
                     {Math.min(paginaEfectivaAdmin * registrosPorPaginaAdmin, ordenadasAdmin.length)} de{' '}

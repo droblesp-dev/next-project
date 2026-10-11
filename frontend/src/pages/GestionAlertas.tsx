@@ -110,9 +110,9 @@ function KpiAlerta({
       <span className={`inline-flex items-center justify-center w-10 h-10 shrink-0 rounded-full ${claseIcono}`}>
         <span className="material-symbols-outlined text-[20px]">{icono}</span>
       </span>
-      <div>
+      <div className="min-w-0">
         <p className="font-headline-md text-headline-md font-black text-on-surface leading-none">{valor}</p>
-        <p className="font-label-caps text-[10px] text-on-surface-variant uppercase mt-1">{etiqueta}</p>
+        <p className="font-label-caps text-[10px] text-on-surface-variant uppercase mt-1 break-words">{etiqueta}</p>
       </div>
     </div>
   );
@@ -423,30 +423,30 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
         <button
           type="button"
           onClick={() => setAlertaSeleccionada(null)}
-          className="mb-6 inline-flex items-center font-['Inter'] text-[14px] font-semibold text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
+          className="min-h-11 -mt-2.5 mb-3.5 inline-flex items-center font-['Inter'] text-[14px] font-semibold text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
         >
           <span className="material-symbols-outlined mr-1 text-[18px]">arrow_back</span>
           VOLVER AL LISTADO
         </button>
 
         <div className="bg-surface sharp-border p-6 space-y-5">
-          <div className="flex justify-between items-start border-b border-outline pb-4">
-            <div>
-              <h3 className="font-headline-md text-headline-md text-on-surface uppercase">
+          <div className="flex flex-wrap justify-between items-start gap-x-4 gap-y-3 border-b border-outline pb-4">
+            <div className="min-w-0 flex-1 basis-52">
+              <h3 className="font-headline-md text-headline-md text-on-surface uppercase wrap-anywhere">
                 {alertaSeleccionada.tipo} · {alertaSeleccionada.condicion}
               </h3>
               <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase mt-1">
                 {new Date(alertaSeleccionada.creado_en).toLocaleString()}
               </p>
             </div>
-            <span className={`inline-flex px-3 py-1 font-code-sm text-xs uppercase ${claseBadgeEstadoAlerta(alertaSeleccionada.estado)}`}>
-              {alertaSeleccionada.estado}
+            <span className={`inline-flex shrink-0 whitespace-nowrap px-3 py-1 font-code-sm text-xs uppercase ${claseBadgeEstadoAlerta(alertaSeleccionada.estado)}`}>
+              {alertaSeleccionada.estado.replace(/_/g, ' ')}
             </span>
           </div>
 
           <div>
             <p className="font-label-caps text-[10px] text-primary-container uppercase mb-2">Mensaje</p>
-            <p className="font-body-md text-body-md text-on-surface">{alertaSeleccionada.mensaje}</p>
+            <p className="font-body-md text-body-md text-on-surface wrap-anywhere">{alertaSeleccionada.mensaje}</p>
           </div>
 
           <div className="border-t border-outline pt-4">
@@ -459,7 +459,7 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
                 </div>
                 <div>
                   <dt className="text-on-surface-variant uppercase">Estado de la orden</dt>
-                  <dd className="text-on-surface">{orden.estado}</dd>
+                  <dd className="text-on-surface">{orden.estado.replace(/_/g, ' ')}</dd>
                 </div>
                 <div>
                   <dt className="text-on-surface-variant uppercase">Cliente</dt>
@@ -601,7 +601,7 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
                     <option value="TODOS">Estado: Todos</option>
                     {estadosDisponibles.map((estado) => (
                       <option key={estado} value={estado}>
-                        {estado}
+                        {estado.replace(/_/g, ' ')}
                       </option>
                     ))}
                   </select>
@@ -611,7 +611,7 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 lg:grid-cols-[180px_180px_1fr_auto] gap-4 items-end">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[180px_180px_1fr_auto] gap-4 items-end">
                 <div>
                   <label className="block font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase mb-1">
                     Fecha desde
@@ -699,8 +699,8 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
                         <td className="py-3 px-4 font-body-md text-body-md text-on-surface">{cliente}</td>
                         <td className="py-3 px-4 font-body-md text-body-md text-on-surface">{servicio}</td>
                         <td className="py-3 px-4">
-                          <span className={`inline-flex px-2.5 py-1 font-code-sm text-[10px] uppercase ${claseBadgeEstadoAlerta(a.estado)}`}>
-                            {a.estado}
+                          <span className={`inline-flex whitespace-nowrap px-2.5 py-1 font-code-sm text-[11px]! leading-tight uppercase ${claseBadgeEstadoAlerta(a.estado)}`}>
+                            {a.estado.replace(/_/g, ' ')}
                           </span>
                         </td>
                         <td className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant">
@@ -733,21 +733,21 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
                 const { orden, cliente, servicio } = datosOrdenAlerta(a.orden_id);
                 return (
                   <div key={a.id} className="bg-surface sharp-border border-l-4 border-l-primary-container p-4 space-y-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="font-body-md text-body-md text-on-surface font-medium">
+                    <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+                      <div className="min-w-0 flex-1 basis-40">
+                        <p className="font-body-md text-body-md text-on-surface font-medium wrap-anywhere">
                           {a.tipo} · {a.condicion}
                         </p>
-                        <p className="font-code-sm text-[11px] text-on-surface-variant uppercase mt-0.5">
+                        <p className="font-code-sm text-[11px] text-on-surface-variant uppercase mt-0.5 wrap-anywhere">
                           {orden?.codigo ?? '—'} — {cliente}
                         </p>
                       </div>
-                      <span className={`inline-flex shrink-0 px-2.5 py-1 font-code-sm text-[10px] uppercase ${claseBadgeEstadoAlerta(a.estado)}`}>
-                        {a.estado}
+                      <span className={`inline-flex shrink-0 whitespace-nowrap px-2.5 py-1 font-code-sm text-[11px]! leading-tight uppercase ${claseBadgeEstadoAlerta(a.estado)}`}>
+                        {a.estado.replace(/_/g, ' ')}
                       </span>
                     </div>
 
-                    <dl className="grid grid-cols-2 gap-2 font-code-sm text-[11px]">
+                    <dl className="grid grid-cols-2 gap-2 font-code-sm text-[11px] wrap-anywhere">
                       <div>
                         <dt className="text-on-surface-variant uppercase">Servicio</dt>
                         <dd className="text-on-surface">{servicio}</dd>
@@ -774,7 +774,7 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
 
             {/* PAGINACIÓN */}
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-surface sharp-border p-4">
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-3 gap-y-2">
                 <span className="font-['Inter'] text-[13px] font-normal text-on-surface-variant">
                   Mostrando {ordenadasAdmin.length === 0 ? 0 : (paginaEfectivaAdmin - 1) * registrosPorPaginaAdmin + 1}–
                   {Math.min(paginaEfectivaAdmin * registrosPorPaginaAdmin, ordenadasAdmin.length)} de{' '}
@@ -860,20 +860,20 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
       {!loading && !error && alertas && alertas.length > 0 && (
         <div className="space-y-3">
           {alertas.map((a) => (
-            <div key={a.id} className="bg-surface sharp-border p-4 flex justify-between items-start gap-4">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
+            <div key={a.id} className="bg-surface sharp-border p-4 flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 sm:gap-4">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1">
                   <span className="font-code-sm text-code-sm text-primary-container uppercase">
                     {a.tipo} · {a.condicion}
                   </span>
-                  <span className="font-code-sm text-[10px] text-on-surface-variant uppercase">{a.estado}</span>
+                  <span className="font-code-sm text-[10px] text-on-surface-variant uppercase">{a.estado.replace(/_/g, ' ')}</span>
                 </div>
-                <p className="font-body-md text-body-md text-on-surface">{a.mensaje}</p>
+                <p className="font-body-md text-body-md text-on-surface wrap-anywhere">{a.mensaje}</p>
                 <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase mt-1">
                   {new Date(a.creado_en).toLocaleString()}
                 </p>
               </div>
-              <div className="shrink-0 flex flex-col gap-2 items-end">
+              <div className="flex flex-wrap sm:flex-col gap-2 sm:items-end sm:shrink-0">
                 <button
                   type="button"
                   onClick={() => onVerOrden(a.orden_id)}

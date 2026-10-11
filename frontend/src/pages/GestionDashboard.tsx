@@ -50,9 +50,9 @@ function KpiDashboard({
       <span className={`inline-flex items-center justify-center w-10 h-10 shrink-0 rounded-full ${claseIcono}`}>
         <span className="material-symbols-outlined text-[20px]">{icono}</span>
       </span>
-      <div>
+      <div className="min-w-0">
         <p className="font-headline-md text-headline-md font-black text-on-surface leading-none">{valor}</p>
-        <p className="font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase mt-1">{etiqueta}</p>
+        <p className="font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase mt-1 break-words">{etiqueta}</p>
       </div>
     </div>
   );
@@ -423,10 +423,10 @@ export default function GestionDashboard({ token, onSesionInvalida }: GestionDas
                 <span className="font-body-md text-body-md text-on-surface">
                   {resumen.analisisIa.totalEjecuciones} ejecuciones registradas
                 </span>
-                <span className="inline-flex px-2.5 py-1 font-code-sm text-[10px] uppercase border border-primary-container bg-primary-container text-on-primary-container">
+                <span className="inline-flex whitespace-nowrap px-2.5 py-1 font-code-sm text-[11px]! leading-tight uppercase border border-primary-container bg-primary-container text-on-primary-container">
                   {resumen.analisisIa.completadas} COMPLETADO
                 </span>
-                <span className="inline-flex px-2.5 py-1 font-code-sm text-[10px] uppercase border border-error text-error bg-error-container/20">
+                <span className="inline-flex whitespace-nowrap px-2.5 py-1 font-code-sm text-[11px]! leading-tight uppercase border border-error text-error bg-error-container/20">
                   {resumen.analisisIa.conError} ERROR
                 </span>
               </div>

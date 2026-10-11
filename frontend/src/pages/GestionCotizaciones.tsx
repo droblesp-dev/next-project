@@ -129,9 +129,9 @@ function KpiCotizacion({
       <span className={`inline-flex items-center justify-center w-10 h-10 shrink-0 rounded-full ${claseIcono}`}>
         <span className="material-symbols-outlined text-[20px]">{icono}</span>
       </span>
-      <div>
+      <div className="min-w-0">
         <p className="font-headline-md text-headline-md font-black text-on-surface leading-none">{valor}</p>
-        <p className="font-label-caps text-[10px] text-on-surface-variant uppercase mt-1">{etiqueta}</p>
+        <p className="font-label-caps text-[10px] text-on-surface-variant uppercase mt-1 break-words">{etiqueta}</p>
       </div>
     </div>
   );
@@ -921,22 +921,22 @@ export default function GestionCotizaciones({
         <button
           type="button"
           onClick={() => setCotizacionSeleccionada(null)}
-          className="mb-6 inline-flex items-center font-['Inter'] text-[14px] font-semibold text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
+          className="min-h-11 -mt-2.5 mb-3.5 inline-flex items-center font-['Inter'] text-[14px] font-semibold text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
         >
           <span className="material-symbols-outlined mr-1 text-[18px]">arrow_back</span>
           VOLVER AL LISTADO
         </button>
 
         <div className="bg-surface sharp-border p-6 space-y-5">
-          <div className="flex justify-between items-start border-b border-outline pb-4">
-            <div>
-              <h3 className="font-headline-md text-headline-md text-on-surface uppercase">{nombreClienteDetalle}</h3>
+          <div className="flex flex-wrap justify-between items-start gap-x-4 gap-y-3 border-b border-outline pb-4">
+            <div className="min-w-0 flex-1 basis-52">
+              <h3 className="font-headline-md text-headline-md text-on-surface uppercase wrap-anywhere">{nombreClienteDetalle}</h3>
               <p className="font-code-sm text-code-sm text-on-surface-variant uppercase mt-1">
                 {solicitud?.servicio ?? 'Servicio no disponible'}
               </p>
             </div>
-            <span className={`inline-flex px-3 py-1 font-code-sm text-xs uppercase ${claseBadgeEstadoCotizacion(cotizacionSeleccionada.estado)}`}>
-              {cotizacionSeleccionada.estado}
+            <span className={`inline-flex shrink-0 whitespace-nowrap px-3 py-1 font-code-sm text-xs uppercase ${claseBadgeEstadoCotizacion(cotizacionSeleccionada.estado)}`}>
+              {cotizacionSeleccionada.estado.replace(/_/g, ' ')}
             </span>
           </div>
 
@@ -962,7 +962,7 @@ export default function GestionCotizaciones({
                 </div>
                 <div>
                   <dt className="text-on-surface-variant uppercase">Estado de la solicitud</dt>
-                  <dd className="text-on-surface">{solicitud.estado}</dd>
+                  <dd className="text-on-surface">{solicitud.estado.replace(/_/g, ' ')}</dd>
                 </div>
               </dl>
             ) : (
@@ -974,7 +974,7 @@ export default function GestionCotizaciones({
 
           <div className="border-t border-outline pt-4">
             <p className="font-label-caps text-[10px] text-primary-container uppercase mb-2">Condiciones comerciales</p>
-            <dl className="grid grid-cols-2 sm:grid-cols-3 gap-4 font-code-sm text-code-sm">
+            <dl className="grid grid-cols-2 sm:grid-cols-3 gap-4 font-code-sm text-code-sm wrap-anywhere">
               <div>
                 <dt className="text-on-surface-variant uppercase">Valor</dt>
                 <dd className="text-on-surface">{cotizacionSeleccionada.valor}</dd>
@@ -1002,7 +1002,7 @@ export default function GestionCotizaciones({
 
           <div className="border-t border-outline pt-4">
             <p className="font-label-caps text-[10px] text-primary-container uppercase mb-2">Anticipo</p>
-            <dl className="grid grid-cols-2 sm:grid-cols-3 gap-4 font-code-sm text-code-sm">
+            <dl className="grid grid-cols-2 sm:grid-cols-3 gap-4 font-code-sm text-code-sm wrap-anywhere">
               <div>
                 <dt className="text-on-surface-variant uppercase">Porcentaje</dt>
                 <dd className="text-on-surface">{cotizacionSeleccionada.anticipo_porcentaje ?? '—'}%</dd>
@@ -1024,7 +1024,7 @@ export default function GestionCotizaciones({
 
           <div className="border-t border-outline pt-4">
             <p className="font-label-caps text-[10px] text-primary-container uppercase mb-2">Saldo</p>
-            <dl className="grid grid-cols-2 sm:grid-cols-3 gap-4 font-code-sm text-code-sm">
+            <dl className="grid grid-cols-2 sm:grid-cols-3 gap-4 font-code-sm text-code-sm wrap-anywhere">
               <div>
                 <dt className="text-on-surface-variant uppercase">Pendiente</dt>
                 <dd className="text-on-surface">{cotizacionSeleccionada.saldo_pendiente ?? '—'}</dd>
@@ -1075,20 +1075,20 @@ export default function GestionCotizaciones({
             setCotizacionSeleccionada(null);
             setMensajeCambio(null);
           }}
-          className="mb-6 inline-flex items-center font-['Inter'] text-[14px] font-semibold text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
+          className="min-h-11 -mt-2.5 mb-3.5 inline-flex items-center font-['Inter'] text-[14px] font-semibold text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
         >
           <span className="material-symbols-outlined mr-1 text-[18px]">arrow_back</span>
           VOLVER AL LISTADO
         </button>
 
         <div className="bg-surface sharp-border p-6 space-y-5">
-          <div className="flex justify-between items-start border-b border-outline pb-4">
-            <div>
+          <div className="flex flex-wrap justify-between items-start gap-x-4 gap-y-3 border-b border-outline pb-4">
+            <div className="min-w-0 flex-1 basis-52">
               <h3 className="font-label-caps text-label-caps text-primary-container tracking-widest uppercase mb-1">
                 Detalle de cotización
               </h3>
-              <p className="font-headline-md text-headline-md text-on-surface uppercase">{nombreClienteDetalle}</p>
-              <p className="font-code-sm text-code-sm text-on-surface-variant uppercase mt-1">
+              <p className="font-headline-md text-headline-md text-on-surface uppercase wrap-anywhere">{nombreClienteDetalle}</p>
+              <p className="font-code-sm text-code-sm text-on-surface-variant uppercase mt-1 wrap-anywhere">
                 {solicitudDetalle?.servicio ?? 'Servicio no disponible'}
               </p>
             </div>
@@ -1105,7 +1105,7 @@ export default function GestionCotizaciones({
               <span
                 className={`inline-flex px-3 py-1 font-code-sm text-xs uppercase ${claseBadgeEstadoCotizacion(cotizacionSeleccionada.estado)}`}
               >
-                {cotizacionSeleccionada.estado}
+                {cotizacionSeleccionada.estado.replace(/_/g, ' ')}
               </span>
             </div>
           </div>
@@ -1263,7 +1263,7 @@ export default function GestionCotizaciones({
             </form>
           ) : (
             <>
-              <dl className="grid grid-cols-2 sm:grid-cols-3 gap-4 font-code-sm text-code-sm">
+              <dl className="grid grid-cols-2 sm:grid-cols-3 gap-4 font-code-sm text-code-sm wrap-anywhere">
                 <div>
                   <dt className="text-on-surface-variant uppercase">Subtotal</dt>
                   <dd className="text-on-surface">{cotizacionSeleccionada.valor}</dd>
@@ -1576,7 +1576,7 @@ export default function GestionCotizaciones({
         {!loadingLista && !errorLista && cotizaciones && cotizaciones.length > 0 && (
           <>
             {/* KPI */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
               <KpiCotizacion
                 icono="request_quote"
                 valor={kpisAdmin.total}
@@ -1651,7 +1651,7 @@ export default function GestionCotizaciones({
                   >
                     {ESTADOS_FILTRO_COTIZACION.map((estado) => (
                       <option key={estado} value={estado}>
-                        {estado === 'TODOS' ? 'Estado: Todos' : estado}
+                        {estado === 'TODOS' ? 'Estado: Todos' : estado.replace(/_/g, ' ')}
                       </option>
                     ))}
                   </select>
@@ -1661,7 +1661,7 @@ export default function GestionCotizaciones({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 lg:grid-cols-[180px_180px_1fr_auto] gap-4 items-end">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[180px_180px_1fr_auto] gap-4 items-end">
                 <div>
                   <label className="block font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase mb-1">
                     Fecha desde
@@ -1717,7 +1717,7 @@ export default function GestionCotizaciones({
             </div>
 
             {/* TABLA — desktop */}
-            <div className="hidden md:block overflow-x-auto bg-surface sharp-border">
+            <div className="hidden xl:block overflow-x-auto bg-surface sharp-border">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-outline">
@@ -1767,9 +1767,9 @@ export default function GestionCotizaciones({
                         </td>
                         <td className="py-3 px-4">
                           <span
-                            className={`inline-flex px-2.5 py-1 font-code-sm text-[10px] uppercase ${claseBadgeEstadoCotizacion(c.estado)}`}
+                            className={`inline-flex whitespace-nowrap px-2.5 py-1 font-code-sm text-[11px]! leading-tight uppercase ${claseBadgeEstadoCotizacion(c.estado)}`}
                           >
-                            {c.estado}
+                            {c.estado.replace(/_/g, ' ')}
                           </span>
                         </td>
                         <td className="py-3 px-4 text-right">
@@ -1789,7 +1789,7 @@ export default function GestionCotizaciones({
             </div>
 
             {/* TABLA — mobile (tarjetas) */}
-            <div className="md:hidden space-y-3">
+            <div className="xl:hidden space-y-3">
               {datosPaginaAdmin.length === 0 && (
                 <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase text-center py-6">
                   Ningún resultado coincide con estos filtros.
@@ -1799,21 +1799,21 @@ export default function GestionCotizaciones({
                 const solicitud = solicitudesPorId.get(c.solicitud_id);
                 return (
                   <div key={c.id} className="bg-surface sharp-border border-l-4 border-l-primary-container p-4 space-y-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="font-body-md text-body-md text-on-surface font-medium">{solicitud?.servicio ?? '—'}</p>
-                        <p className="font-code-sm text-[11px] text-on-surface-variant uppercase mt-0.5">
+                    <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+                      <div className="min-w-0 flex-1 basis-40">
+                        <p className="font-body-md text-body-md text-on-surface font-medium wrap-anywhere">{solicitud?.servicio ?? '—'}</p>
+                        <p className="font-code-sm text-[11px] text-on-surface-variant uppercase mt-0.5 wrap-anywhere">
                           {nombreClienteAdmin(solicitud?.cliente_id)}
                         </p>
                       </div>
                       <span
-                        className={`inline-flex shrink-0 px-2.5 py-1 font-code-sm text-[10px] uppercase ${claseBadgeEstadoCotizacion(c.estado)}`}
+                        className={`inline-flex shrink-0 whitespace-nowrap px-2.5 py-1 font-code-sm text-[11px]! leading-tight uppercase ${claseBadgeEstadoCotizacion(c.estado)}`}
                       >
-                        {c.estado}
+                        {c.estado.replace(/_/g, ' ')}
                       </span>
                     </div>
 
-                    <dl className="grid grid-cols-2 gap-2 font-code-sm text-[11px]">
+                    <dl className="grid grid-cols-2 gap-2 font-code-sm text-[11px] wrap-anywhere">
                       <div>
                         <dt className="text-on-surface-variant uppercase">Valor</dt>
                         <dd className="text-on-surface">{c.total ?? c.valor}</dd>
@@ -1858,7 +1858,7 @@ export default function GestionCotizaciones({
 
             {/* PAGINACIÓN */}
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-surface sharp-border p-4">
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-3 gap-y-2">
                 <span className="font-['Inter'] text-[13px] font-normal text-on-surface-variant">
                   Mostrando {ordenadasAdmin.length === 0 ? 0 : (paginaEfectivaAdmin - 1) * registrosPorPaginaAdmin + 1}–
                   {Math.min(paginaEfectivaAdmin * registrosPorPaginaAdmin, ordenadasAdmin.length)} de {ordenadasAdmin.length}{' '}
@@ -1946,7 +1946,7 @@ export default function GestionCotizaciones({
       {!loadingLista && !errorLista && (
         <>
           {/* KPI */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
             <KpiCotizacion
               icono="request_quote"
               valor={kpisAdmin.total}
@@ -2007,7 +2007,7 @@ export default function GestionCotizaciones({
             <button
               type="button"
               onClick={() => setMostrandoFormularioCrear((v) => !v)}
-              className="w-full flex items-center justify-between cursor-pointer"
+              className="w-full min-h-11 -my-2.5 flex items-center justify-between cursor-pointer"
             >
               <h3 className="font-label-caps text-label-caps text-primary-container tracking-widest uppercase">
                 + NUEVA COTIZACIÓN
@@ -2243,7 +2243,7 @@ export default function GestionCotizaciones({
                     >
                       {ESTADOS_FILTRO_COTIZACION.map((estado) => (
                         <option key={estado} value={estado}>
-                          {estado === 'TODOS' ? 'Estado: Todos' : estado}
+                          {estado === 'TODOS' ? 'Estado: Todos' : estado.replace(/_/g, ' ')}
                         </option>
                       ))}
                     </select>
@@ -2253,7 +2253,7 @@ export default function GestionCotizaciones({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 lg:grid-cols-[180px_180px_1fr_auto] gap-4 items-end">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[180px_180px_1fr_auto] gap-4 items-end">
                   <div>
                     <label className="block font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase mb-1">
                       Fecha desde
@@ -2309,7 +2309,7 @@ export default function GestionCotizaciones({
               </div>
 
               {/* TABLA — desktop */}
-              <div className="hidden md:block overflow-x-auto bg-surface sharp-border">
+              <div className="hidden xl:block overflow-x-auto bg-surface sharp-border">
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="border-b border-outline">
@@ -2359,9 +2359,9 @@ export default function GestionCotizaciones({
                           </td>
                           <td className="py-3 px-4">
                             <span
-                              className={`inline-flex px-2.5 py-1 font-code-sm text-[10px] uppercase ${claseBadgeEstadoCotizacion(c.estado)}`}
+                              className={`inline-flex whitespace-nowrap px-2.5 py-1 font-code-sm text-[11px]! leading-tight uppercase ${claseBadgeEstadoCotizacion(c.estado)}`}
                             >
-                              {c.estado}
+                              {c.estado.replace(/_/g, ' ')}
                             </span>
                           </td>
                           <td className="py-3 px-4 text-right">
@@ -2381,7 +2381,7 @@ export default function GestionCotizaciones({
               </div>
 
               {/* TABLA — mobile (tarjetas) */}
-              <div className="md:hidden space-y-3">
+              <div className="xl:hidden space-y-3">
                 {datosPaginaAdmin.length === 0 && (
                   <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase text-center py-6">
                     Ningún resultado coincide con estos filtros.
@@ -2391,21 +2391,21 @@ export default function GestionCotizaciones({
                   const solicitud = solicitudesPorId.get(c.solicitud_id);
                   return (
                     <div key={c.id} className="bg-surface sharp-border border-l-4 border-l-primary-container p-4 space-y-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <p className="font-body-md text-body-md text-on-surface font-medium">{solicitud?.servicio ?? '—'}</p>
-                          <p className="font-code-sm text-[11px] text-on-surface-variant uppercase mt-0.5">
+                      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+                        <div className="min-w-0 flex-1 basis-40">
+                          <p className="font-body-md text-body-md text-on-surface font-medium wrap-anywhere">{solicitud?.servicio ?? '—'}</p>
+                          <p className="font-code-sm text-[11px] text-on-surface-variant uppercase mt-0.5 wrap-anywhere">
                             {nombreClienteAdmin(solicitud?.cliente_id)}
                           </p>
                         </div>
                         <span
-                          className={`inline-flex shrink-0 px-2.5 py-1 font-code-sm text-[10px] uppercase ${claseBadgeEstadoCotizacion(c.estado)}`}
+                          className={`inline-flex shrink-0 whitespace-nowrap px-2.5 py-1 font-code-sm text-[11px]! leading-tight uppercase ${claseBadgeEstadoCotizacion(c.estado)}`}
                         >
-                          {c.estado}
+                          {c.estado.replace(/_/g, ' ')}
                         </span>
                       </div>
 
-                      <dl className="grid grid-cols-2 gap-2 font-code-sm text-[11px]">
+                      <dl className="grid grid-cols-2 gap-2 font-code-sm text-[11px] wrap-anywhere">
                         <div>
                           <dt className="text-on-surface-variant uppercase">Valor</dt>
                           <dd className="text-on-surface">{c.total ?? c.valor}</dd>
@@ -2450,7 +2450,7 @@ export default function GestionCotizaciones({
 
               {/* PAGINACIÓN */}
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-surface sharp-border p-4">
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-3 gap-y-2">
                   <span className="font-['Inter'] text-[13px] font-normal text-on-surface-variant">
                     Mostrando {ordenadasAdmin.length === 0 ? 0 : (paginaEfectivaAdmin - 1) * registrosPorPaginaAdmin + 1}–
                     {Math.min(paginaEfectivaAdmin * registrosPorPaginaAdmin, ordenadasAdmin.length)} de{' '}

@@ -491,7 +491,7 @@ export default function App({ onAcceso }: AppProps) {
         <div className="flex justify-between items-center w-full px-margin-mobile md:px-margin-desktop py-4 max-w-container-max mx-auto">
           {/* Brand */}
           <a
-            className="font-headline-lg text-headline-lg-mobile md:text-headline-lg font-black text-on-surface uppercase tracking-tighter flex items-center"
+            className="font-headline-lg-responsive font-black text-on-surface uppercase tracking-tighter flex items-center"
             href="#inicio"
             onClick={() => setActiveNav('inicio')}
           >
@@ -610,7 +610,7 @@ export default function App({ onAcceso }: AppProps) {
         </div>
         <div className="relative z-10 w-full max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop py-16 lg:py-0 grid grid-cols-1 lg:grid-cols-2 gap-8">
           <div className="flex flex-col justify-center pl-4 border-l-4 border-primary-container">
-            <h1 className="font-display-lg text-headline-lg-mobile md:text-display-lg font-black uppercase text-on-surface flex flex-col leading-none mb-6">
+            <h1 className="font-display-lg-responsive font-black uppercase text-on-surface flex flex-col leading-none mb-6">
               <span>CENTRO DE</span>
               <span className="text-primary-container">MECANIZADO</span>
               <span>INDUSTRIAL</span>
@@ -697,7 +697,7 @@ export default function App({ onAcceso }: AppProps) {
               <div className="w-8 h-[2px] bg-primary-container mr-4"></div>
               <h3 className="font-label-caps text-label-caps !text-[14px] text-primary-container tracking-widest uppercase">Nosotros</h3>
             </div>
-            <h2 className="font-headline-lg text-headline-lg-mobile md:text-headline-lg font-bold text-on-surface uppercase mb-6">
+            <h2 className="font-headline-lg-responsive font-bold text-on-surface uppercase mb-6">
               QUIÉNES SOMOS
             </h2>
             <p className="font-body-md text-body-md text-on-surface-variant mb-6">
@@ -730,7 +730,7 @@ export default function App({ onAcceso }: AppProps) {
           <div className="flex flex-col md:flex-row md:justify-between md:items-end mb-12 border-l-4 border-primary-container pl-4">
             <div>
               <h3 className="font-label-caps text-label-caps !text-[14px] text-primary-container tracking-widest uppercase mb-2">ESPECIALIDADES</h3>
-              <h2 className="font-headline-lg text-headline-lg-mobile md:text-headline-lg font-bold text-on-surface uppercase">
+              <h2 className="font-headline-lg-responsive font-bold text-on-surface uppercase">
                 NUESTROS SERVICIOS
               </h2>
             </div>
@@ -831,7 +831,7 @@ export default function App({ onAcceso }: AppProps) {
               <div className="w-8 h-[2px] bg-primary-container mr-4"></div>
               <h3 className="font-label-caps text-label-caps !text-[14px] text-primary-container tracking-widest uppercase">APLICACIONES</h3>
             </div>
-            <h2 className="font-headline-lg text-headline-lg-mobile md:text-headline-lg font-bold text-on-surface uppercase mb-6">
+            <h2 className="font-headline-lg-responsive font-bold text-on-surface uppercase mb-6">
               SOLUCIONES PARA SUS NECESIDADES INDUSTRIALES
             </h2>
             <p className="font-body-md text-body-md text-on-surface-variant mb-8">
@@ -886,7 +886,7 @@ export default function App({ onAcceso }: AppProps) {
         <div className="max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop">
           <div className="text-center mb-12">
             <h3 className="font-label-caps text-label-caps !text-[14px] text-primary-container tracking-widest uppercase mb-2">ALCANCE</h3>
-            <h2 className="font-headline-lg text-headline-lg-mobile md:text-headline-lg font-bold text-on-surface uppercase">
+            <h2 className="font-headline-lg-responsive font-bold text-on-surface uppercase">
               SECTORES QUE ATENDEMOS
             </h2>
           </div>
@@ -942,7 +942,7 @@ export default function App({ onAcceso }: AppProps) {
         <div className="max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop">
           <div className="border-l-4 border-primary-container pl-4 mb-16">
             <h3 className="font-label-caps text-label-caps !text-[14px] text-primary-container tracking-widest uppercase mb-2">METODOLOGÍA</h3>
-            <h2 className="font-headline-lg text-headline-lg-mobile md:text-headline-lg font-bold text-on-surface uppercase">
+            <h2 className="font-headline-lg-responsive font-bold text-on-surface uppercase">
               NUESTRO PROCESO
             </h2>
           </div>
@@ -1027,7 +1027,7 @@ export default function App({ onAcceso }: AppProps) {
           <div className="flex flex-col md:flex-row md:justify-between md:items-end mb-12 border-l-4 border-primary-container pl-4">
             <div>
               <h3 className="font-label-caps text-label-caps !text-[14px] text-primary-container tracking-widest uppercase mb-2">GALERÍA</h3>
-              <h2 className="font-headline-lg text-headline-lg-mobile md:text-headline-lg font-bold text-on-surface uppercase">
+              <h2 className="font-headline-lg-responsive font-bold text-on-surface uppercase">
                 TRABAJOS REALIZADOS
               </h2>
             </div>
@@ -1110,7 +1110,7 @@ export default function App({ onAcceso }: AppProps) {
         <div className="max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop">
           <div className="text-center mb-12">
             <h3 className="font-label-caps text-label-caps !text-[14px] text-primary-container tracking-widest uppercase mb-2">VENTAJAS</h3>
-            <h2 className="font-headline-lg text-headline-lg-mobile md:text-headline-lg font-bold text-on-surface uppercase">
+            <h2 className="font-headline-lg-responsive font-bold text-on-surface uppercase">
               ¿POR QUÉ NEXTPROJECT?
             </h2>
           </div>
@@ -1161,7 +1161,7 @@ export default function App({ onAcceso }: AppProps) {
                   <h3 className="font-label-caps text-label-caps !text-[14px] text-primary-container tracking-widest uppercase mb-1">
                     CONTACTO COMERCIAL
                   </h3>
-                  <h2 className="font-headline-lg text-headline-lg-mobile md:text-headline-lg font-bold text-on-surface uppercase">
+                  <h2 className="font-headline-lg-responsive font-bold text-on-surface uppercase">
                     CONECTA CON NEXTPROJECT
                   </h2>
                 </div>
@@ -1640,7 +1640,7 @@ export default function App({ onAcceso }: AppProps) {
               <h3 className="font-label-caps text-label-caps !text-[14px] text-primary-container tracking-widest uppercase mb-2">
                 UBICACIÓN Y DATOS
               </h3>
-              <h2 className="font-headline-lg text-headline-lg-mobile md:text-headline-lg font-bold text-on-surface uppercase">
+              <h2 className="font-headline-lg-responsive font-bold text-on-surface uppercase">
                 CONTACTO
               </h2>
             </div>
@@ -1759,7 +1759,7 @@ export default function App({ onAcceso }: AppProps) {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
           <div
             className={`bg-surface sharp-border border-t-4 border-t-primary-container max-w-2xl w-full ${
-              modalType === 'asistente_comercial' ? 'px-12 md:px-14 py-6 md:py-8' : 'p-6 md:p-8'
+              modalType === 'asistente_comercial' ? 'px-6 sm:px-10 md:px-14 py-6 md:py-8' : 'p-6 md:p-8'
             } max-h-[85vh] overflow-y-auto`}
           >
             <div className="flex justify-between items-center pb-4 border-b border-outline mb-6">
@@ -2032,7 +2032,7 @@ export default function App({ onAcceso }: AppProps) {
               </div>
             )}
 
-            <div className="mt-6 pt-4 border-t border-outline flex justify-end">
+            <div className="hidden lg:flex mt-6 pt-4 border-t border-outline justify-end">
               <button
                 onClick={() => setModalType(null)}
                 className="px-6 py-2 bg-primary-container text-on-primary-container font-['Inter'] text-[14px] font-semibold hover:bg-primary-fixed-dim transition-colors cursor-pointer"

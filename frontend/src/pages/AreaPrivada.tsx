@@ -113,7 +113,7 @@ export default function AreaPrivada({ usuario, token, onLogout, onSesionInvalida
     <div className="bg-background text-on-surface font-body-md antialiased min-h-screen">
       <header className="bg-background border-b border-surface-container-highest sticky top-0 z-50">
         <div className="flex justify-between items-center w-full px-margin-mobile md:px-margin-desktop py-4 max-w-container-max mx-auto">
-          <a className="font-headline-lg text-headline-lg-mobile font-black text-on-surface uppercase tracking-tighter flex items-center">
+          <a className="font-['Montserrat'] text-[24px] lg:text-[32px] font-black text-on-surface uppercase tracking-tighter flex items-center">
             <span>NEXT</span>
             <span className="text-primary-container">PROJECT</span>
             <span className="ml-3 font-label-caps text-label-caps text-on-surface-variant tracking-widest hidden sm:inline">
@@ -129,10 +129,11 @@ export default function AreaPrivada({ usuario, token, onLogout, onSesionInvalida
             <button
               type="button"
               onClick={onLogout}
+              aria-label="Cerrar sesión"
               className="inline-flex items-center justify-center px-4 py-2 border border-outline text-on-surface hover:bg-surface-container-high transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
             >
-              <span className="material-symbols-outlined mr-2 text-[18px]">logout</span>
-              CERRAR SESIÓN
+              <span className="material-symbols-outlined sm:mr-2 text-[18px]">logout</span>
+              <span className="hidden sm:inline">CERRAR SESIÓN</span>
             </button>
           </div>
         </div>
@@ -154,7 +155,7 @@ export default function AreaPrivada({ usuario, token, onLogout, onSesionInvalida
               <h3 className="font-label-caps text-label-caps text-primary-container tracking-widest uppercase mb-1">
                 GESTIÓN
               </h3>
-              <h2 className="font-headline-lg text-headline-lg-mobile md:text-headline-lg font-bold text-on-surface uppercase">
+              <h2 className="font-headline-lg-responsive font-bold text-on-surface uppercase">
                 {seccion === 'dashboard'
                   ? 'DASHBOARD'
                   : seccion === 'usuarios'
@@ -269,12 +270,14 @@ export default function AreaPrivada({ usuario, token, onLogout, onSesionInvalida
               {/* Notificaciones — entrada visual global preparada para uso
                   futuro (autorización explícita: solo placeholder de
                   navegación). Sin sección, sin contador, sin datos
-                  simulados — no se agrega ningún endpoint/tabla/lógica. */}
+                  simulados — no se agrega ningún endpoint/tabla/lógica.
+                  Oculto bajo `sm` (auditoría responsive): al estar deshabilitado
+                  solo ocupaba una fila extra de navegación en móvil. */}
               <button
                 type="button"
                 disabled
                 title="Próximamente"
-                className="inline-flex items-center gap-2 px-4 py-2 font-['Inter'] text-[14px] font-semibold border border-outline text-on-surface-variant opacity-50 cursor-not-allowed"
+                className="hidden sm:inline-flex items-center gap-2 px-4 py-2 font-['Inter'] text-[14px] font-semibold border border-outline text-on-surface-variant opacity-50 cursor-not-allowed"
               >
                 <span className="material-symbols-outlined text-[16px]">notifications</span>
                 NOTIFICACIONES

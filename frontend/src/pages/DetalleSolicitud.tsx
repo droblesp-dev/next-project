@@ -374,7 +374,7 @@ export default function DetalleSolicitud({
       <button
         type="button"
         onClick={onVolver}
-        className="mb-6 inline-flex items-center font-['Inter'] text-[14px] font-semibold text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
+        className="min-h-11 -mt-2.5 mb-3.5 inline-flex items-center font-['Inter'] text-[14px] font-semibold text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
       >
         <span className="material-symbols-outlined mr-1 text-[18px]">arrow_back</span>
         VOLVER A LA BANDEJA
@@ -394,14 +394,14 @@ export default function DetalleSolicitud({
               requerida, descripción. Sin repetir estos datos dentro de
               Análisis IA. */}
           <div className="bg-surface sharp-border p-6 space-y-4">
-            <div className="flex justify-between items-start border-b border-outline pb-4">
-              <h3 className="font-headline-md text-headline-md text-on-surface uppercase">{solicitud.servicio}</h3>
-              <span className="font-code-sm text-code-sm text-primary-container uppercase">{solicitud.estado}</span>
+            <div className="flex flex-wrap justify-between items-start gap-x-4 gap-y-2 border-b border-outline pb-4">
+              <h3 className="font-headline-md text-headline-md text-on-surface uppercase min-w-0 wrap-anywhere">{solicitud.servicio}</h3>
+              <span className="shrink-0 whitespace-nowrap font-code-sm text-code-sm text-primary-container uppercase">{solicitud.estado.replace(/_/g, ' ')}</span>
             </div>
 
             <p className="font-body-md text-body-md text-on-surface-variant">{solicitud.descripcion}</p>
 
-            <dl className="grid grid-cols-2 md:grid-cols-4 gap-4 font-code-sm text-code-sm">
+            <dl className="grid grid-cols-2 md:grid-cols-4 gap-4 font-code-sm text-code-sm wrap-anywhere">
               <div>
                 <dt className="text-on-surface-variant uppercase">Cliente</dt>
                 <dd className="text-on-surface">
@@ -441,7 +441,7 @@ export default function DetalleSolicitud({
                       onClick={() => handleCambiarEstado(destino)}
                       className="inline-flex items-center px-4 py-2 border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors font-['Inter'] text-[14px] font-semibold disabled:opacity-50 cursor-pointer"
                     >
-                      {destino}
+                      {destino.replace(/_/g, ' ')}
                     </button>
                   ))}
                   {(TRANSICIONES[solicitud.estado] ?? []).length === 0 && (
@@ -519,7 +519,7 @@ export default function DetalleSolicitud({
                                 <span
                                   className={`inline-flex px-2 py-0.5 font-code-sm text-[10px] uppercase ${claseBadgeEstadoAnalisis(a.estado)}`}
                                 >
-                                  {a.estado}
+                                  {a.estado.replace(/_/g, ' ')}
                                 </span>
                                 <span className="font-code-sm text-[10px] text-on-surface-variant uppercase">
                                   {new Date(a.fecha_hora).toLocaleString()}

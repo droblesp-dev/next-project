@@ -62,9 +62,9 @@ function KpiUsuario({
       <span className={`inline-flex items-center justify-center w-10 h-10 shrink-0 rounded-full ${claseIcono}`}>
         <span className="material-symbols-outlined text-[20px]">{icono}</span>
       </span>
-      <div>
+      <div className="min-w-0">
         <p className="font-headline-md text-headline-md font-black text-on-surface leading-none">{valor}</p>
-        <p className="font-label-caps text-[10px] text-on-surface-variant uppercase mt-1">{etiqueta}</p>
+        <p className="font-label-caps text-[10px] text-on-surface-variant uppercase mt-1 break-words">{etiqueta}</p>
       </div>
     </div>
   );
@@ -323,7 +323,7 @@ export default function GestionUsuarios({ token, onSesionInvalida }: GestionUsua
       {!loadingLista && !errorLista && usuarios && (
         <>
           {/* KPI */}
-          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
             <KpiUsuario
               icono="groups"
               valor={kpis.total}
@@ -574,7 +574,7 @@ export default function GestionUsuarios({ token, onSesionInvalida }: GestionUsua
                       </div>
                     </td>
                     <td className="py-3 px-4">
-                      <span className={`inline-flex px-2.5 py-1 font-code-sm text-[10px] uppercase ${claseBadgeEstadoUsuario(u.activo)}`}>
+                      <span className={`inline-flex whitespace-nowrap px-2.5 py-1 font-code-sm text-[11px]! leading-tight uppercase ${claseBadgeEstadoUsuario(u.activo)}`}>
                         {u.activo ? 'ACTIVO' : 'INACTIVO'}
                       </span>
                     </td>
@@ -606,12 +606,12 @@ export default function GestionUsuarios({ token, onSesionInvalida }: GestionUsua
             )}
             {datosPagina.map((u) => (
               <div key={u.id} className="bg-surface sharp-border border-l-4 border-l-primary-container p-4 space-y-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="font-body-md text-body-md text-on-surface font-medium">{u.nombre}</p>
-                    <p className="font-code-sm text-[11px] text-on-surface-variant mt-0.5 break-all">{u.email}</p>
+                <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+                  <div className="min-w-0 flex-1 basis-40">
+                    <p className="font-body-md text-body-md text-on-surface font-medium wrap-anywhere">{u.nombre}</p>
+                    <p className="font-code-sm text-[11px] text-on-surface-variant mt-0.5 wrap-anywhere">{u.email}</p>
                   </div>
-                  <span className={`inline-flex shrink-0 px-2.5 py-1 font-code-sm text-[10px] uppercase ${claseBadgeEstadoUsuario(u.activo)}`}>
+                  <span className={`inline-flex shrink-0 whitespace-nowrap px-2.5 py-1 font-code-sm text-[11px]! leading-tight uppercase ${claseBadgeEstadoUsuario(u.activo)}`}>
                     {u.activo ? 'ACTIVO' : 'INACTIVO'}
                   </span>
                 </div>
@@ -653,7 +653,7 @@ export default function GestionUsuarios({ token, onSesionInvalida }: GestionUsua
 
           {/* PAGINACIÓN */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-surface sharp-border p-4">
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-3 gap-y-2">
               <span className="font-['Inter'] text-[13px] font-normal text-on-surface-variant">
                 Mostrando {ordenados.length === 0 ? 0 : (paginaEfectiva - 1) * registrosPorPagina + 1}–
                 {Math.min(paginaEfectiva * registrosPorPagina, ordenados.length)} de {ordenados.length} usuarios

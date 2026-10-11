@@ -113,9 +113,9 @@ function Kpi({
       >
         <span className="material-symbols-outlined text-[22px]">{icono}</span>
       </span>
-      <div>
+      <div className="min-w-0">
         <p className="font-headline-lg text-headline-lg-mobile font-black text-on-surface leading-none">{valor}</p>
-        <p className="font-label-caps text-label-caps text-on-surface-variant uppercase mt-1">{etiqueta}</p>
+        <p className="font-label-caps text-label-caps text-on-surface-variant uppercase mt-1 break-words">{etiqueta}</p>
       </div>
     </div>
   );
@@ -359,7 +359,7 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
   return (
     <div className="space-y-8">
       {/* KPI */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <Kpi
           icono="description"
           valor={kpis.total}
@@ -421,7 +421,7 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
             >
               {ESTADOS_FILTRO.map((estado) => (
                 <option key={estado} value={estado}>
-                  {estado === 'TODOS' ? 'Estado: Todos' : estado}
+                  {estado === 'TODOS' ? 'Estado: Todos' : estado.replace(/_/g, ' ')}
                 </option>
               ))}
             </select>
@@ -449,7 +449,7 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
           </div>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-[180px_180px_1fr_auto] gap-4 items-end">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[180px_180px_1fr_auto] gap-4 items-end">
           <div>
             <label className="block font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase mb-1">
               Fecha desde
@@ -503,7 +503,7 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
       </div>
 
       {/* TABLA — desktop */}
-      <div className="hidden md:block overflow-x-auto bg-surface sharp-border">
+      <div className="hidden xl:block overflow-x-auto bg-surface sharp-border">
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="border-b border-outline">
@@ -539,8 +539,8 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
                 <td className="py-3 px-4 font-body-md text-body-md text-on-surface">{s.servicio}</td>
                 <td className="py-3 px-4 font-body-md text-body-md text-on-surface">{formatearCantidad(s.cantidad, s.especificaciones)}</td>
                 <td className="py-3 px-4">
-                  <span className={`inline-flex px-2.5 py-1 font-code-sm text-[10px] uppercase ${claseBadgeEstado(s.estado)}`}>
-                    {s.estado}
+                  <span className={`inline-flex whitespace-nowrap px-2.5 py-1 font-code-sm text-[11px]! leading-tight uppercase ${claseBadgeEstado(s.estado)}`}>
+                    {s.estado.replace(/_/g, ' ')}
                   </span>
                 </td>
                 <td className="py-3 px-4 font-['Inter'] text-[14px] font-normal text-on-surface-variant">
@@ -573,7 +573,7 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
       </div>
 
       {/* TABLA — mobile (tarjetas, no tabla comprimida) */}
-      <div className="md:hidden space-y-3">
+      <div className="xl:hidden space-y-3">
         {datosPagina.length === 0 && (
           <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase text-center py-6">
             Ningún resultado coincide con estos filtros.
@@ -581,17 +581,17 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
         )}
         {datosPagina.map((s) => (
           <div key={s.id} className="bg-surface sharp-border border-l-4 border-l-primary-container p-4 space-y-3">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <p className="font-body-md text-body-md text-on-surface font-medium">{s.servicio}</p>
-                <p className="font-code-sm text-[11px] text-on-surface-variant uppercase mt-0.5">{nombreCliente(s.cliente_id)}</p>
+            <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+              <div className="min-w-0 flex-1 basis-40">
+                <p className="font-body-md text-body-md text-on-surface font-medium wrap-anywhere">{s.servicio}</p>
+                <p className="font-code-sm text-[11px] text-on-surface-variant uppercase mt-0.5 wrap-anywhere">{nombreCliente(s.cliente_id)}</p>
               </div>
-              <span className={`inline-flex shrink-0 px-2.5 py-1 font-code-sm text-[10px] uppercase ${claseBadgeEstado(s.estado)}`}>
-                {s.estado}
+              <span className={`inline-flex shrink-0 whitespace-nowrap px-2.5 py-1 font-code-sm text-[11px]! leading-tight uppercase ${claseBadgeEstado(s.estado)}`}>
+                {s.estado.replace(/_/g, ' ')}
               </span>
             </div>
 
-            <dl className="grid grid-cols-2 gap-2 font-code-sm text-[11px]">
+            <dl className="grid grid-cols-2 gap-2 font-code-sm text-[11px] wrap-anywhere">
               <div>
                 <dt className="text-on-surface-variant uppercase">Cantidad</dt>
                 <dd className="text-on-surface">{formatearCantidad(s.cantidad, s.especificaciones)}</dd>
@@ -630,7 +630,7 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
 
       {/* PAGINACIÓN */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-surface sharp-border p-4">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-3 gap-y-2">
           <span className="font-['Inter'] text-[13px] font-normal text-on-surface-variant">
             Mostrando {ordenadas.length === 0 ? 0 : (paginaEfectiva - 1) * registrosPorPagina + 1}–
             {Math.min(paginaEfectiva * registrosPorPagina, ordenadas.length)} de {ordenadas.length} solicitudes
@@ -708,8 +708,8 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
           {vistaRapida && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className={`inline-flex px-2.5 py-1 font-code-sm text-[10px] uppercase ${claseBadgeEstado(vistaRapida.estado)}`}>
-                  {vistaRapida.estado}
+                <span className={`inline-flex whitespace-nowrap px-2.5 py-1 font-code-sm text-[11px]! leading-tight uppercase ${claseBadgeEstado(vistaRapida.estado)}`}>
+                  {vistaRapida.estado.replace(/_/g, ' ')}
                 </span>
                 <span className="font-code-sm text-[10px] text-on-surface-variant">
                   {new Date(vistaRapida.creado_en).toLocaleDateString()}
@@ -739,19 +739,25 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
             <span className="material-symbols-outlined text-[16px]">bar_chart</span>
             Distribución de solicitudes
           </p>
-          <div className="flex items-end justify-between gap-3 h-32">
+          <div className="flex items-end justify-between gap-2 sm:gap-3 h-32">
             {(['NUEVA', 'EN_REVISION', 'COTIZADA', 'CANCELADA'] as const).map((estado) => {
               const valor = kpis[estado];
               const maximo = Math.max(kpis.NUEVA, kpis.EN_REVISION, kpis.COTIZADA, kpis.CANCELADA, 1);
               const alturaPorcentaje = Math.max((valor / maximo) * 100, valor > 0 ? 6 : 0);
               return (
-                <div key={estado} className="flex-1 flex flex-col items-center justify-end h-full gap-1">
+                <div key={estado} className="flex-1 min-w-0 flex flex-col items-center justify-end h-full gap-1">
                   <span className="font-code-sm text-xs text-on-surface">{valor}</span>
                   <div
                     className={`w-full ${estado === 'CANCELADA' ? 'bg-error' : 'bg-primary-container'}`}
                     style={{ height: `${alturaPorcentaje}%`, opacity: estado === 'EN_REVISION' ? 0.6 : 1 }}
                   />
-                  <span className="font-code-sm text-[9px] text-on-surface-variant uppercase text-center">{estado}</span>
+                  <span
+                    className={`font-code-sm text-[9px]! text-on-surface-variant max-w-full uppercase text-center flex sm:inline items-center justify-center h-8 sm:h-auto ${
+                      estado === 'EN_REVISION' ? 'sm:whitespace-nowrap' : ''
+                    }`}
+                  >
+                    {estado === 'EN_REVISION' ? 'En revisión' : estado}
+                  </span>
                 </div>
               );
             })}

@@ -236,8 +236,9 @@ export default function AsistenteComercial({ onIrFormulario }: AsistenteComercia
           <button
             type="button"
             onClick={() => setPaso('menu')}
-            className="px-4 py-2 text-on-surface-variant font-['Inter'] text-[14px] font-semibold hover:text-on-surface transition-colors cursor-pointer"
+            className="px-4 py-2 border border-outline text-on-surface font-['Inter'] text-[14px] font-semibold hover:bg-surface-container-high transition-colors cursor-pointer inline-flex items-center gap-1"
           >
+            <span className="material-symbols-outlined text-[18px]">arrow_back</span>
             VOLVER
           </button>
         </div>
@@ -379,7 +380,7 @@ export default function AsistenteComercial({ onIrFormulario }: AsistenteComercia
         </p>
       )}
 
-      <div className="flex gap-3">
+      <div className="flex justify-center gap-4">
         <button
           disabled={enviando}
           type="submit"
@@ -390,8 +391,9 @@ export default function AsistenteComercial({ onIrFormulario }: AsistenteComercia
         <button
           type="button"
           onClick={() => setPaso('menu')}
-          className="px-4 py-2 text-on-surface-variant font-['Inter'] text-[14px] font-semibold hover:text-on-surface transition-colors cursor-pointer"
+          className="px-4 py-2 min-w-[110px] border border-outline text-on-surface font-['Inter'] text-[14px] font-semibold hover:bg-surface-container-high transition-colors cursor-pointer inline-flex items-center justify-center gap-1"
         >
+          <span className="material-symbols-outlined text-[18px]">arrow_back</span>
           VOLVER
         </button>
       </div>
