@@ -23,7 +23,7 @@ pool:
 variables:
   - group: next-project-backend-secrets
   - name: harborProject
-    value: 'nextproject'
+    value: 'zyntra'
   - name: imageName
     value: 'nextproject-backend'
   - name: devHostPort
