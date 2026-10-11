@@ -83,9 +83,90 @@ stages:
               docker push $(HARBOR_REGISTRY)/$(harborProject)/$(frontendImageName):$(Build.SourceBranchName)
             displayName: "Docker Push"
 
+  - stage: RunMigrations
+    displayName: "Run Database Migrations"
+    dependsOn: Build
+    condition: succeeded()
+    jobs:
+      - job: MigrateDevJob
+        displayName: "Apply Migrations (dev)"
+        condition: eq(variables['Build.SourceBranch'], 'refs/heads/develop')
+        steps:
+        - script: |
+            set -e
+            docker run --rm \
+              -e PGHOST="$DB_HOST" \
+              -e PGPORT="$DB_PORT" \
+              -e PGUSER="$DB_USER" \
+              -e PGPASSWORD="$DB_PASSWORD" \
+              -e PGDATABASE="$DB_NAME" \
+              -e PGSSLMODE=require \
+              -v $(Build.SourcesDirectory)/backend/database/migrations:/migrations:ro \
+              postgres:18-alpine \
+              sh -c '
+                set -e
+                psql -v ON_ERROR_STOP=1 -c "CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, applied_at TIMESTAMPTZ DEFAULT now());"
+                for f in $(ls /migrations/*.sql | sort); do
+                  version=$(basename "$f")
+                  applied=$(psql -v version="$version" -tAc "SELECT 1 FROM schema_migrations WHERE version = :'"'"'version'"'"'")
+                  if [ "$applied" = "1" ]; then
+                    echo "Skip $version (ya aplicada)"
+                  else
+                    echo "Aplicando $version"
+                    psql -v ON_ERROR_STOP=1 -f "/migrations/$version"
+                    psql -v version="$version" -c "INSERT INTO schema_migrations(version) VALUES (:'"'"'version'"'"')"
+                  fi
+                done
+              '
+          displayName: "Apply pending SQL migrations"
+          env:
+            DB_HOST: $(DEV_DB_HOST)
+            DB_PORT: $(DEV_DB_PORT)
+            DB_USER: $(DEV_DB_USER)
+            DB_PASSWORD: $(DEV_DB_PASSWORD)
+            DB_NAME: $(DEV_DB_NAME)
+
+      - job: MigrateProdJob
+        displayName: "Apply Migrations (prod)"
+        condition: eq(variables['Build.SourceBranch'], 'refs/heads/main')
+        steps:
+        - script: |
+            set -e
+            docker run --rm \
+              -e PGHOST="$DB_HOST" \
+              -e PGPORT="$DB_PORT" \
+              -e PGUSER="$DB_USER" \
+              -e PGPASSWORD="$DB_PASSWORD" \
+              -e PGDATABASE="$DB_NAME" \
+              -e PGSSLMODE=require \
+              -v $(Build.SourcesDirectory)/backend/database/migrations:/migrations:ro \
+              postgres:18-alpine \
+              sh -c '
+                set -e
+                psql -v ON_ERROR_STOP=1 -c "CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, applied_at TIMESTAMPTZ DEFAULT now());"
+                for f in $(ls /migrations/*.sql | sort); do
+                  version=$(basename "$f")
+                  applied=$(psql -v version="$version" -tAc "SELECT 1 FROM schema_migrations WHERE version = :'"'"'version'"'"'")
+                  if [ "$applied" = "1" ]; then
+                    echo "Skip $version (ya aplicada)"
+                  else
+                    echo "Aplicando $version"
+                    psql -v ON_ERROR_STOP=1 -f "/migrations/$version"
+                    psql -v version="$version" -c "INSERT INTO schema_migrations(version) VALUES (:'"'"'version'"'"')"
+                  fi
+                done
+              '
+          displayName: "Apply pending SQL migrations"
+          env:
+            DB_HOST: $(PROD_DB_HOST)
+            DB_PORT: $(PROD_DB_PORT)
+            DB_USER: $(PROD_DB_USER)
+            DB_PASSWORD: $(PROD_DB_PASSWORD)
+            DB_NAME: $(PROD_DB_NAME)
+
   - stage: DeployStaging
     displayName: "Deploy to Staging"
-    dependsOn: Build
+    dependsOn: RunMigrations
     condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/develop'))
     jobs:
       - deployment: DeployBackendStagingJob
@@ -219,7 +300,7 @@ stages:
 
   - stage: DeployProduction
     displayName: "Deploy to Production"
-    dependsOn: Build
+    dependsOn: RunMigrations
     condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
     jobs:
       - deployment: DeployBackendProductionJob
