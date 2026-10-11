@@ -1,11 +1,11 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
+import { API_BASE } from '../lib/authClient';
 
 // Página pública contextual: el prospecto llega con el enlace que le envió su
 // asesor (JWT firmado, 7 días, uso único). Usa los mismos campos y reglas que
 // el formulario de solicitud de la landing y NO precarga ningún dato del
 // lead. El token solo viaja en la URL: el backend obtiene el lead a partir de
 // él y decide cliente/estado; aquí nunca se envía ningún id.
-const API_BASE = 'http://localhost:3000';
 
 interface SolicitudPorEnlaceProps {
   token: string;

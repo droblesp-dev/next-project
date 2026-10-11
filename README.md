@@ -1,33 +1,61 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# NEXTPROJECT
 
-# Run and deploy your AI Studio app
+Sistema de gestión de solicitudes, análisis técnico asistido por IA, cotizaciones y órdenes de trabajo para un centro de mecanizado industrial.
 
-This contains everything you need to run your app locally.
+Las reglas generales de desarrollo, decisiones arquitectónicas y el plan de fases del proyecto están documentados en [`CLAUDE.md`](./CLAUDE.md).
 
-View your app in AI Studio: https://ai.studio/apps/531f713c-baa4-4b58-8798-1b70358d4ea6
+## Stack
 
-## Run Locally
+- **Frontend:** React + TypeScript + Vite + Tailwind CSS.
+- **Backend:** Node.js + Express + TypeScript.
+- **Base de datos:** PostgreSQL (`nextproject`), acceso mediante `pg` + SQL directo (sin ORM).
+- **Autenticación:** `bcryptjs` + JWT.
+- **Documentación de API:** Swagger/OpenAPI.
 
-**Prerequisites:**  Node.js
+## Estructura del monorepo
 
-Estructura del monorepo:
-- `frontend/` — React + TypeScript + Vite.
-- `backend/` — Node.js + Express + TypeScript, incluye `backend/database/migrations/`.
+```
+/
+├── backend/
+│   ├── database/migrations/   # Migraciones SQL versionadas (V0…)
+│   ├── scripts/                # Scripts de seed y utilidades
+│   └── src/
+│       ├── config/
+│       ├── controllers/
+│       ├── middleware/
+│       ├── repositories/
+│       ├── routes/
+│       └── services/
+├── frontend/
+│   └── src/
+├── docs/fases/                 # Documentación de cada fase del proyecto
+└── CLAUDE.md                   # Reglas de desarrollo (documento base, congelado)
+```
 
-### Frontend
+## Requisitos previos
 
-1. Instalar dependencias:
-   `cd frontend && npm install`
-2. Configurar `.env.local` con `GEMINI_API_KEY` si corresponde.
-3. Ejecutar:
-   `npm run dev`
+- Node.js
+- PostgreSQL
 
-### Backend
+## Backend
 
 1. Instalar dependencias:
    `cd backend && npm install`
-2. Configurar `.env` (ver `backend/.env.example`).
-3. Ejecutar:
+2. Configurar variables de entorno copiando `backend/.env.example` a `backend/.env` y completando los valores (credenciales de PostgreSQL, `JWT_SECRET`, etc.). Nunca versionar `.env`.
+3. Aplicar las migraciones en `backend/database/migrations/` sobre la base `nextproject`.
+4. Ejecutar en modo desarrollo:
    `npm run dev`
+
+Scripts disponibles: `npm run build`, `npm run start`, `npm run seed:initial`, `npm run seed:usuarios-roles`, `npm run hash:admin`.
+
+## Frontend
+
+1. Instalar dependencias:
+   `cd frontend && npm install`
+2. Configurar `.env.local` si corresponde (p. ej. `GEMINI_API_KEY`).
+3. Ejecutar en modo desarrollo:
+   `npm run dev`
+
+## Estado del proyecto
+
+El desarrollo avanza de forma incremental por fases (ver §24 de `CLAUDE.md`). El detalle de cada fase autorizada se documenta en `docs/fases/`.

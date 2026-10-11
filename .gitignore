@@ -3,9 +3,38 @@ build/
 dist/
 coverage/
 .DS_Store
+Thumbs.db
 *.log
+
+# Variables de entorno y secretos (backend y frontend)
 .env*
 !.env.example
-backend/uploads/
+**/.env*
+!**/.env.example
+# Variante sin punto (así estaba nombrado backend/env)
+/backend/env
+/frontend/env
 .local-secrets/
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+secrets.json
+credentials.json
+service-account*.json
+
+# Archivos subidos por usuarios (comprobantes, evidencias)
+backend/uploads/
+**/uploads/
+
+# Herramientas locales
 .agent/
+.claude/settings.local.json
+.vscode/
+.idea/
+
+# Volcados de base de datos
+*.dump
+*.sql.bak
+*.bak
