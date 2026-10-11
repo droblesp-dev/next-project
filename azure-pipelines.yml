@@ -130,6 +130,40 @@ stages:
             DB_PASSWORD: $(DEV_DB_PASSWORD)
             DB_NAME: $(DEV_DB_NAME)
 
+        - script: |
+            set -e
+            docker run --rm \
+              -e DB_HOST="$DB_HOST" \
+              -e DB_PORT="$DB_PORT" \
+              -e DB_USER="$DB_USER" \
+              -e DB_PASSWORD="$DB_PASSWORD" \
+              -e DB_NAME="$DB_NAME" \
+              -e DB_SSL="$DB_SSL" \
+              -e SEED_ADMIN_EMAIL="$SEED_ADMIN_EMAIL" \
+              -e SEED_ADMIN_PASSWORD="$SEED_ADMIN_PASSWORD" \
+              -e SEED_COMERCIAL_EMAIL="$SEED_COMERCIAL_EMAIL" \
+              -e SEED_COMERCIAL_PASSWORD="$SEED_COMERCIAL_PASSWORD" \
+              -e SEED_OPERATIVO_EMAIL="$SEED_OPERATIVO_EMAIL" \
+              -e SEED_OPERATIVO_PASSWORD="$SEED_OPERATIVO_PASSWORD" \
+              -v $(Build.SourcesDirectory)/backend:/app \
+              -w /app \
+              node:20-alpine \
+              sh -c "npm ci --omit=dev && node scripts/seed-usuarios-roles.js"
+          displayName: "Seed initial users per role"
+          env:
+            DB_HOST: $(DEV_DB_HOST)
+            DB_PORT: $(DEV_DB_PORT)
+            DB_USER: $(DEV_DB_USER)
+            DB_PASSWORD: $(DEV_DB_PASSWORD)
+            DB_NAME: $(DEV_DB_NAME)
+            DB_SSL: $(dbSsl)
+            SEED_ADMIN_EMAIL: $(DEV_SEED_ADMIN_EMAIL)
+            SEED_ADMIN_PASSWORD: $(DEV_SEED_ADMIN_PASSWORD)
+            SEED_COMERCIAL_EMAIL: $(DEV_SEED_COMERCIAL_EMAIL)
+            SEED_COMERCIAL_PASSWORD: $(DEV_SEED_COMERCIAL_PASSWORD)
+            SEED_OPERATIVO_EMAIL: $(DEV_OPERATIVO_POR_DEFECTO_EMAIL)
+            SEED_OPERATIVO_PASSWORD: $(DEV_SEED_OPERATIVO_PASSWORD)
+
       - job: MigrateProdJob
         displayName: "Apply Migrations (prod)"
         condition: eq(variables['Build.SourceBranch'], 'refs/heads/main')
@@ -170,6 +204,40 @@ stages:
             DB_USER: $(PROD_DB_USER)
             DB_PASSWORD: $(PROD_DB_PASSWORD)
             DB_NAME: $(PROD_DB_NAME)
+
+        - script: |
+            set -e
+            docker run --rm \
+              -e DB_HOST="$DB_HOST" \
+              -e DB_PORT="$DB_PORT" \
+              -e DB_USER="$DB_USER" \
+              -e DB_PASSWORD="$DB_PASSWORD" \
+              -e DB_NAME="$DB_NAME" \
+              -e DB_SSL="$DB_SSL" \
+              -e SEED_ADMIN_EMAIL="$SEED_ADMIN_EMAIL" \
+              -e SEED_ADMIN_PASSWORD="$SEED_ADMIN_PASSWORD" \
+              -e SEED_COMERCIAL_EMAIL="$SEED_COMERCIAL_EMAIL" \
+              -e SEED_COMERCIAL_PASSWORD="$SEED_COMERCIAL_PASSWORD" \
+              -e SEED_OPERATIVO_EMAIL="$SEED_OPERATIVO_EMAIL" \
+              -e SEED_OPERATIVO_PASSWORD="$SEED_OPERATIVO_PASSWORD" \
+              -v $(Build.SourcesDirectory)/backend:/app \
+              -w /app \
+              node:20-alpine \
+              sh -c "npm ci --omit=dev && node scripts/seed-usuarios-roles.js"
+          displayName: "Seed initial users per role"
+          env:
+            DB_HOST: $(PROD_DB_HOST)
+            DB_PORT: $(PROD_DB_PORT)
+            DB_USER: $(PROD_DB_USER)
+            DB_PASSWORD: $(PROD_DB_PASSWORD)
+            DB_NAME: $(PROD_DB_NAME)
+            DB_SSL: $(dbSsl)
+            SEED_ADMIN_EMAIL: $(PROD_SEED_ADMIN_EMAIL)
+            SEED_ADMIN_PASSWORD: $(PROD_SEED_ADMIN_PASSWORD)
+            SEED_COMERCIAL_EMAIL: $(PROD_SEED_COMERCIAL_EMAIL)
+            SEED_COMERCIAL_PASSWORD: $(PROD_SEED_COMERCIAL_PASSWORD)
+            SEED_OPERATIVO_EMAIL: $(PROD_OPERATIVO_POR_DEFECTO_EMAIL)
+            SEED_OPERATIVO_PASSWORD: $(PROD_SEED_OPERATIVO_PASSWORD)
 
   - stage: DeployStaging
     displayName: "Deploy to Staging"
