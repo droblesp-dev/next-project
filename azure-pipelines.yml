@@ -283,6 +283,8 @@ stages:
         - script: |
             set -e
             docker run --rm \
+              --user "$(id -u):$(id -g)" \
+              -e HOME=/tmp \
               -e DB_HOST="$DB_HOST" \
               -e DB_PORT="$DB_PORT" \
               -e DB_USER="$DB_USER" \
@@ -358,6 +360,8 @@ stages:
         - script: |
             set -e
             docker run --rm \
+              --user "$(id -u):$(id -g)" \
+              -e HOME=/tmp \
               -e DB_HOST="$DB_HOST" \
               -e DB_PORT="$DB_PORT" \
               -e DB_USER="$DB_USER" \
