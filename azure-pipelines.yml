@@ -13,8 +13,12 @@ trigger:
       - frontend/*
       - azure-pipelines.yml
 
+# Cada ambiente tiene su propio pool de agentes: main -> produccion, resto -> desarrollo.
 pool:
-  name: "Zyntra Agent Pool"
+  ${{ if eq(variables['Build.SourceBranch'], 'refs/heads/main') }}:
+    name: "Zyntra Agent Pool"
+  ${{ else }}:
+    name: "Zyntra Agent Pool Develop"
 
 variables:
   - group: next-project-secrets
