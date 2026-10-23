@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Eye } from 'lucide-react';
 import { fetchAutenticado, SesionInvalidaError } from '../lib/authClient';
 import fabricacionGalleryImg from '../assets/images/fabricacion_gallery_1788229017518.jpg';
 
@@ -14,6 +15,7 @@ export interface Solicitud {
   requiere_comprobante: boolean;
   creado_en: string;
   actualizado_en: string;
+  codigo: string | null;
 }
 
 // FORMULARIO-UX-06.1 (autorización explícita — auditoría previa "AUDITORÍA FORMULARIO —
@@ -53,6 +55,31 @@ interface BandejaSolicitudesProps {
 interface ClienteResumen {
   nombre: string;
   empresa: string | null;
+  telefono: string;
+}
+
+// Lo que se muestra de un cliente: `principal` es la empresa si existe, si
+// no el nombre de la persona de contacto (nunca ambos como principal, para
+// no duplicar). `contacto` es el nombre de la persona, pero solo cuando NO
+// es ya el principal (para no repetirlo); `telefono` es el teléfono, si
+// está disponible. Ambos se etiquetan explícitamente al mostrarse (ver
+// `lineaContacto`) — un teléfono sin etiqueta no se reconoce de inmediato
+// como tal.
+interface InfoCliente {
+  principal: string;
+  contacto: string | null;
+  telefono: string | null;
+}
+
+// Línea compacta, con etiquetas explícitas, para los lugares de espacio
+// reducido (tabla, tarjetas, vista rápida) — nunca duplica el nombre si ya
+// es el principal, y nunca muestra "Contacto:"/"Teléfono:" vacío.
+function lineaContacto(info: InfoCliente): string | null {
+  const partes = [
+    info.contacto ? `Contacto: ${info.contacto}` : null,
+    info.telefono ? `Teléfono: ${info.telefono}` : null,
+  ].filter((v): v is string => Boolean(v));
+  return partes.length ? partes.join(' · ') : null;
 }
 
 type EstadoClientes = 'cargando' | 'disponible' | 'no_autorizado' | 'error';
@@ -107,15 +134,15 @@ function Kpi({
   claseBorde: string;
 }) {
   return (
-    <div className={`bg-surface sharp-border p-5 border-l-4 ${claseBorde} flex items-center gap-4`}>
+    <div className={`bg-surface sharp-border px-5 py-4 border-l-4 ${claseBorde} flex items-center gap-4`}>
       <span
         className={`inline-flex items-center justify-center w-11 h-11 shrink-0 rounded-full ${claseIcono}`}
       >
         <span className="material-symbols-outlined text-[22px]">{icono}</span>
       </span>
       <div className="min-w-0">
-        <p className="font-headline-lg text-headline-lg-mobile font-black text-on-surface leading-none">{valor}</p>
-        <p className="font-label-caps text-label-caps text-on-surface-variant uppercase mt-1 break-words">{etiqueta}</p>
+        <p className="font-['Montserrat'] text-[22px] font-semibold leading-[1.3] text-on-surface">{valor}</p>
+        <p className="font-label-caps text-label-caps text-on-surface-variant uppercase mt-0.5 break-words">{etiqueta}</p>
       </div>
     </div>
   );
@@ -211,11 +238,11 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
         }
 
         const data = (await response.json()) as {
-          clientes: { id: string; nombre: string; empresa: string | null }[];
+          clientes: { id: string; nombre: string; empresa: string | null; telefono: string }[];
         };
         if (!cancelado) {
           const mapa = new Map<string, ClienteResumen>();
-          data.clientes.forEach((c) => mapa.set(c.id, { nombre: c.nombre, empresa: c.empresa }));
+          data.clientes.forEach((c) => mapa.set(c.id, { nombre: c.nombre, empresa: c.empresa, telefono: c.telefono }));
           setClientesPorId(mapa);
           setEstadoClientes('disponible');
         }
@@ -234,13 +261,23 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
     };
   }, [token, onSesionInvalida]);
 
-  function nombreCliente(clienteId: string): string {
-    if (estadoClientes === 'cargando') return 'Cargando…';
-    if (estadoClientes === 'no_autorizado') return '— (sin acceso)';
-    if (estadoClientes === 'error') return '—';
+  function infoCliente(clienteId: string): InfoCliente {
+    if (estadoClientes === 'cargando') return { principal: 'Cargando…', contacto: null, telefono: null };
+    if (estadoClientes === 'no_autorizado') return { principal: '— (sin acceso)', contacto: null, telefono: null };
+    if (estadoClientes === 'error') return { principal: '—', contacto: null, telefono: null };
     const cliente = clientesPorId.get(clienteId);
-    if (!cliente) return '—';
-    return cliente.empresa?.trim() ? cliente.empresa : cliente.nombre;
+    if (!cliente) return { principal: '—', contacto: null, telefono: null };
+
+    const empresa = cliente.empresa?.trim() || null;
+    const nombre = cliente.nombre?.trim() || null;
+    const telefono = cliente.telefono?.trim() || null;
+    const principal = empresa || nombre || '—';
+    // El nombre solo se repite como "contacto" cuando ya se usó la empresa
+    // como principal — si no hay empresa, el nombre ya es el principal y
+    // no debe duplicarse aquí.
+    const contacto = empresa && nombre ? nombre : null;
+
+    return { principal, contacto, telefono };
   }
 
   const serviciosDisponibles = useMemo(() => {
@@ -278,6 +315,7 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
         const coincide =
           s.servicio.toLowerCase().includes(termino) ||
           s.descripcion.toLowerCase().includes(termino) ||
+          (s.codigo?.toLowerCase().includes(termino) ?? false) ||
           (cliente ? cliente.nombre.toLowerCase().includes(termino) : false) ||
           (cliente?.empresa ? cliente.empresa.toLowerCase().includes(termino) : false);
         if (!coincide) return false;
@@ -344,6 +382,12 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
     return solicitudes.find((s) => s.id === vistaRapidaId) ?? null;
   }, [solicitudes, vistaRapidaId]);
 
+  const infoClienteVistaRapida = useMemo(() => {
+    if (!vistaRapida) return null;
+    return infoCliente(vistaRapida.cliente_id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vistaRapida, clientesPorId, estadoClientes]);
+
   if (loading) {
     return <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">CARGANDO SOLICITUDES...</p>;
   }
@@ -408,7 +452,7 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
               type="text"
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
-              placeholder="Buscar por cliente, servicio o descripción…"
+              placeholder="Buscar por código, cliente, servicio o descripción…"
               className="w-full bg-background border border-outline pl-10 pr-3 py-2.5 text-on-surface text-sm focus:border-primary-container focus:outline-hidden font-body-md"
             />
           </div>
@@ -524,7 +568,9 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
                 </td>
               </tr>
             )}
-            {datosPagina.map((s) => (
+            {datosPagina.map((s) => {
+              const infoClienteFila = infoCliente(s.cliente_id);
+              return (
               <tr
                 key={s.id}
                 onClick={() => setVistaRapidaId(s.id)}
@@ -535,9 +581,16 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
                 <td className="py-3 px-4 font-['Inter'] text-[14px] font-normal text-on-surface-variant">
                   {new Date(s.creado_en).toLocaleDateString()}
                 </td>
-                <td className="py-3 px-4 font-body-md text-body-md text-on-surface">{nombreCliente(s.cliente_id)}</td>
-                <td className="py-3 px-4 font-body-md text-body-md text-on-surface">{s.servicio}</td>
-                <td className="py-3 px-4 font-body-md text-body-md text-on-surface">{formatearCantidad(s.cantidad, s.especificaciones)}</td>
+                <td className="py-3 px-4 font-['Inter'] text-[14px] font-normal leading-[20px] text-on-surface">
+                  <div>{infoClienteFila.principal}</div>
+                  {lineaContacto(infoClienteFila) && (
+                    <div className="font-code-sm text-[11px] text-on-surface-variant mt-0.5 wrap-anywhere">
+                      {lineaContacto(infoClienteFila)}
+                    </div>
+                  )}
+                </td>
+                <td className="py-3 px-4 font-['Inter'] text-[14px] font-normal leading-[20px] text-on-surface break-words">{s.servicio}</td>
+                <td className="py-3 px-4 font-['Inter'] text-[14px] font-normal leading-[20px] text-on-surface">{formatearCantidad(s.cantidad, s.especificaciones)}</td>
                 <td className="py-3 px-4">
                   <span className={`inline-flex whitespace-nowrap px-2.5 py-1 font-code-sm text-[11px]! leading-tight uppercase ${claseBadgeEstado(s.estado)}`}>
                     {s.estado.replace(/_/g, ' ')}
@@ -548,26 +601,20 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
                 </td>
                 <td className="py-3 px-4">
                   <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                    {puedeChatear && (
-                      <span
-                        title="Canal de comunicación técnica disponible para esta solicitud"
-                        aria-label="Comunicación técnica disponible"
-                        className="inline-flex items-center justify-center w-7 h-7 border border-primary-container text-primary-container"
-                      >
-                        <span className="material-symbols-outlined text-[16px]">forum</span>
-                      </span>
-                    )}
                     <button
                       type="button"
                       onClick={() => onSeleccionar(s.id)}
-                      className="inline-flex items-center px-3 py-1 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
+                      aria-label="Ver detalle de la solicitud"
+                      title="Ver detalle"
+                      className="inline-flex items-center justify-center w-11 h-11 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors cursor-pointer"
                     >
-                      VER DETALLE
+                      <Eye size={18} aria-hidden="true" />
                     </button>
                   </div>
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -579,12 +626,17 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
             Ningún resultado coincide con estos filtros.
           </p>
         )}
-        {datosPagina.map((s) => (
+        {datosPagina.map((s) => {
+          const infoClienteTarjeta = infoCliente(s.cliente_id);
+          return (
           <div key={s.id} className="bg-surface sharp-border border-l-4 border-l-primary-container p-4 space-y-3">
             <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
               <div className="min-w-0 flex-1 basis-40">
                 <p className="font-body-md text-body-md text-on-surface font-medium wrap-anywhere">{s.servicio}</p>
-                <p className="font-code-sm text-[11px] text-on-surface-variant uppercase mt-0.5 wrap-anywhere">{nombreCliente(s.cliente_id)}</p>
+                <p className="font-code-sm text-[11px] text-on-surface-variant uppercase mt-0.5 wrap-anywhere">{infoClienteTarjeta.principal}</p>
+                {lineaContacto(infoClienteTarjeta) && (
+                  <p className="font-code-sm text-[11px] text-on-surface-variant mt-0.5 wrap-anywhere">{lineaContacto(infoClienteTarjeta)}</p>
+                )}
               </div>
               <span className={`inline-flex shrink-0 whitespace-nowrap px-2.5 py-1 font-code-sm text-[11px]! leading-tight uppercase ${claseBadgeEstado(s.estado)}`}>
                 {s.estado.replace(/_/g, ' ')}
@@ -607,25 +659,19 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
             </dl>
 
             <div className="flex items-center justify-end gap-2 pt-1 border-t border-outline">
-              {puedeChatear && (
-                <span
-                  title="Canal de comunicación técnica disponible para esta solicitud"
-                  aria-label="Comunicación técnica disponible"
-                  className="inline-flex items-center justify-center w-8 h-8 border border-primary-container text-primary-container"
-                >
-                  <span className="material-symbols-outlined text-[18px]">forum</span>
-                </span>
-              )}
               <button
                 type="button"
                 onClick={() => onSeleccionar(s.id)}
-                className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
+                aria-label="Ver detalle de la solicitud"
+                title="Ver detalle"
+                className="flex-1 inline-flex items-center justify-center min-h-11 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors cursor-pointer"
               >
-                VER DETALLE
+                <Eye size={18} aria-hidden="true" />
               </button>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* PAGINACIÓN */}
@@ -715,7 +761,10 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
                   {new Date(vistaRapida.creado_en).toLocaleDateString()}
                 </span>
               </div>
-              <p className="font-body-md text-body-md text-on-surface">{nombreCliente(vistaRapida.cliente_id)}</p>
+              <p className="font-body-md text-body-md text-on-surface">{infoClienteVistaRapida?.principal}</p>
+              {infoClienteVistaRapida && lineaContacto(infoClienteVistaRapida) && (
+                <p className="font-code-sm text-[11px] text-on-surface-variant">{lineaContacto(infoClienteVistaRapida)}</p>
+              )}
               <p className="font-code-sm text-code-sm text-on-surface-variant uppercase">{vistaRapida.servicio}</p>
               <p className="font-code-sm text-[11px] text-on-surface-variant">
                 {formatearCantidad(vistaRapida.cantidad, vistaRapida.especificaciones)} unidades
@@ -726,9 +775,11 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
               <button
                 type="button"
                 onClick={() => onSeleccionar(vistaRapida.id)}
-                className="mt-2 inline-flex items-center px-4 py-2 border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
+                aria-label="Ver detalle de la solicitud"
+                title="Ver detalle"
+                className="mt-2 inline-flex items-center justify-center w-11 h-11 border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors cursor-pointer"
               >
-                VER DETALLE
+                <Eye size={18} aria-hidden="true" />
               </button>
             </div>
           )}

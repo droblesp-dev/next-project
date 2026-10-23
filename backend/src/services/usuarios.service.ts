@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { pool } from '../config/db.js';
 import {
   listAll,
+  listarAdminsActivos as listarAdminsActivosRepo,
   existsByEmail,
   create as crearUsuarioRepo,
   lockActiveAdminIds,
@@ -10,6 +11,7 @@ import {
   updateRol as updateRolRepo,
   findByIdWithRol,
   type UsuarioPublico,
+  type UsuarioMinimo,
 } from '../repositories/usuarios.repository.js';
 import { findByNombre, esRolValido } from '../repositories/roles.repository.js';
 
@@ -29,6 +31,10 @@ export class UsuarioNoEncontradoError extends Error {}
 
 export async function listarUsuarios(): Promise<UsuarioPublico[]> {
   return listAll();
+}
+
+export async function listarAdminsActivos(): Promise<UsuarioMinimo[]> {
+  return listarAdminsActivosRepo();
 }
 
 export async function crearUsuario(input: {

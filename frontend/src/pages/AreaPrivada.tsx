@@ -8,6 +8,7 @@ import GestionOrdenes from './GestionOrdenes';
 import GestionLeads from './GestionLeads';
 import GestionAlertas from './GestionAlertas';
 import GestionDashboard from './GestionDashboard';
+import GestionCuentasBancarias from './GestionCuentasBancarias';
 
 interface AreaPrivadaProps {
   usuario: Usuario;
@@ -30,7 +31,7 @@ const ROLES_CON_ALERTAS = ['ADMIN', 'OPERATIVO', 'COMERCIAL'];
 // COTIZACIONES y LEADS, que OPERATIVO no debe ver.
 const ROLES_CON_LECTURA_SOLICITUDES = ['ADMIN', 'COMERCIAL', 'OPERATIVO'];
 
-type Seccion = 'solicitudes' | 'cotizaciones' | 'ordenes' | 'leads' | 'alertas' | 'usuarios' | 'dashboard';
+type Seccion = 'solicitudes' | 'cotizaciones' | 'ordenes' | 'leads' | 'alertas' | 'usuarios' | 'dashboard' | 'cuentas-bancarias';
 
 export default function AreaPrivada({ usuario, token, onLogout, onSesionInvalida }: AreaPrivadaProps) {
   const tieneBandeja = ROLES_CON_BANDEJA.includes(usuario.rol);
@@ -126,6 +127,23 @@ export default function AreaPrivada({ usuario, token, onLogout, onSesionInvalida
               <p className="font-body-md text-body-md text-on-surface leading-tight">{usuario.nombre}</p>
               <p className="font-code-sm text-code-sm text-primary-container uppercase leading-tight">{usuario.rol}</p>
             </div>
+            {/* Notificaciones — entrada visual global preparada para uso
+                futuro (autorización explícita: solo placeholder de
+                navegación). Sin sección, sin contador, sin datos
+                simulados — no se agrega ningún endpoint/tabla/lógica.
+                Ubicada en la barra superior, junto al nombre y rol del
+                usuario, en los roles que tienen bandeja u órdenes. */}
+            {(tieneBandeja || tieneOrdenes) && (
+              <button
+                type="button"
+                disabled
+                title="Notificaciones — próximamente"
+                aria-label="Notificaciones (próximamente)"
+                className="inline-flex items-center justify-center w-10 h-10 border border-outline text-on-surface-variant opacity-50 cursor-not-allowed"
+              >
+                <span className="material-symbols-outlined text-[20px]">notifications</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={onLogout}
@@ -160,6 +178,8 @@ export default function AreaPrivada({ usuario, token, onLogout, onSesionInvalida
                   ? 'DASHBOARD'
                   : seccion === 'usuarios'
                   ? 'GESTIÓN DE USUARIOS'
+                  : seccion === 'cuentas-bancarias'
+                  ? 'CUENTAS BANCARIAS'
                   : seccion === 'cotizaciones'
                     ? 'GESTIÓN DE COTIZACIONES'
                     : seccion === 'ordenes'
@@ -266,28 +286,27 @@ export default function AreaPrivada({ usuario, token, onLogout, onSesionInvalida
                   USUARIOS
                 </button>
               )}
-
-              {/* Notificaciones — entrada visual global preparada para uso
-                  futuro (autorización explícita: solo placeholder de
-                  navegación). Sin sección, sin contador, sin datos
-                  simulados — no se agrega ningún endpoint/tabla/lógica.
-                  Oculto bajo `sm` (auditoría responsive): al estar deshabilitado
-                  solo ocupaba una fila extra de navegación en móvil. */}
-              <button
-                type="button"
-                disabled
-                title="Próximamente"
-                className="hidden sm:inline-flex items-center gap-2 px-4 py-2 font-['Inter'] text-[14px] font-semibold border border-outline text-on-surface-variant opacity-50 cursor-not-allowed"
-              >
-                <span className="material-symbols-outlined text-[16px]">notifications</span>
-                NOTIFICACIONES
-              </button>
+              {esAdmin && (
+                <button
+                  type="button"
+                  onClick={() => setSeccion('cuentas-bancarias')}
+                  className={`inline-flex items-center px-4 py-2 font-['Inter'] text-[14px] font-semibold transition-colors cursor-pointer ${
+                    seccion === 'cuentas-bancarias'
+                      ? 'bg-primary-container text-on-primary-container'
+                      : 'border border-outline text-on-surface hover:bg-surface-container-high'
+                  }`}
+                >
+                  CUENTAS BANCARIAS
+                </button>
+              )}
             </div>
 
             {seccion === 'dashboard' && esAdmin ? (
               <GestionDashboard token={token} onSesionInvalida={onSesionInvalida} />
             ) : seccion === 'usuarios' && esAdmin ? (
               <GestionUsuarios token={token} onSesionInvalida={onSesionInvalida} />
+            ) : seccion === 'cuentas-bancarias' && esAdmin ? (
+              <GestionCuentasBancarias token={token} onSesionInvalida={onSesionInvalida} />
             ) : seccion === 'ordenes' && puedeVerOrdenes ? (
               <GestionOrdenes
                 token={token}

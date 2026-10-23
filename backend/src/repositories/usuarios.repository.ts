@@ -50,6 +50,27 @@ export async function listAll(): Promise<UsuarioPublico[]> {
   return result.rows;
 }
 
+export interface UsuarioMinimo {
+  id: string;
+  nombre: string;
+}
+
+// PC-2026-01 (continuación — Frontend Secciones C/D): proyección mínima
+// (solo id+nombre, nunca email) de los ADMIN activos — usada exclusivamente
+// para que COMERCIAL identifique al verificador en «Llamada a ADMIN»
+// (CONFIRMAR_TELEFONICA). No reutiliza listAll()/UsuarioPublico para no
+// exponerle a COMERCIAL el email de otros usuarios.
+export async function listarAdminsActivos(): Promise<UsuarioMinimo[]> {
+  const result = await pool.query<UsuarioMinimo>(
+    `SELECT u.id, u.nombre
+     FROM usuarios u
+     JOIN roles r ON r.id = u.rol_id
+     WHERE r.nombre = 'ADMIN' AND u.activo = true
+     ORDER BY u.nombre`
+  );
+  return result.rows;
+}
+
 export async function existsByEmail(email: string): Promise<boolean> {
   const result = await pool.query('SELECT 1 FROM usuarios WHERE email = $1', [email]);
   return (result.rowCount ?? 0) > 0;

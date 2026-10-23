@@ -56,6 +56,54 @@ function formatearCantidad(cantidad: number, especificaciones: string | null): s
   return String(cantidad);
 }
 
+// `solicitudes.fecha_requerida` es una columna DATE (sin hora ni zona
+// horaria real, ver V0__esquema_base.sql) — el driver `pg` la entrega como
+// un string ISO con hora de medianoche local y sufijo "Z" (ej.
+// "2026-10-20T05:00:00.000Z" para la fecha calendario 2026-10-20 en un
+// servidor en UTC-5). Convertirla con `new Date(...)` y formatearla en el
+// navegador arriesga mostrar el día anterior o siguiente si el huso horario
+// del navegador no coincide exactamente con el del servidor — por eso se
+// lee directamente el fragmento YYYY-MM-DD de la cadena, sin construir
+// ningún objeto Date ni hacer ninguna conversión de huso horario.
+function formatearFechaSolo(valor: string | null): string {
+  if (!valor) return 'No especificada';
+  const coincidencia = valor.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!coincidencia) return 'No especificada';
+  const [, anio, mes, dia] = coincidencia;
+  return `${dia}/${mes}/${anio}`;
+}
+
+// `creado_en`/`actualizado_en`/`fecha_hora`/`revisado_en` son TIMESTAMPTZ
+// (instantes reales, no fechas de calendario) — aquí sí es correcto
+// convertir con `new Date(...)` y dejar que el navegador muestre la hora
+// local del usuario. Se fija el locale ('es-EC') y el formato explícitos
+// para que no dependan del idioma configurado en cada navegador, y se
+// maneja un valor inválido sin mostrar "Invalid Date".
+function formatearFechaHora(valorIso: string | null): string {
+  if (!valorIso) return 'No especificada';
+  const fecha = new Date(valorIso);
+  if (Number.isNaN(fecha.getTime())) return 'No especificada';
+  return fecha.toLocaleString('es-EC', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+// La descripción puede incluir, pegado por el cliente desde la sugerencia
+// del asistente, un bloque de preguntas de seguimiento con su respuesta
+// ("si"/"no") concatenada sin espacio justo después del signo de
+// interrogación de cierre (ej. "...la pieza?si ¿Tiene..."). Es contenido ya
+// guardado tal cual se recibió — nunca se reescribe su significado ni se
+// modifica la base de datos — solo se inserta un espacio visual entre el
+// "?" y la palabra siguiente para que sea legible, igual para cualquier
+// registro histórico con el mismo patrón.
+function legibilizarDescripcion(texto: string): string {
+  return texto.replace(/\?(?=[A-Za-zÀ-ÿ¿])/g, '? ');
+}
+
 // Forma real de informacion_estructurada, tal como la exige
 // backend/src/services/analisisIa.service.ts (ESQUEMA_RESPUESTA): son los
 // ÚNICOS 3 campos que la IA puede devolver dentro de este objeto — no existe
@@ -85,6 +133,19 @@ interface AnalisisIa {
 interface ClienteResumen {
   nombre: string;
   empresa: string | null;
+  telefono: string;
+}
+
+// Mismo criterio que BandejaSolicitudes.tsx::InfoCliente: `principal` es la
+// empresa si existe, si no el nombre de la persona de contacto. `contacto`
+// es el nombre de la persona, pero solo cuando NO es ya el principal (para
+// no repetirlo); `telefono` es el teléfono, si está disponible. Cada uno se
+// muestra en su propia fila con su propia etiqueta ("Contacto"/"Teléfono")
+// — un teléfono sin etiqueta no se reconoce de inmediato como tal.
+interface InfoCliente {
+  principal: string;
+  contacto: string | null;
+  telefono: string | null;
 }
 
 // Transiciones permitidas — deben coincidir con TRANSICIONES en
@@ -198,10 +259,10 @@ export default function DetalleSolicitud({
       const response = await fetchAutenticado('/api/clientes', token);
       if (!response.ok) return;
       const data = (await response.json()) as {
-        clientes: { id: string; nombre: string; empresa: string | null }[];
+        clientes: { id: string; nombre: string; empresa: string | null; telefono: string }[];
       };
       const mapa = new Map<string, ClienteResumen>();
-      data.clientes.forEach((c) => mapa.set(c.id, { nombre: c.nombre, empresa: c.empresa }));
+      data.clientes.forEach((c) => mapa.set(c.id, { nombre: c.nombre, empresa: c.empresa, telefono: c.telefono }));
       setClientesPorId(mapa);
     } catch (err) {
       if (err instanceof SesionInvalidaError) {
@@ -362,7 +423,16 @@ export default function DetalleSolicitud({
     }
   }
 
-  const nombreCliente = solicitud ? clientesPorId.get(solicitud.cliente_id) : undefined;
+  const clienteResuelto = solicitud ? clientesPorId.get(solicitud.cliente_id) : undefined;
+  const infoCliente: InfoCliente = (() => {
+    if (!clienteResuelto) return { principal: '—', contacto: null, telefono: null };
+    const empresa = clienteResuelto.empresa?.trim() || null;
+    const nombre = clienteResuelto.nombre?.trim() || null;
+    const telefono = clienteResuelto.telefono?.trim() || null;
+    const principal = empresa || nombre || '—';
+    const contacto = empresa && nombre ? nombre : null;
+    return { principal, contacto, telefono };
+  })();
   // Una solicitud NUEVA nunca tuvo la oportunidad de generar un análisis
   // (generarAnalisis() exige EN_REVISION, y NUEVA->EN_REVISION es la única
   // vía de entrada, sin retorno) — se puede afirmar con certeza que su
@@ -399,26 +469,36 @@ export default function DetalleSolicitud({
               <span className="shrink-0 whitespace-nowrap font-code-sm text-code-sm text-primary-container uppercase">{solicitud.estado.replace(/_/g, ' ')}</span>
             </div>
 
-            <p className="font-body-md text-body-md text-on-surface-variant">{solicitud.descripcion}</p>
+            <p className="font-body-md text-body-md text-on-surface-variant">{legibilizarDescripcion(solicitud.descripcion)}</p>
 
             <dl className="grid grid-cols-2 md:grid-cols-4 gap-4 font-code-sm text-code-sm wrap-anywhere">
               <div>
                 <dt className="text-on-surface-variant uppercase">Cliente</dt>
-                <dd className="text-on-surface">
-                  {nombreCliente ? (nombreCliente.empresa?.trim() ? nombreCliente.empresa : nombreCliente.nombre) : '—'}
-                </dd>
+                <dd className="text-on-surface">{infoCliente.principal}</dd>
               </div>
+              {infoCliente.contacto && (
+                <div>
+                  <dt className="text-on-surface-variant uppercase">Contacto</dt>
+                  <dd className="text-on-surface">{infoCliente.contacto}</dd>
+                </div>
+              )}
+              {infoCliente.telefono && (
+                <div>
+                  <dt className="text-on-surface-variant uppercase">Teléfono</dt>
+                  <dd className="text-on-surface">{infoCliente.telefono}</dd>
+                </div>
+              )}
               <div>
                 <dt className="text-on-surface-variant uppercase">Cantidad</dt>
                 <dd className="text-on-surface">{formatearCantidad(solicitud.cantidad, solicitud.especificaciones)}</dd>
               </div>
               <div>
                 <dt className="text-on-surface-variant uppercase">Fecha requerida</dt>
-                <dd className="text-on-surface">{solicitud.fecha_requerida ?? 'No especificada'}</dd>
+                <dd className="text-on-surface">{formatearFechaSolo(solicitud.fecha_requerida)}</dd>
               </div>
               <div>
                 <dt className="text-on-surface-variant uppercase">Creada</dt>
-                <dd className="text-on-surface">{new Date(solicitud.creado_en).toLocaleString()}</dd>
+                <dd className="text-on-surface">{formatearFechaHora(solicitud.creado_en)}</dd>
               </div>
             </dl>
 
@@ -522,7 +602,7 @@ export default function DetalleSolicitud({
                                   {a.estado.replace(/_/g, ' ')}
                                 </span>
                                 <span className="font-code-sm text-[10px] text-on-surface-variant uppercase">
-                                  {new Date(a.fecha_hora).toLocaleString()}
+                                  {formatearFechaHora(a.fecha_hora)}
                                 </span>
                               </div>
 
@@ -580,7 +660,7 @@ export default function DetalleSolicitud({
 
                               <p className="font-code-sm text-[10px] text-on-surface-variant uppercase">
                                 {a.revisado
-                                  ? `Revisado el ${a.revisado_en ? new Date(a.revisado_en).toLocaleString() : ''}`
+                                  ? `Revisado el ${formatearFechaHora(a.revisado_en)}`
                                   : 'No revisado'}
                               </p>
                               {puedeRevisarAnalisis && a.estado === 'COMPLETADO' && !a.revisado && (

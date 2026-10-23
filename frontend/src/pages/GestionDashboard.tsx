@@ -380,7 +380,7 @@ export default function GestionDashboard({ token, onSesionInvalida }: GestionDas
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4">
           <KpiDashboard
             icono="schedule"
             valor={resumen.alertas.pendientes}

@@ -51,18 +51,22 @@ export async function create(
 // FORMULARIO-01: variante exclusiva de la integración Cliente -> Solicitud ->
 // Lead del formulario público (crearSolicitud() en solicitudes.service.ts).
 // A diferencia de create() (lead "en blanco", sin cliente/solicitud, usado por
-// POST /api/leads — AsistenteComercial), este INSERT nace YA vinculado y YA
-// TIBIO: la solicitud recién enviada es evidencia suficiente de intención real
-// (distinto del significado histórico de TIBIO = "tuvo un seguimiento humano";
-// aquí el propio envío del formulario cumple ese rol). Nunca se llama sola:
-// siempre dentro de la misma transacción que crea la solicitud.
+// POST /api/leads — AsistenteComercial), este INSERT nace YA vinculado. Nunca
+// se llama sola: siempre dentro de la misma transacción que crea la solicitud.
+//
+// C2 (Corrección A, autorización explícita — auditorías C1/C1.1): nace
+// CALIENTE, no TIBIO. Regla comercial confirmada por el usuario: CALIENTE
+// significa "ya completó y envió la solicitud principal" — y eso es
+// exactamente lo que acaba de pasar aquí. TIBIO queda reservado para el
+// formulario secundario "Hablar con un asesor" (crearLead(), sin cambios),
+// que capta intención sin solicitud todavía.
 export async function createConVinculo(
   executor: Executor,
   data: { nombre: string; telefono: string; email: string | null; fuente: string; clienteId: string; solicitudId: string }
 ): Promise<Lead> {
   const result = await executor.query<Lead>(
     `INSERT INTO leads (id, nombre, telefono, email, fuente, cliente_id, solicitud_id, clasificacion, estado)
-     VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, 'TIBIO', 'ACTIVO')
+     VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, 'CALIENTE', 'ACTIVO')
      RETURNING ${COLUMNAS}`,
     [data.nombre, data.telefono, data.email, data.fuente, data.clienteId, data.solicitudId]
   );
@@ -186,9 +190,16 @@ export async function buscarLeadOrfanoPorTelefonoYEmail(
 // primer contacto real, no se reescriben por una interacción posterior).
 // Condición WHERE: mismo principio de protección ya usado en
 // vincularSolicitudDesdeEnlace/actualizarLead — un lead DESCARTADO,
-// CONVERTIDO o RECURRENTE nunca se reescribe automáticamente; el llamador
-// debe crear un lead nuevo en ese caso (fallback, nunca deja una Solicitud
-// sin ningún lead).
+// CONVERTIDO o RECURRENTE nunca se reescribe automáticamente (excluidos en
+// el propio WHERE); el llamador debe crear un lead nuevo en ese caso
+// (fallback, nunca deja una Solicitud sin ningún lead).
+//
+// C2 (Corrección A, autorización explícita): promueve a CALIENTE —no solo
+// FRIO->TIBIO— porque reutilizar este lead significa, igual que
+// createConVinculo(), que su titular acaba de completar y enviar la
+// solicitud principal. El WHERE ya protegía CONVERTIDO/RECURRENTE antes de
+// este cambio; sigue protegiéndolos exactamente igual (la fila no entra al
+// UPDATE, el llamador cae al fallback de crear un lead nuevo).
 export async function reutilizarParaSolicitud(
   executor: Executor,
   data: { leadId: string; clienteId: string; solicitudId: string }
@@ -197,7 +208,7 @@ export async function reutilizarParaSolicitud(
     `UPDATE leads
      SET cliente_id = $2,
          solicitud_id = $3,
-         clasificacion = CASE WHEN clasificacion = 'FRIO' THEN 'TIBIO' ELSE clasificacion END,
+         clasificacion = 'CALIENTE',
          actualizado_en = CURRENT_TIMESTAMP
      WHERE id = $1 AND estado = 'ACTIVO' AND clasificacion NOT IN ('CONVERTIDO', 'RECURRENTE')
      RETURNING ${COLUMNAS}`,
@@ -263,6 +274,52 @@ export async function existeCotizacionAceptada(solicitudId: string): Promise<boo
     [solicitudId]
   );
   return (result.rowCount ?? 0) > 0;
+}
+
+// C2 (Corrección B) / C2.2 (autorización explícita — alternativa B de la
+// auditoría C2.1): leads vinculados a una solicitud dada — usada
+// exclusivamente para resolver, antes de convertir, cuántos leads
+// corresponden a la solicitud de la cotización que se acaba de aceptar (0,
+// 1 o más de 1). Solo lectura; no decide nada por sí misma.
+//
+// C2.2: `FOR UPDATE` — bloquea las filas encontradas por el resto de la
+// transacción del `executor` recibido, reduciendo la ventana de
+// concurrencia señalada en la auditoría C2.1 (que otro proceso vincule o
+// desvincule un lead de esta misma solicitud entre este conteo y el
+// `UPDATE` de convertirPorAceptacion()). `executor` opcional (por defecto
+// `pool`, igual que el resto del archivo): fuera de una transacción
+// explícita, `FOR UPDATE` sigue siendo válido (bloqueo de la transacción
+// implícita de una sola sentencia) y no cambia el resultado para los
+// llamadores existentes que no pasan `executor` (p. ej. las pruebas de
+// integración de C2, que solo leen para verificar).
+export async function listarPorSolicitud(solicitudId: string, executor: Executor = pool): Promise<Lead[]> {
+  const result = await executor.query<Lead>(
+    `SELECT ${COLUMNAS} FROM leads WHERE solicitud_id = $1 FOR UPDATE`,
+    [solicitudId]
+  );
+  return result.rows;
+}
+
+// C2 (Corrección B) / C2.2 (autorización explícita): conversión automática
+// al aceptar válidamente una cotización. UPDATE atómico por id (nunca por
+// solicitud_id directamente — quien llama ya resolvió que hay exactamente
+// un lead candidato, ver leads.service.ts::convertirLeadPorAceptacion) con
+// el mismo criterio de guarda ya usado en el resto de este archivo:
+// `estado = 'ACTIVO'` y `clasificacion NOT IN ('CONVERTIDO', 'RECURRENTE')`
+// — nunca degrada ni reescribe un lead ya CONVERTIDO/RECURRENTE, y nunca
+// reactiva uno DESCARTADO. Devuelve null si la fila no cumplía la
+// condición en el instante del UPDATE (no es un error: el llamador lo trata
+// como "no había nada que cambiar"). `executor` opcional (por defecto
+// `pool`) — mismo motivo que listarPorSolicitud().
+export async function convertirPorAceptacion(leadId: string, executor: Executor = pool): Promise<Lead | null> {
+  const result = await executor.query<Lead>(
+    `UPDATE leads
+     SET clasificacion = 'CONVERTIDO', actualizado_en = CURRENT_TIMESTAMP
+     WHERE id = $1 AND estado = 'ACTIVO' AND clasificacion NOT IN ('CONVERTIDO', 'RECURRENTE')
+     RETURNING ${COLUMNAS}`,
+    [leadId]
+  );
+  return result.rows[0] ?? null;
 }
 
 // RECURRENTE exige que la nueva solicitud sea POSTERIOR a la solicitud que

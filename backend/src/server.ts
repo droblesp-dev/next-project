@@ -12,6 +12,8 @@ import { leadsRouter } from './routes/leads.routes.js';
 import { alertasRouter } from './routes/alertas.routes.js';
 import { dashboardRouter } from './routes/dashboard.routes.js';
 import { asistenteFormularioRouter } from './routes/asistenteFormulario.routes.js';
+import { cuentasBancariasRouter } from './routes/cuentasBancarias.routes.js';
+import { LOGOS_BANCOS_DIR } from './config/uploadsLogosBancos.js';
 
 const app = express();
 
@@ -59,6 +61,17 @@ app.use('/api/leads', leadsRouter);
 app.use('/api/alertas', alertasRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/asistente-formulario', asistenteFormularioRouter);
+app.use('/api/cuentas-bancarias', cuentasBancariasRouter);
+
+// PC-2026-01 (Fase D — logos de bancos): único directorio servido como
+// estático público en todo el backend — justificado porque un logo de
+// banco debe ser visible en la vista pública del cliente (Fase F), no solo
+// en el área privada. `express.static` nunca permite salir de
+// LOGOS_BANCOS_DIR (sanitiza la ruta), y cada archivo se guarda con un
+// nombre generado por el servidor (UUID), nunca el nombre original del
+// cliente — ver uploadsLogosBancos.ts. No expone ningún otro directorio
+// (comprobantes/evidencias siguen exclusivamente detrás de requireAuth).
+app.use('/uploads/logos-bancos', express.static(LOGOS_BANCOS_DIR));
 
 const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   // CORRECCIÓN FASE 4 (hallazgo #1, manifestación B): un cuerpo JSON sintácticamente inválido, o

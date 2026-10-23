@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { Eye } from 'lucide-react';
 import { fetchAutenticado, obtenerMe, SesionInvalidaError, type Usuario } from '../lib/authClient';
 import type { Solicitud } from './BandejaSolicitudes';
 
@@ -1259,8 +1260,8 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
                   )}
                   {datosPaginaAdmin.map((l) => (
                     <tr key={l.id} className="border-b border-outline hover:bg-surface-container-high transition-colors">
-                      <td className="py-3 px-4 font-body-md text-body-md text-on-surface wrap-anywhere">{l.nombre}</td>
-                      <td className="py-3 px-4 font-body-md text-body-md text-on-surface">{empresaAdmin(l.cliente_id)}</td>
+                      <td className="py-3 px-4 font-['Inter'] text-[14px] font-normal leading-[20px] text-on-surface wrap-anywhere">{l.nombre}</td>
+                      <td className="py-3 px-4 font-['Inter'] text-[14px] font-normal leading-[20px] text-on-surface">{empresaAdmin(l.cliente_id)}</td>
                       <td className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant uppercase">{l.fuente}</td>
                       <td className="py-3 px-4">
                         <BadgeClasificacion valor={l.clasificacion} />
@@ -1278,9 +1279,11 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
                         <button
                           type="button"
                           onClick={() => abrirDetalle(l.id)}
-                          className="inline-flex items-center px-3 py-1 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
+                          aria-label="Ver detalle del lead"
+                          title="Ver detalle"
+                          className="inline-flex items-center justify-center w-11 h-11 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors cursor-pointer"
                         >
-                          VER
+                          <Eye size={18} aria-hidden="true" />
                         </button>
                       </td>
                     </tr>
@@ -1326,9 +1329,11 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
                     <button
                       type="button"
                       onClick={() => abrirDetalle(l.id)}
-                      className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
+                      aria-label="Ver detalle del lead"
+                      title="Ver detalle"
+                      className="flex-1 inline-flex items-center justify-center min-h-11 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors cursor-pointer"
                     >
-                      VER
+                      <Eye size={18} aria-hidden="true" />
                     </button>
                   </div>
                 </div>
@@ -2255,12 +2260,18 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
   // paginación (filtradasAdmin, ordenadasAdmin, datosPaginaAdmin,
   // paginasVisiblesAdmin) sin cambiar permisos, visibilidad ni reglas.
   const clienteCelda = (clienteId: string | null) => {
-    if (!clienteId) return <span className="text-sm text-on-surface-variant/60 italic">Sin vincular</span>;
+    if (!clienteId)
+      return <span className="font-['Inter'] text-[14px] font-normal italic text-on-surface-variant/60">Sin vincular</span>;
     const c = clienteResueltoAdmin(clienteId);
-    if (!c) return <span className="text-sm text-on-surface-variant">{estadoApoyo === 'cargando' ? 'Cargando…' : '—'}</span>;
+    if (!c)
+      return (
+        <span className="font-['Inter'] text-[14px] font-normal text-on-surface-variant">
+          {estadoApoyo === 'cargando' ? 'Cargando…' : '—'}
+        </span>
+      );
     return (
       <>
-        <p className="text-sm text-on-surface wrap-anywhere">{c.nombre}</p>
+        <p className="font-['Inter'] text-[14px] font-normal leading-[20px] text-on-surface wrap-anywhere">{c.nombre}</p>
         {c.empresa?.trim() && <p className="font-code-sm text-[11px] text-on-surface-variant wrap-anywhere">{c.empresa}</p>}
       </>
     );
@@ -2268,11 +2279,11 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
 
   const comercialCelda = (comercialId: string | null) => {
     const texto = comercialMostrable(comercialId);
-    if (texto === 'Yo') return <span className="font-code-sm text-xs text-primary-container uppercase">Yo</span>;
+    if (texto === 'Yo') return <span className="font-code-sm text-code-sm text-primary-container uppercase">Yo</span>;
     if (texto === 'Sin asignar') {
-      return <span className="font-code-sm text-xs text-on-surface-variant/60 italic">Sin asignar</span>;
+      return <span className="font-code-sm text-code-sm text-on-surface-variant/60 italic">Sin asignar</span>;
     }
-    return <span className="font-code-sm text-xs text-on-surface-variant break-words">{texto}</span>;
+    return <span className="font-code-sm text-code-sm text-on-surface-variant break-words">{texto}</span>;
   };
 
   const claseSelectFiltro =
@@ -2470,7 +2481,7 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
                     {datosPaginaAdmin.length === 0 && (
                       <tr>
                         <td colSpan={7} className="py-10 px-4 text-center">
-                          <p className="font-body-md text-sm text-on-surface-variant">
+                          <p className="font-['Inter'] text-[14px] font-normal text-on-surface-variant">
                             Ningún lead coincide con estos filtros.
                           </p>
                         </td>
@@ -2485,7 +2496,7 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
                         }`}
                       >
                         <td className="py-3.5 px-4 align-top">
-                          <p className="font-body-md text-body-md font-medium text-on-surface wrap-anywhere">{l.nombre}</p>
+                          <p className="font-['Inter'] text-[14px] font-normal leading-[20px] text-on-surface wrap-anywhere">{l.nombre}</p>
                           <p className="mt-0.5 flex flex-wrap items-center gap-x-2 font-code-sm text-[11px] text-on-surface-variant">
                             <span className="inline-flex items-center gap-1">
                               <span className="material-symbols-outlined text-[13px]" aria-hidden="true">
@@ -2504,7 +2515,7 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
                         </td>
                         <td className="py-3.5 px-4 align-top">{clienteCelda(l.cliente_id)}</td>
                         <td className="py-3.5 px-4 pt-4 align-top">{comercialCelda(l.comercial_id)}</td>
-                        <td className="py-3.5 px-4 pt-4 align-top font-code-sm text-xs text-on-surface-variant whitespace-nowrap">
+                        <td className="py-3.5 px-4 pt-4 align-top font-code-sm text-code-sm text-on-surface-variant whitespace-nowrap">
                           {new Date(l.creado_en).toLocaleDateString()}
                         </td>
                         <td className="py-3.5 px-4 align-top text-right">
@@ -2514,12 +2525,11 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
                               e.stopPropagation();
                               abrirDetalle(l.id);
                             }}
-                            className="inline-flex items-center gap-1 whitespace-nowrap px-3 py-1.5 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
+                            aria-label="Ver detalle del lead"
+                            title="Ver detalle"
+                            className="inline-flex items-center justify-center w-11 h-11 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors cursor-pointer"
                           >
-                            VER DETALLE
-                            <span className="material-symbols-outlined text-[14px]" aria-hidden="true">
-                              chevron_right
-                            </span>
+                            <Eye size={18} aria-hidden="true" />
                           </button>
                         </td>
                       </tr>
@@ -2531,7 +2541,7 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
               {/* TARJETAS — móvil */}
               <div className="xl:hidden space-y-3">
                 {datosPaginaAdmin.length === 0 && (
-                  <p className="font-body-md text-sm text-on-surface-variant text-center py-6">
+                  <p className="font-['Inter'] text-[14px] font-normal text-on-surface-variant text-center py-6">
                     Ningún lead coincide con estos filtros.
                   </p>
                 )}
@@ -2573,12 +2583,11 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
                       <button
                         type="button"
                         onClick={() => abrirDetalle(l.id)}
-                        className="inline-flex items-center gap-1 px-4 py-2 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
+                        aria-label="Ver detalle del lead"
+                        title="Ver detalle"
+                        className="inline-flex items-center justify-center w-11 h-11 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors cursor-pointer"
                       >
-                        VER DETALLE
-                        <span className="material-symbols-outlined text-[14px]" aria-hidden="true">
-                          chevron_right
-                        </span>
+                        <Eye size={18} aria-hidden="true" />
                       </button>
                     </div>
                   </div>

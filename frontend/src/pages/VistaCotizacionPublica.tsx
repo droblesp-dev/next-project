@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { API_BASE } from '../lib/authClient';
+import { claveCuentaReceptora } from '../lib/cuentasReceptoras';
 
 interface VistaCotizacionPublicaProps {
   token: string;
@@ -30,12 +31,170 @@ interface CotizacionPublica {
     titular: string;
     ruc: string;
   } | null;
+  // PC-2026-01 ("Implementación completa de Gestión de Cuentas Bancarias",
+  // Fase F): cuentas receptoras reales del catálogo administrado por
+  // ADMIN. Convive con `datos_bancarios` (variables BANCO_*, no
+  // retiradas) — se prefiere esta lista cuando no está vacía; si está
+  // vacía se usa `datos_bancarios` como respaldo, sin romper el
+  // comportamiento actual. `titular` es `string | null`: null significa
+  // que esa cuenta no debe mostrar el nombre del titular al cliente
+  // (decisión 5 de la autorización) — nunca se inventa un valor en su
+  // lugar.
+  cuentas_bancarias_activas: {
+    banco: string;
+    titular: string | null;
+    tipo_cuenta: string;
+    numero_cuenta: string;
+    logo_url: string | null;
+  }[];
   solicitud: {
     servicio: string;
     descripcion: string;
     cantidad: number;
     especificaciones: string | null;
   };
+}
+
+type CuentaBancariaPublicaFront = {
+  banco: string;
+  titular: string | null;
+  tipo_cuenta: string;
+  numero_cuenta: string;
+  logo_url: string | null;
+};
+
+type DatosBancariosLegacy = {
+  banco: string;
+  tipoCuenta: string;
+  numeroCuenta: string;
+  titular: string;
+  ruc: string;
+};
+
+// PC-2026-01 (Fase F): bloque compartido por ANTICIPO y SALDO — muestra la
+// cuenta receptora real de NextProject. Reglas explícitas de la
+// autorización: solo cuentas activas (ya filtradas por el backend, nunca
+// aquí); si hay una sola, se usa directamente (decisión 8); si hay varias,
+// el cliente elige; el titular solo se muestra si el backend lo entrega
+// (no null); nunca se confunde con el banco de origen de la transferencia
+// del cliente; una cuenta elegida NUNCA implica que el pago ya se acreditó
+// — ese estado solo lo decide Comercial/ADMIN (estado_anticipo/
+// estado_saldo), nunca esta pantalla.
+function BloqueCuentaReceptora({
+  cuentas,
+  datosLegacy,
+  indiceElegido,
+  onElegir,
+}: {
+  cuentas: CuentaBancariaPublicaFront[];
+  datosLegacy: DatosBancariosLegacy | null;
+  indiceElegido: number;
+  onElegir: (indice: number) => void;
+}) {
+  if (cuentas.length === 0) {
+    if (!datosLegacy) {
+      return (
+        <p className="font-['Inter'] text-[13px] font-normal text-error uppercase">
+          Datos bancarios no configurados. Contacte a su asesor comercial.
+        </p>
+      );
+    }
+    return (
+      <dl className="bg-background sharp-border p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 font-code-sm text-code-sm">
+        <div className="min-w-0">
+          <dt className="text-on-surface-variant uppercase">Banco</dt>
+          <dd className="text-on-surface break-words">{datosLegacy.banco}</dd>
+        </div>
+        <div className="min-w-0">
+          <dt className="text-on-surface-variant uppercase">Tipo de cuenta</dt>
+          <dd className="text-on-surface break-words">{datosLegacy.tipoCuenta}</dd>
+        </div>
+        <div className="min-w-0">
+          <dt className="text-on-surface-variant uppercase">Número de cuenta</dt>
+          <dd className="text-on-surface break-words">{datosLegacy.numeroCuenta}</dd>
+        </div>
+        <div className="min-w-0">
+          <dt className="text-on-surface-variant uppercase">Titular</dt>
+          <dd className="text-on-surface break-words">{datosLegacy.titular}</dd>
+        </div>
+        <div className="min-w-0">
+          <dt className="text-on-surface-variant uppercase">RUC</dt>
+          <dd className="text-on-surface break-words">{datosLegacy.ruc}</dd>
+        </div>
+      </dl>
+    );
+  }
+
+  const indiceSeguro = indiceElegido < cuentas.length ? indiceElegido : 0;
+  const elegida = cuentas[indiceSeguro];
+
+  return (
+    <div className="space-y-3">
+      {cuentas.length > 1 && (
+        <div className="space-y-2">
+          <p className="font-code-sm text-[11px] text-on-surface-variant uppercase">Elija la cuenta a la que transferirá</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {cuentas.map((c, i) => (
+              <button
+                key={claveCuentaReceptora(c, i)}
+                type="button"
+                onClick={() => onElegir(i)}
+                className={`flex items-center gap-2 p-3 text-left border transition-colors cursor-pointer ${
+                  i === indiceSeguro
+                    ? 'border-primary-container bg-primary-container/10'
+                    : 'border-outline hover:bg-surface-container-high'
+                }`}
+              >
+                {c.logo_url ? (
+                  <img src={`${API_BASE}${c.logo_url}`} alt={`Logo de ${c.banco}`} className="w-8 h-8 object-contain bg-background border border-outline shrink-0" />
+                ) : (
+                  <span className="inline-flex items-center justify-center w-8 h-8 bg-surface-container-high border border-outline text-on-surface-variant shrink-0">
+                    <span className="material-symbols-outlined text-[18px]">account_balance</span>
+                  </span>
+                )}
+                <span className="min-w-0">
+                  <span className="block font-['Inter'] text-[13px] font-semibold text-on-surface truncate">{c.banco}</span>
+                  <span className="block font-code-sm text-[11px] text-on-surface-variant truncate">{c.numero_cuenta}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <dl className="bg-background sharp-border p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 font-code-sm text-code-sm">
+        <div className="sm:col-span-2 flex items-center gap-3">
+          {elegida.logo_url ? (
+            <img src={`${API_BASE}${elegida.logo_url}`} alt={`Logo de ${elegida.banco}`} className="w-10 h-10 object-contain bg-surface border border-outline shrink-0" />
+          ) : (
+            <span className="inline-flex items-center justify-center w-10 h-10 bg-surface-container-high border border-outline text-on-surface-variant shrink-0">
+              <span className="material-symbols-outlined text-[20px]">account_balance</span>
+            </span>
+          )}
+          <span className="font-['Inter'] text-[15px] font-semibold text-on-surface">{elegida.banco}</span>
+        </div>
+        <div className="min-w-0">
+          <dt className="text-on-surface-variant uppercase">Tipo de cuenta</dt>
+          <dd className="text-on-surface break-words">{elegida.tipo_cuenta}</dd>
+        </div>
+        <div className="min-w-0">
+          <dt className="text-on-surface-variant uppercase">Número de cuenta</dt>
+          <dd className="text-on-surface break-words">{elegida.numero_cuenta}</dd>
+        </div>
+        {elegida.titular && (
+          <div className="min-w-0 sm:col-span-2">
+            <dt className="text-on-surface-variant uppercase">Titular</dt>
+            <dd className="text-on-surface break-words">{elegida.titular}</dd>
+          </div>
+        )}
+      </dl>
+
+      <p className="font-['Inter'] text-[12px] font-normal text-on-surface-variant">
+        Puedes realizar la transferencia desde un banco diferente. En ese caso, el pago quedará pendiente hasta que el
+        dinero se haga efectivo y se acredite en nuestra cuenta bancaria.
+      </p>
+    </div>
+  );
 }
 
 // Fase D.6: mismos tipos/tamaño que valida el backend — el frontend solo
@@ -73,6 +232,13 @@ export default function VistaCotizacionPublica({ token }: VistaCotizacionPublica
   const [archivoComprobanteSaldo, setArchivoComprobanteSaldo] = useState<File | null>(null);
   const [errorArchivoSaldo, setErrorArchivoSaldo] = useState<string | null>(null);
   const [subiendoComprobanteSaldo, setSubiendoComprobanteSaldo] = useState(false);
+
+  // PC-2026-01 (Fase F): cuál cuenta receptora activa eligió el cliente,
+  // cuando hay más de una — independiente para anticipo y saldo (en la
+  // práctica suele ser la misma, pero son dos bloques distintos de la
+  // pantalla con su propia gestión de pago).
+  const [cuentaElegidaAnticipo, setCuentaElegidaAnticipo] = useState(0);
+  const [cuentaElegidaSaldo, setCuentaElegidaSaldo] = useState(0);
 
   useEffect(() => {
     let cancelado = false;
@@ -394,29 +560,29 @@ export default function VistaCotizacionPublica({ token }: VistaCotizacionPublica
 
               <p className="font-body-md text-body-md text-on-surface-variant">{cotizacion.solicitud.descripcion}</p>
 
-              <dl className="grid grid-cols-2 gap-4 font-code-sm text-code-sm">
-                <div>
+              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 font-code-sm text-code-sm">
+                <div className="min-w-0">
                   <dt className="text-on-surface-variant uppercase">Cantidad</dt>
                   <dd className="text-on-surface">{cotizacion.solicitud.cantidad}</dd>
                 </div>
-                <div>
+                <div className="min-w-0">
                   <dt className="text-on-surface-variant uppercase">Valor</dt>
                   <dd className="text-on-surface">${cotizacion.valor}</dd>
                 </div>
                 {cotizacion.fecha_vigencia && (
-                  <div>
+                  <div className="min-w-0">
                     <dt className="text-on-surface-variant uppercase">Vigencia</dt>
                     <dd className="text-on-surface">{new Date(cotizacion.fecha_vigencia).toLocaleString()}</dd>
                   </div>
                 )}
                 {cotizacion.aceptada_en && (
-                  <div>
+                  <div className="min-w-0">
                     <dt className="text-on-surface-variant uppercase">Aceptada</dt>
                     <dd className="text-on-surface">{new Date(cotizacion.aceptada_en).toLocaleString()}</dd>
                   </div>
                 )}
                 {cotizacion.rechazada_en && (
-                  <div>
+                  <div className="min-w-0">
                     <dt className="text-on-surface-variant uppercase">Rechazada</dt>
                     <dd className="text-on-surface">{new Date(cotizacion.rechazada_en).toLocaleString()}</dd>
                   </div>
@@ -516,20 +682,20 @@ export default function VistaCotizacionPublica({ token }: VistaCotizacionPublica
                     ANTICIPO
                   </h4>
 
-                  <dl className="grid grid-cols-2 gap-4 font-code-sm text-code-sm">
-                    <div>
+                  <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 font-code-sm text-code-sm">
+                    <div className="min-w-0">
                       <dt className="text-on-surface-variant uppercase">Valor anticipo</dt>
                       <dd className="text-on-surface">${cotizacion.anticipo_valor}</dd>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <dt className="text-on-surface-variant uppercase">Saldo pendiente</dt>
                       <dd className="text-on-surface">${cotizacion.saldo_pendiente}</dd>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <dt className="text-on-surface-variant uppercase">Método</dt>
                       <dd className="text-on-surface">{cotizacion.metodo_anticipo}</dd>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <dt className="text-on-surface-variant uppercase">Estado</dt>
                       <dd className="text-on-surface">{cotizacion.estado_anticipo}</dd>
                     </div>
@@ -555,50 +721,54 @@ export default function VistaCotizacionPublica({ token }: VistaCotizacionPublica
 
                   {cotizacion.estado_anticipo === 'PENDIENTE' && cotizacion.metodo_anticipo === 'TRANSFERENCIA' && (
                     <div className="space-y-4">
-                      {cotizacion.datos_bancarios ? (
-                        <dl className="bg-background sharp-border p-4 grid grid-cols-2 gap-3 font-code-sm text-code-sm">
-                          <div>
-                            <dt className="text-on-surface-variant uppercase">Banco</dt>
-                            <dd className="text-on-surface">{cotizacion.datos_bancarios.banco}</dd>
-                          </div>
-                          <div>
-                            <dt className="text-on-surface-variant uppercase">Tipo de cuenta</dt>
-                            <dd className="text-on-surface">{cotizacion.datos_bancarios.tipoCuenta}</dd>
-                          </div>
-                          <div>
-                            <dt className="text-on-surface-variant uppercase">Número de cuenta</dt>
-                            <dd className="text-on-surface">{cotizacion.datos_bancarios.numeroCuenta}</dd>
-                          </div>
-                          <div>
-                            <dt className="text-on-surface-variant uppercase">Titular</dt>
-                            <dd className="text-on-surface">{cotizacion.datos_bancarios.titular}</dd>
-                          </div>
-                          <div>
-                            <dt className="text-on-surface-variant uppercase">RUC</dt>
-                            <dd className="text-on-surface">{cotizacion.datos_bancarios.ruc}</dd>
-                          </div>
-                        </dl>
-                      ) : (
-                        <p className="font-['Inter'] text-[13px] font-normal text-error uppercase">
-                          Datos bancarios no configurados. Contacte a su asesor comercial.
-                        </p>
-                      )}
+                      <BloqueCuentaReceptora
+                        cuentas={cotizacion.cuentas_bancarias_activas}
+                        datosLegacy={cotizacion.datos_bancarios}
+                        indiceElegido={cuentaElegidaAnticipo}
+                        onElegir={setCuentaElegidaAnticipo}
+                      />
 
                       {cotizacion.comprobante_recibido ? (
                         <p className="font-['Inter'] text-[13px] font-normal text-primary-container uppercase">
                           Comprobante recibido. Pendiente de revisión por Comercial.
                         </p>
                       ) : (
-                        <div className="space-y-3">
-                          <label className="block font-['Inter'] text-[13px] font-semibold text-on-surface-variant uppercase mb-1">
-                            Comprobante de transferencia (PDF, JPG o PNG, máx. 5 MB)
+                        <div className="bg-background sharp-border p-4 space-y-3">
+                          <div>
+                            <p className="font-['Inter'] text-[14px] font-semibold text-on-surface">Comprobante de transferencia</p>
+                            <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant mt-1">
+                              Adjunta una imagen o PDF de tu comprobante para que podamos verificar el pago.
+                            </p>
+                          </div>
+
+                          <label
+                            htmlFor="comprobante-anticipo"
+                            className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-primary-container p-6 text-center cursor-pointer hover:bg-surface-container-high focus-within:ring-2 focus-within:ring-primary-container transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-primary-container text-[32px]" aria-hidden="true">
+                              cloud_upload
+                            </span>
+                            <span className="font-['Inter'] text-[14px] font-semibold text-on-surface break-words">
+                              {archivoComprobante ? archivoComprobante.name : 'Selecciona tu comprobante'}
+                            </span>
+                            <span className="font-['Inter'] text-[12px] font-normal text-on-surface-variant">
+                              PDF, JPG o PNG · Máximo 5 MB
+                            </span>
+                            <span className="inline-flex items-center gap-1.5 px-4 py-2 mt-1 bg-primary-container text-on-primary-container font-['Inter'] text-[13px] font-semibold">
+                              <span className="material-symbols-outlined text-[16px]" aria-hidden="true">
+                                folder_open
+                              </span>
+                              ELEGIR ARCHIVO
+                            </span>
+                            <input
+                              id="comprobante-anticipo"
+                              type="file"
+                              accept="application/pdf,image/jpeg,image/png"
+                              onChange={(e) => handleSeleccionarArchivo(e.target.files?.[0] ?? null)}
+                              className="sr-only"
+                            />
                           </label>
-                          <input
-                            type="file"
-                            accept="application/pdf,image/jpeg,image/png"
-                            onChange={(e) => handleSeleccionarArchivo(e.target.files?.[0] ?? null)}
-                            className="block w-full text-on-surface font-body-md text-sm"
-                          />
+
                           {errorArchivo && (
                             <p className="font-['Inter'] text-[13px] font-normal text-error uppercase">{errorArchivo}</p>
                           )}
@@ -610,6 +780,9 @@ export default function VistaCotizacionPublica({ token }: VistaCotizacionPublica
                           >
                             {subiendoComprobante ? 'SUBIENDO...' : 'SUBIR COMPROBANTE'}
                           </button>
+                          <p className="font-['Inter'] text-[12px] font-normal text-on-surface-variant text-center">
+                            Primero selecciona el archivo y después pulsa «Subir comprobante».
+                          </p>
                         </div>
                       )}
                     </div>
@@ -623,12 +796,12 @@ export default function VistaCotizacionPublica({ token }: VistaCotizacionPublica
                     SALDO
                   </h4>
 
-                  <dl className="grid grid-cols-2 gap-4 font-code-sm text-code-sm">
-                    <div>
+                  <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 font-code-sm text-code-sm">
+                    <div className="min-w-0">
                       <dt className="text-on-surface-variant uppercase">Saldo pendiente</dt>
                       <dd className="text-on-surface">${cotizacion.saldo_pendiente}</dd>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <dt className="text-on-surface-variant uppercase">Estado</dt>
                       <dd className="text-on-surface">{cotizacion.estado_saldo}</dd>
                     </div>
@@ -659,41 +832,51 @@ export default function VistaCotizacionPublica({ token }: VistaCotizacionPublica
                             forma presencial en efectivo en el Centro de Mecanizado Industrial.
                           </p>
 
-                          {cotizacion.datos_bancarios && (
-                            <dl className="bg-background sharp-border p-4 grid grid-cols-2 gap-3 font-code-sm text-code-sm">
-                              <div>
-                                <dt className="text-on-surface-variant uppercase">Banco</dt>
-                                <dd className="text-on-surface">{cotizacion.datos_bancarios.banco}</dd>
-                              </div>
-                              <div>
-                                <dt className="text-on-surface-variant uppercase">Tipo de cuenta</dt>
-                                <dd className="text-on-surface">{cotizacion.datos_bancarios.tipoCuenta}</dd>
-                              </div>
-                              <div>
-                                <dt className="text-on-surface-variant uppercase">Número de cuenta</dt>
-                                <dd className="text-on-surface">{cotizacion.datos_bancarios.numeroCuenta}</dd>
-                              </div>
-                              <div>
-                                <dt className="text-on-surface-variant uppercase">Titular</dt>
-                                <dd className="text-on-surface">{cotizacion.datos_bancarios.titular}</dd>
-                              </div>
-                              <div>
-                                <dt className="text-on-surface-variant uppercase">RUC</dt>
-                                <dd className="text-on-surface">{cotizacion.datos_bancarios.ruc}</dd>
-                              </div>
-                            </dl>
+                          {(cotizacion.cuentas_bancarias_activas.length > 0 || cotizacion.datos_bancarios) && (
+                            <BloqueCuentaReceptora
+                              cuentas={cotizacion.cuentas_bancarias_activas}
+                              datosLegacy={cotizacion.datos_bancarios}
+                              indiceElegido={cuentaElegidaSaldo}
+                              onElegir={setCuentaElegidaSaldo}
+                            />
                           )}
 
-                          <div className="space-y-3">
-                            <label className="block font-['Inter'] text-[13px] font-semibold text-on-surface-variant uppercase mb-1">
-                              Comprobante de transferencia del saldo (PDF, JPG o PNG, máx. 5 MB)
+                          <div className="bg-background sharp-border p-4 space-y-3">
+                            <div>
+                              <p className="font-['Inter'] text-[14px] font-semibold text-on-surface">Comprobante de transferencia del saldo</p>
+                              <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant mt-1">
+                                Adjunta una imagen o PDF de tu comprobante para que podamos verificar el pago.
+                              </p>
+                            </div>
+
+                            <label
+                              htmlFor="comprobante-saldo"
+                              className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-primary-container p-6 text-center cursor-pointer hover:bg-surface-container-high focus-within:ring-2 focus-within:ring-primary-container transition-colors"
+                            >
+                              <span className="material-symbols-outlined text-primary-container text-[32px]" aria-hidden="true">
+                                cloud_upload
+                              </span>
+                              <span className="font-['Inter'] text-[14px] font-semibold text-on-surface break-words">
+                                {archivoComprobanteSaldo ? archivoComprobanteSaldo.name : 'Selecciona tu comprobante'}
+                              </span>
+                              <span className="font-['Inter'] text-[12px] font-normal text-on-surface-variant">
+                                PDF, JPG o PNG · Máximo 5 MB
+                              </span>
+                              <span className="inline-flex items-center gap-1.5 px-4 py-2 mt-1 bg-primary-container text-on-primary-container font-['Inter'] text-[13px] font-semibold">
+                                <span className="material-symbols-outlined text-[16px]" aria-hidden="true">
+                                  folder_open
+                                </span>
+                                ELEGIR ARCHIVO
+                              </span>
+                              <input
+                                id="comprobante-saldo"
+                                type="file"
+                                accept="application/pdf,image/jpeg,image/png"
+                                onChange={(e) => handleSeleccionarArchivoSaldo(e.target.files?.[0] ?? null)}
+                                className="sr-only"
+                              />
                             </label>
-                            <input
-                              type="file"
-                              accept="application/pdf,image/jpeg,image/png"
-                              onChange={(e) => handleSeleccionarArchivoSaldo(e.target.files?.[0] ?? null)}
-                              className="block w-full text-on-surface font-body-md text-sm"
-                            />
+
                             {errorArchivoSaldo && (
                               <p className="font-['Inter'] text-[13px] font-normal text-error uppercase">{errorArchivoSaldo}</p>
                             )}
@@ -705,6 +888,9 @@ export default function VistaCotizacionPublica({ token }: VistaCotizacionPublica
                             >
                               {subiendoComprobanteSaldo ? 'SUBIENDO...' : 'SUBIR COMPROBANTE'}
                             </button>
+                            <p className="font-['Inter'] text-[12px] font-normal text-on-surface-variant text-center">
+                              Primero selecciona el archivo y después pulsa «Subir comprobante».
+                            </p>
                           </div>
                         </>
                       )}

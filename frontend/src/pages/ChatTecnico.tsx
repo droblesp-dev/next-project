@@ -198,7 +198,7 @@ export default function ChatTecnico({
     <div
       ref={raiz}
       data-chat-modo={modo}
-      className="md:col-span-2 bg-background border border-outline border-l-4 border-l-primary-container p-5"
+      className="md:col-span-2 min-w-0 bg-background border border-outline border-l-4 border-l-primary-container p-5"
     >
       <div className="flex items-center gap-2 mb-1">
         <span className="material-symbols-outlined text-primary-container text-[22px]">{icono}</span>
@@ -236,7 +236,7 @@ export default function ChatTecnico({
         <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase mb-3">Sin mensajes todavía.</p>
       )}
       {!loadingMensajes && modo !== 'sin-acceso' && !errorMensajes && mensajes && mensajes.length > 0 && (
-        <div className="space-y-2 mb-4 max-h-80 overflow-y-auto">
+        <div className="space-y-2 mb-4 max-h-80 overflow-y-auto overflow-x-hidden">
           {mensajes.map((m) => (
             <div key={m.id} className={`p-3 border border-outline ${claseBurbujaMensaje(m.autor_tipo)}`}>
               <div className="flex justify-between items-baseline mb-1">
@@ -245,7 +245,7 @@ export default function ChatTecnico({
                   {new Date(m.creado_en).toLocaleString()}
                 </span>
               </div>
-              <p className="font-body-md text-body-md text-on-surface whitespace-pre-wrap">{m.contenido}</p>
+              <p className="font-body-md text-body-md text-on-surface whitespace-pre-wrap break-words">{m.contenido}</p>
             </div>
           ))}
         </div>
