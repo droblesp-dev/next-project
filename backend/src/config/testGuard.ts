@@ -162,17 +162,3 @@ export const IDENTIDAD_ESPERADA_POR_DEFECTO: IdentidadEsperada = {
   puerto: 5432,
 };
 
-// Mecanismo adicional (defensa en profundidad, opcional) para el comando
-// UNITARIO normal: no hace nada a menos que REQUIERE_BD_PRUEBAS=1 esté
-// fijada explícitamente. El comando de integración (ver
-// `testGuard.integration.setup.ts`) NO usa esta función — en ese comando la
-// guardia es obligatoria e incondicional, sin ninguna variable que permita
-// omitirla, tal como exige esta corrección.
-export async function aplicarGuardiaSiCorresponde(
-  esperado: IdentidadEsperada = IDENTIDAD_ESPERADA_POR_DEFECTO
-): Promise<void> {
-  if (process.env.REQUIERE_BD_PRUEBAS !== '1') {
-    return;
-  }
-  await assertIdentidadBaseDePruebas(esperado);
-}

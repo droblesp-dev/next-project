@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { resolverDirLogosBancos } from './uploadsLogosBancos.js';
+import { LOGOS_BANCOS_DIR } from './uploadsLogosBancos.js';
 import {
   CarpetaTemporalInvalidaError,
   crearCarpetaTemporalLogos,
@@ -30,33 +30,12 @@ afterEach(() => {
 describe('configuración de la carpeta de logos (producción conserva su ruta)', () => {
   const porDefecto = path.resolve(process.cwd(), 'uploads', 'logos-bancos');
 
-  it('sin variable de entorno (o vacía / solo espacios) la ruta es exactamente la de siempre', () => {
-    expect(resolverDirLogosBancos(undefined, process.cwd())).toBe(porDefecto);
-    expect(resolverDirLogosBancos('', process.cwd())).toBe(porDefecto);
-    expect(resolverDirLogosBancos('   ', process.cwd())).toBe(porDefecto);
+  it('la ruta del módulo real es exactamente la de siempre', () => {
+    expect(LOGOS_BANCOS_DIR).toBe(porDefecto);
   });
 
-  it('la ruta compartida que usa el helper de pruebas coincide con la predeterminada de producción', () => {
-    expect(rutaCompartidaPorDefecto()).toBe(resolverDirLogosBancos(undefined, process.cwd()));
-  });
-
-  it('con LOGOS_BANCOS_DIR usa esa carpeta, resuelta a ruta absoluta', () => {
-    const otra = path.join(os.tmpdir(), 'otra-carpeta-de-logos');
-    expect(resolverDirLogosBancos(otra, process.cwd())).toBe(path.resolve(otra));
-    expect(path.isAbsolute(resolverDirLogosBancos('relativa/logos', process.cwd()))).toBe(true);
-  });
-
-  it('el módulo real, sin LOGOS_BANCOS_DIR, exporta la ruta predeterminada; con ella, la configurada', async () => {
-    delete process.env.LOGOS_BANCOS_DIR;
-    vi.resetModules();
-    const sinVariable = await import('./uploadsLogosBancos.js');
-    expect(sinVariable.LOGOS_BANCOS_DIR).toBe(porDefecto);
-
-    const otra = path.join(os.tmpdir(), 'nextproject-prueba-config-logos');
-    vi.stubEnv('LOGOS_BANCOS_DIR', otra);
-    vi.resetModules();
-    const conVariable = await import('./uploadsLogosBancos.js');
-    expect(conVariable.LOGOS_BANCOS_DIR).toBe(path.resolve(otra));
+  it('la ruta compartida que usa el helper de pruebas coincide con la de producción', () => {
+    expect(rutaCompartidaPorDefecto()).toBe(LOGOS_BANCOS_DIR);
   });
 });
 
@@ -68,7 +47,7 @@ describe('carpeta temporal de logos para pruebas', () => {
     expect(path.dirname(dir)).toBe(path.resolve(os.tmpdir()));
     expect(path.basename(dir).startsWith(PREFIJO_CARPETA_TEMPORAL_LOGOS)).toBe(true);
     expect(esCarpetaTemporalDePruebas(dir)).toBe(true);
-    expect(esCarpetaTemporalDePruebas(resolverDirLogosBancos(undefined, process.cwd()))).toBe(false);
+    expect(esCarpetaTemporalDePruebas(LOGOS_BANCOS_DIR)).toBe(false);
   });
 
   it('cada llamada devuelve una carpeta distinta', () => {
@@ -98,7 +77,7 @@ describe('carpeta temporal de logos para pruebas', () => {
   });
 
   it('rechaza borrar o escribir en cualquier ruta que no sea una carpeta temporal de pruebas (sin tocar el disco)', () => {
-    const compartida = resolverDirLogosBancos(undefined, process.cwd());
+    const compartida = LOGOS_BANCOS_DIR;
     const existiaCompartida = fs.existsSync(compartida);
     const ajena = fs.mkdtempSync(path.join(os.tmpdir(), 'otra-cosa-'));
     creadasPorEstaPrueba.push(ajena);
@@ -271,7 +250,7 @@ describe('salvaguarda previa al borrado de la carpeta temporal', () => {
   });
 
   it('rechaza rutas que no son carpetas temporales de pruebas, sin consultar ni tocar el disco', async () => {
-    const compartida = resolverDirLogosBancos(undefined, process.cwd());
+    const compartida = LOGOS_BANCOS_DIR;
     const { ejecutor, consultas } = ejecutorFalso({});
     await expect(limpiarCarpetaTemporalSiNoHayReferencias(compartida, ejecutor)).rejects.toThrow(CarpetaTemporalInvalidaError);
     expect(consultas).toHaveLength(0);

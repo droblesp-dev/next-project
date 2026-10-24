@@ -8,17 +8,9 @@ import path from 'path';
 // disco hasta validar), nombre de archivo siempre generado por el
 // servidor (UUID + extensión del mimetype ya validado) — el nombre
 // original del cliente nunca se usa para el archivo final.
-// Carpeta de logos. Por defecto, exactamente la de siempre
-// (`backend/uploads/logos-bancos`, relativa a `process.cwd()`). La variable de
-// entorno opcional `LOGOS_BANCOS_DIR` permite apuntar a otra carpeta (las
-// pruebas de integración la usan para trabajar en una carpeta temporal propia,
-// sin tocar la compartida). Vacía o solo espacios equivale a no configurarla.
-export function resolverDirLogosBancos(valorEnv: string | undefined, cwd: string): string {
-  const personalizado = valorEnv?.trim();
-  return personalizado ? path.resolve(personalizado) : path.resolve(cwd, 'uploads', 'logos-bancos');
-}
-
-export const LOGOS_BANCOS_DIR = resolverDirLogosBancos(process.env.LOGOS_BANCOS_DIR, process.cwd());
+// Carpeta de logos: `backend/uploads/logos-bancos`, relativa a `process.cwd()` (en el contenedor,
+// el volumen montado en /app/uploads).
+export const LOGOS_BANCOS_DIR = path.resolve(process.cwd(), 'uploads', 'logos-bancos');
 
 const EXTENSION_POR_MIME: Record<string, string> = {
   'image/png': '.png',

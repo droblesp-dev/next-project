@@ -16,7 +16,7 @@ con compilación (`tsc`), `npm test` (82 pruebas unitarias) y prueba en navegado
 | 8 | Media | A05 | `req.ip` sin `trust proxy` | **Corregido (requiere configurar)** | Variable `TRUST_PROXY` (`config/env.ts`, `.env.example`). Sin definir, comportamiento anterior. **Acción de despliegue:** definirla si hay proxy/balanceador. |
 | 9 | Baja | A05 | Swagger solo se oculta con `NODE_ENV=production` | **Sin cambio (ya mitigado)** | El Dockerfile fija `NODE_ENV=production`; no se añadió otra variable para no romper la documentación local. |
 | 10 | Baja | A05 | Contenedor corre como root | **Pendiente (riesgo de despliegue)** | `USER node` rompería la escritura en `/app/uploads` (bind mount del host con otro propietario) y no se puede probar el despliegue desde aquí. Requiere `docker run --user` + prueba en staging. |
-| 11 | Baja | A02 | `rejectUnauthorized: false` en conexiones SSL | **Corregido (opt-in)** | Variable `DB_SSL_REJECT_UNAUTHORIZED=true` en `db.ts` y seeders `.js`. Por defecto sigue `false` hasta que se configure la CA del servidor. `PGSSLMODE=require` de las migraciones no cambia. |
+| 11 | Baja | A02 | `rejectUnauthorized: false` en conexiones SSL | **Aceptado (sin cambio)** | Se probó una variable opt-in `DB_SSL_REJECT_UNAUTHORIZED` y se retiró por decisión del propietario: se mantiene `rejectUnauthorized: false` (cifra el tráfico pero no valida el certificado del servidor). Riesgo residual: suplantación del servidor de BD en la red. |
 | 12 | Baja | A07 | Pipeline de prod siembra usuarios de prueba | **Pendiente (decisión)** | Las credenciales vienen de variables secretas del pipeline; quitar el paso dejaría prod sin ADMIN inicial. Decidir cómo crear el primer administrador. |
 | 13 | Info | A09 | Sin registro de eventos de seguridad | **Corregido (básico)** | `services/securityLog.ts`: JSON por línea para `LOGIN_OK/FALLIDO/BLOQUEADO`, `PASSWORD_CAMBIADA`, `PROMESA_NO_CAPTURADA`. Sin contraseñas ni tokens; correos enmascarados. |
 
@@ -26,6 +26,8 @@ con compilación (`tsc`), `npm test` (82 pruebas unitarias) y prueba en navegado
 - Sin resolver: 3 avisos solo de **desarrollo** (`vitest`/`tinypool`); exigen `vitest@5` (cambio mayor, `--force`). No afectan a producción.
 
 ## Archivos
+Variables opcionales retiradas del código: `DB_SSL_REJECT_UNAUTHORIZED`, `LOGOS_BANCOS_DIR` (la carpeta de logos es siempre `uploads/logos-bancos`) y `REQUIERE_BD_PRUEBAS`.
+
 Nuevos: `services/securityLog.ts`, `services/loginRateLimit.service.ts`, `services/loginRateLimit.test.ts`, este documento.
 Modificados: `server.ts`, `config/env.ts`, `config/db.ts`, `controllers/auth.controller.ts`, `routes/auth.routes.ts`, `services/auth.service.ts`, `services/cotizaciones.service.ts`, `middleware/auth.middleware.ts`, `.env.example`, `scripts/seed-*.js`, `package.json`, `package-lock.json`.
 

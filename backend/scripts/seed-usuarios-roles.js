@@ -48,7 +48,7 @@ const pool = new Pool({
   password: process.env.DB_PASSWORD,
   ssl:
     (process.env.DB_SSL ?? '').trim().toLowerCase() === 'true'
-      ? { rejectUnauthorized: (process.env.DB_SSL_REJECT_UNAUTHORIZED ?? '').trim().toLowerCase() === 'true' }
+      ? { rejectUnauthorized: false }
       : undefined,
 });
 
