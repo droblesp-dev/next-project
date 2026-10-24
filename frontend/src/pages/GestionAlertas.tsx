@@ -509,8 +509,7 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
     return (
       <div className="space-y-8">
         <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase max-w-2xl">
-          Vista de supervisión: consulte las alertas generadas por el sistema y su contexto. Esta vista no permite
-          atenderlas — esa acción es responsabilidad de Operativo.
+          Vista de supervisión: solo consulta. Atender las alertas es responsabilidad de Operativo.
         </p>
 
         {loading && <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">CARGANDO ALERTAS...</p>}

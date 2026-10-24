@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { fetchAutenticado, SesionInvalidaError } from '../lib/authClient';
+import { formatearCantidad } from '../lib/cantidadSolicitud';
+import { textoResultadoAnalisis } from '../lib/mensajeAnalisisIa';
 import type { Solicitud } from './BandejaSolicitudes';
 import ChatTecnico from './ChatTecnico';
 
@@ -40,20 +42,6 @@ interface DetalleSolicitudProps {
   enfocarChat?: boolean;
   onVolver: () => void;
   onSesionInvalida: () => void;
-}
-
-// FORMULARIO-UX-06.1 (autorización explícita — auditoría previa "AUDITORÍA FORMULARIO —
-// PENDIENTES UX-06"): misma regla que BandejaSolicitudes.tsx::formatearCantidad — `cantidad`
-// guarda 1 tanto para "1 unidad real" como para "el cliente marcó Aún no lo sé"; solo
-// `especificaciones` distingue ambos casos. No se toca la BD ni `cantidad_desconocida`, solo se
-// lee un texto ya guardado para mostrar "(a confirmar)" cuando corresponde.
-const MARCA_CANTIDAD_DESCONOCIDA = 'el cliente indicó que aún no la conoce';
-
-function formatearCantidad(cantidad: number, especificaciones: string | null): string {
-  if (especificaciones?.includes(MARCA_CANTIDAD_DESCONOCIDA)) {
-    return `${cantidad} (a confirmar)`;
-  }
-  return String(cantidad);
 }
 
 // `solicitudes.fecha_requerida` es una columna DATE (sin hora ni zona
@@ -606,8 +594,10 @@ export default function DetalleSolicitud({
                                 </span>
                               </div>
 
-                              {a.resultado && (
-                                <p className="font-body-md text-body-md text-on-surface mb-3">{a.resultado}</p>
+                              {textoResultadoAnalisis(a.estado, a.resultado) && (
+                                <p className="font-body-md text-body-md text-on-surface mb-3">
+                                  {textoResultadoAnalisis(a.estado, a.resultado)}
+                                </p>
                               )}
 
                               {(a.prioridad_sugerida || info?.material_estimado || info?.proceso_estimado) && (

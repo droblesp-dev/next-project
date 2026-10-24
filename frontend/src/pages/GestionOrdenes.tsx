@@ -1961,8 +1961,7 @@ export default function GestionOrdenes({
     return (
       <div className="space-y-8">
         <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase max-w-2xl">
-          Vista de supervisión: consulte el estado, el progreso y la información de las órdenes registradas. Esta
-          vista no permite crear, ejecutar ni cerrar órdenes — esas acciones son responsabilidad de Comercial y
+          Vista de supervisión: solo consulta. Crear, ejecutar o cerrar órdenes es responsabilidad de Comercial y
           Operativo.
         </p>
 

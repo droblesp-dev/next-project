@@ -1098,8 +1098,7 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
     return (
       <div className="space-y-8">
         <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase max-w-2xl">
-          Vista de supervisión: consulte el estado y evolución de los contactos comerciales registrados. Esta vista
-          no permite vincular, registrar seguimientos, convertir ni descartar leads — esas acciones son
+          Vista de supervisión: solo consulta. Vincular, dar seguimiento, convertir o descartar leads es
           responsabilidad de Comercial.
         </p>
 
@@ -1903,7 +1902,7 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
               const actual = i === idxActual;
               const pasada = i < idxActual;
               return (
-                <li key={etapa.clave} className={`flex items-center ${i < ETAPAS.length - 1 ? 'flex-1' : ''}`}>
+                <li key={etapa.clave} className={`flex items-center ${i < ETAPAS.length - 1 ? 'flex-1 min-w-0' : ''}`}>
                   <span
                     aria-current={actual ? 'step' : undefined}
                     title={etapa.etiqueta}

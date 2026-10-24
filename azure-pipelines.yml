@@ -301,7 +301,7 @@ stages:
                       docker stop nextproject-backend-staging 2>/dev/null || true
                       docker rm nextproject-backend-staging 2>/dev/null || true
 
-                      mkdir -p "$HOME/nextproject-uploads-staging/comprobantes" "$HOME/nextproject-uploads-staging/evidencias"
+                      mkdir -p "$HOME/nextproject-uploads-staging/comprobantes" "$HOME/nextproject-uploads-staging/evidencias" "$HOME/nextproject-uploads-staging/logos-bancos"
 
                       docker network create nextproject-net 2>/dev/null || true
 
@@ -435,7 +435,7 @@ stages:
                       docker stop nextproject-backend-prod 2>/dev/null || true
                       docker rm nextproject-backend-prod 2>/dev/null || true
 
-                      mkdir -p "$HOME/nextproject-uploads-production/comprobantes" "$HOME/nextproject-uploads-production/evidencias"
+                      mkdir -p "$HOME/nextproject-uploads-production/comprobantes" "$HOME/nextproject-uploads-production/evidencias" "$HOME/nextproject-uploads-production/logos-bancos"
 
                       docker network create nextproject-net 2>/dev/null || true
 

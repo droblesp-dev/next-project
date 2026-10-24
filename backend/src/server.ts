@@ -1,6 +1,8 @@
 import express, { type ErrorRequestHandler } from 'express';
 import { env } from './config/env.js';
 import { checkDatabaseConnection } from './config/db.js';
+import swaggerUi from 'swagger-ui-express';
+import { openApiSpec } from './config/openapi.js';
 import { authRouter } from './routes/auth.routes.js';
 import { usuariosRouter } from './routes/usuarios.routes.js';
 import { clientesRouter } from './routes/clientes.routes.js';
@@ -49,6 +51,11 @@ app.get('/api/health', (_req, res) => {
     message: 'NextProject backend está activo',
   });
 });
+
+// Documentación Swagger de los endpoints documentados; no se expone en producción.
+if (process.env.NODE_ENV !== 'production') {
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(openApiSpec as unknown as Record<string, unknown>));
+}
 
 app.use('/api/auth', authRouter);
 app.use('/api/usuarios', usuariosRouter);

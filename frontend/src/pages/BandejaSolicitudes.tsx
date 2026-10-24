@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Eye } from 'lucide-react';
 import { fetchAutenticado, SesionInvalidaError } from '../lib/authClient';
+import { esCantidadDesconocida, formatearCantidad } from '../lib/cantidadSolicitud';
 import fabricacionGalleryImg from '../assets/images/fabricacion_gallery_1788229017518.jpg';
 
 export interface Solicitud {
@@ -16,24 +17,6 @@ export interface Solicitud {
   creado_en: string;
   actualizado_en: string;
   codigo: string | null;
-}
-
-// FORMULARIO-UX-06.1 (autorización explícita — auditoría previa "AUDITORÍA FORMULARIO —
-// PENDIENTES UX-06"): `cantidad` guarda 1 tanto para "1 unidad real" como para "el cliente
-// marcó Aún no lo sé" (placeholder obligatorio del CHECK de PostgreSQL, ver
-// solicitudes.service.ts::crearSolicitud) — hoy solo `especificaciones` distingue ambos casos,
-// y ese texto no era visible en este listado. No se toca la BD ni el comportamiento de
-// `cantidad_desconocida`: esto es solo una lectura de un texto ya guardado, para mostrar
-// "(a confirmar)" junto al número cuando corresponde. Subcadena estable (no el texto completo)
-// para no depender de puntuación exacta — el texto real lo arma únicamente
-// solicitudes.service.ts::crearSolicitud, nunca se reescribe aquí.
-const MARCA_CANTIDAD_DESCONOCIDA = 'el cliente indicó que aún no la conoce';
-
-function formatearCantidad(cantidad: number, especificaciones: string | null): string {
-  if (especificaciones?.includes(MARCA_CANTIDAD_DESCONOCIDA)) {
-    return `${cantidad} (a confirmar)`;
-  }
-  return String(cantidad);
 }
 
 interface BandejaSolicitudesProps {
@@ -551,6 +534,7 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="border-b border-outline">
+              <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">N.º Solicitud</th>
               <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Fecha</th>
               <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Cliente</th>
               <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Servicio</th>
@@ -563,7 +547,7 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
           <tbody>
             {datosPagina.length === 0 && (
               <tr>
-                <td colSpan={7} className="py-6 px-4 text-center font-code-sm text-code-sm text-on-surface-variant uppercase">
+                <td colSpan={8} className="py-6 px-4 text-center font-code-sm text-code-sm text-on-surface-variant uppercase">
                   Ningún resultado coincide con estos filtros.
                 </td>
               </tr>
@@ -578,6 +562,7 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
                   vistaRapidaId === s.id ? 'bg-surface-container-high' : ''
                 }`}
               >
+                <td className="py-3 px-4 font-code-sm text-code-sm text-on-surface whitespace-nowrap">{s.codigo ?? '—'}</td>
                 <td className="py-3 px-4 font-['Inter'] text-[14px] font-normal text-on-surface-variant">
                   {new Date(s.creado_en).toLocaleDateString()}
                 </td>
@@ -644,6 +629,10 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
             </div>
 
             <dl className="grid grid-cols-2 gap-2 font-code-sm text-[11px] wrap-anywhere">
+              <div className="col-span-2">
+                <dt className="text-on-surface-variant uppercase">N.º Solicitud</dt>
+                <dd className="text-on-surface">{s.codigo ?? '—'}</dd>
+              </div>
               <div>
                 <dt className="text-on-surface-variant uppercase">Cantidad</dt>
                 <dd className="text-on-surface">{formatearCantidad(s.cantidad, s.especificaciones)}</dd>
@@ -743,7 +732,7 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
 
       {/* VISTA RÁPIDA + DISTRIBUCIÓN + IDENTIDAD */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="bg-surface sharp-border p-5">
+        <div className="bg-surface sharp-border p-5 flex flex-col lg:min-h-[19rem]">
           <p className="font-label-caps text-label-caps text-primary-container uppercase mb-4 flex items-center gap-2">
             <span className="material-symbols-outlined text-[16px]">visibility</span>
             Vista rápida
@@ -752,7 +741,7 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
             <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">Seleccione una fila de la tabla.</p>
           )}
           {vistaRapida && (
-            <div className="space-y-2">
+            <div className="flex-1 flex flex-col gap-2">
               <div className="flex items-center justify-between">
                 <span className={`inline-flex whitespace-nowrap px-2.5 py-1 font-code-sm text-[11px]! leading-tight uppercase ${claseBadgeEstado(vistaRapida.estado)}`}>
                   {vistaRapida.estado.replace(/_/g, ' ')}
@@ -767,30 +756,34 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
               )}
               <p className="font-code-sm text-code-sm text-on-surface-variant uppercase">{vistaRapida.servicio}</p>
               <p className="font-code-sm text-[11px] text-on-surface-variant">
-                {formatearCantidad(vistaRapida.cantidad, vistaRapida.especificaciones)} unidades
+                {esCantidadDesconocida(vistaRapida.especificaciones)
+                  ? `Cantidad: ${formatearCantidad(vistaRapida.cantidad, vistaRapida.especificaciones)}`
+                  : `${formatearCantidad(vistaRapida.cantidad, vistaRapida.especificaciones)} unidades`}
               </p>
               <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">
                 Últ. actualización: {new Date(vistaRapida.actualizado_en).toLocaleString()}
               </p>
-              <button
-                type="button"
-                onClick={() => onSeleccionar(vistaRapida.id)}
-                aria-label="Ver detalle de la solicitud"
-                title="Ver detalle"
-                className="mt-2 inline-flex items-center justify-center w-11 h-11 border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors cursor-pointer"
-              >
-                <Eye size={18} aria-hidden="true" />
-              </button>
+              <div className="mt-auto pt-3 border-t border-outline">
+                <button
+                  type="button"
+                  onClick={() => onSeleccionar(vistaRapida.id)}
+                  aria-label="Ver detalle de la solicitud"
+                  title="Ver detalle"
+                  className="w-full inline-flex items-center justify-center h-11 border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors cursor-pointer"
+                >
+                  <Eye size={18} aria-hidden="true" />
+                </button>
+              </div>
             </div>
           )}
         </div>
 
-        <div className="bg-surface sharp-border p-5">
+        <div className="bg-surface sharp-border p-5 flex flex-col lg:min-h-[19rem]">
           <p className="font-label-caps text-label-caps text-primary-container uppercase mb-4 flex items-center gap-2">
             <span className="material-symbols-outlined text-[16px]">bar_chart</span>
             Distribución de solicitudes
           </p>
-          <div className="flex items-end justify-between gap-2 sm:gap-3 h-32">
+          <div className="flex-1 flex items-end justify-between gap-2 sm:gap-3 min-h-32">
             {(['NUEVA', 'EN_REVISION', 'COTIZADA', 'CANCELADA'] as const).map((estado) => {
               const valor = kpis[estado];
               const maximo = Math.max(kpis.NUEVA, kpis.EN_REVISION, kpis.COTIZADA, kpis.CANCELADA, 1);
@@ -815,7 +808,7 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
           </div>
         </div>
 
-        <div className="relative overflow-hidden sharp-border min-h-[180px] flex items-end">
+        <div className="relative overflow-hidden sharp-border min-h-[180px] lg:min-h-[19rem] flex items-end">
           <img src={fabricacionGalleryImg} alt="" className="absolute inset-0 w-full h-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-background/20" />
           <div className="relative z-10 p-5">

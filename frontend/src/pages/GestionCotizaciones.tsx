@@ -2364,8 +2364,7 @@ export default function GestionCotizaciones({
     return (
       <div className="space-y-8">
         <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase max-w-2xl">
-          Vista de supervisión: consulte el estado y las condiciones comerciales de las cotizaciones registradas. Esta
-          vista no permite crear, enviar ni modificar cotizaciones — esas acciones son responsabilidad de Comercial.
+          Vista de supervisión: solo consulta. Crear, enviar o modificar cotizaciones es responsabilidad de Comercial.
         </p>
 
         {loadingLista && (

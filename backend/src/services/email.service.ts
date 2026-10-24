@@ -550,3 +550,86 @@ export async function enviarConfirmacionSolicitud(input: ConfirmacionSolicitudIn
     clearTimeout(timeoutId);
   }
 }
+
+// Fase 2C (cambio de contraseña): aviso al usuario de que su contraseña fue cambiada. NO incluye
+// ninguna contraseña, token ni enlace. SIEMPRE resuelve (nunca lanza): si Brevo falla o no está
+// configurado, el cambio de contraseña ya realizado no se revierte.
+export interface AvisoCambioPasswordInput {
+  destinatarioNombre: string;
+  destinatarioEmail: string;
+}
+
+export async function enviarAvisoCambioPassword(input: AvisoCambioPasswordInput): Promise<ResultadoEnvioCorreo> {
+  if (!env.brevoApiKey || !env.nextProjectEmail) {
+    const motivo =
+      !env.brevoApiKey && !env.nextProjectEmail
+        ? 'BREVO_API_KEY y NEXT_PROJECT_EMAIL no configurados'
+        : !env.brevoApiKey
+          ? 'BREVO_API_KEY no configurado'
+          : 'NEXT_PROJECT_EMAIL no configurado';
+    console.log(`[EMAIL] Aviso de cambio de contraseña: envío desactivado (${motivo}).`);
+    return { estado: 'skipped', motivo };
+  }
+
+  const asunto = `Tu contraseña de ${env.nextProjectName} fue cambiada`;
+  const texto = [
+    `Hola ${input.destinatarioNombre}.`,
+    '',
+    `La contraseña de tu cuenta en ${env.nextProjectName} acaba de ser cambiada y las demás sesiones abiertas se cerraron.`,
+    'Si fuiste tú, no necesitas hacer nada.',
+    'Si no reconoces este cambio, avisa de inmediato a un administrador de NextProject.',
+  ].join('\n');
+  const html = `<!doctype html>
+<html lang="es">
+  <body style="margin:0;padding:24px;background:#f4f4f4;font-family:Arial,Helvetica,sans-serif;color:#1a1a1a;">
+    <div style="max-width:480px;margin:0 auto;background:#ffffff;padding:32px 24px;border-radius:4px;">
+      <p style="margin:0 0 16px;">Hola ${escaparHtml(input.destinatarioNombre)}.</p>
+      <p style="margin:0 0 16px;">La contraseña de tu cuenta en ${escaparHtml(env.nextProjectName)} acaba de ser cambiada y las demás sesiones abiertas se cerraron.</p>
+      <p style="margin:0 0 16px;">Si fuiste tú, no necesitas hacer nada.</p>
+      <p style="margin:0;"><strong>Si no reconoces este cambio, avisa de inmediato a un administrador de NextProject.</strong></p>
+    </div>
+  </body>
+</html>`;
+  const destinoEnmascarado = enmascararEmail(input.destinatarioEmail);
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), BREVO_TIMEOUT_MS);
+  try {
+    const response = await fetch(BREVO_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        'api-key': env.brevoApiKey,
+        ...(env.brevoSandbox ? { 'X-Sib-Sandbox': 'drop' } : {}),
+      },
+      body: JSON.stringify({
+        sender: { name: env.nextProjectName, email: env.nextProjectEmail },
+        to: [{ email: input.destinatarioEmail, name: input.destinatarioNombre }],
+        subject: asunto,
+        htmlContent: html,
+        textContent: texto,
+      }),
+      signal: controller.signal,
+    });
+
+    const data = (await response.json().catch(() => null)) as { messageId?: unknown; message?: unknown } | null;
+
+    if (!response.ok) {
+      const errorResumen = typeof data?.message === 'string' ? data.message : `HTTP ${response.status}`;
+      console.log(`[EMAIL] Aviso de cambio de contraseña: falló su envío (destino=${destinoEnmascarado}): ${errorResumen}`);
+      return { estado: 'failed', error: errorResumen };
+    }
+
+    const messageId = typeof data?.messageId === 'string' ? data.messageId : undefined;
+    console.log(`[EMAIL] Aviso de cambio de contraseña enviado (destino=${destinoEnmascarado}).`);
+    return { estado: 'sent', messageId };
+  } catch (error) {
+    const esTimeout = error instanceof Error && error.name === 'AbortError';
+    const errorResumen = esTimeout ? 'timeout' : error instanceof Error ? error.message : 'error desconocido';
+    console.log(`[EMAIL] Aviso de cambio de contraseña: falló su envío (destino=${destinoEnmascarado}): ${errorResumen}`);
+    return { estado: 'failed', error: errorResumen };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}

@@ -114,6 +114,8 @@ async function procesarLogoSubido(req: Request): Promise<{ logo: LogoPendiente |
 
 async function escribirLogoPendiente(logo: LogoPendiente | null): Promise<void> {
   if (!logo) return;
+  // La carpeta puede no existir aún (volumen nuevo): se crea de forma idempotente.
+  await fs.promises.mkdir(LOGOS_BANCOS_DIR, { recursive: true });
   await fs.promises.writeFile(path.join(LOGOS_BANCOS_DIR, logo.nombreArchivo), logo.buffer);
 }
 

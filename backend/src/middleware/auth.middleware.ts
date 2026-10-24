@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import { verifyToken, type JwtPayload } from '../services/auth.service.js';
-import { findByIdWithRol } from '../repositories/usuarios.repository.js';
+import { findSesionById } from '../repositories/usuarios.repository.js';
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -37,9 +37,15 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   try {
     const payload = verifyToken(token);
 
-    const usuario = await findByIdWithRol(payload.sub);
+    const usuario = await findSesionById(payload.sub);
     if (!usuario || !usuario.activo) {
       res.status(401).json({ message: 'Usuario inactivo o inexistente.' });
+      return;
+    }
+    // V18: un token emitido antes de un cambio de contraseña lleva una versión anterior.
+    // Los tokens sin `sv` (anteriores a V18) cuentan como versión 0.
+    if ((payload.sv ?? 0) !== usuario.session_version) {
+      res.status(401).json({ message: 'Sesión inválida o cerrada. Inicia sesión de nuevo.' });
       return;
     }
 

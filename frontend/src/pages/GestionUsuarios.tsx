@@ -373,7 +373,7 @@ export default function GestionUsuarios({ token, onSesionInvalida }: GestionUsua
             <button
               type="button"
               onClick={() => setMostrarFormularioCrear((v) => !v)}
-              className="w-full flex items-center justify-between font-['Inter'] text-[14px] font-semibold text-primary-container tracking-widest uppercase cursor-pointer"
+              className="w-full min-h-11 flex items-center justify-between font-['Inter'] text-[14px] font-semibold text-primary-container tracking-widest uppercase cursor-pointer"
             >
               <span className="flex items-center gap-2">
                 <span className="material-symbols-outlined text-[18px]">

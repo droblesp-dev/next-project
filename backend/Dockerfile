@@ -22,7 +22,7 @@ COPY --from=builder /app/dist ./dist
 # backend/src/config/uploadsComprobantes.ts). En despliegue, /app/uploads
 # se monta como volumen (ver azure-pipelines.yml) para persistir los
 # archivos entre deploys.
-RUN mkdir -p uploads/comprobantes uploads/evidencias
+RUN mkdir -p uploads/comprobantes uploads/evidencias uploads/logos-bancos
 
 EXPOSE 3000
 CMD ["node", "dist/server.js"]

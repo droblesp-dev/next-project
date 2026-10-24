@@ -510,8 +510,7 @@ export default function GestionCuentasBancarias({ token, onSesionInvalida }: Cue
     <div className="space-y-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase max-w-2xl">
-          Administración de las cuentas bancarias que recibe NextProject. El cliente solo verá las cuentas activas, y el
-          titular únicamente cuando la cuenta lo permita.
+          Cuentas bancarias de NextProject. El cliente solo ve las activas, y el titular solo si la cuenta lo permite.
         </p>
         <button
           type="button"
