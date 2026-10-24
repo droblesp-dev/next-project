@@ -15,7 +15,7 @@ trigger:
 
 # Cada ambiente tiene su propio pool de agentes: main -> produccion, resto -> desarrollo.
 pool:
-  name: ${{ variables.agentPool }}
+  name: $(agentPool)
 
 variables:
   - group: next-project-secrets
