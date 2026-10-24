@@ -11,7 +11,7 @@ function asyncRoute(handler: (req: Request, res: Response) => Promise<void>): Re
 
 export const authRouter = Router();
 
-authRouter.post('/login', loginController);
-authRouter.get('/me', requireAuth, meController);
+authRouter.post('/login', asyncRoute(loginController));
+authRouter.get('/me', requireAuth, asyncRoute(meController));
 // Fase 2C: solo el usuario autenticado, sobre su propia cuenta. Documentado en config/openapi.ts.
 authRouter.patch('/password', requireAuth, asyncRoute(cambiarPasswordController));

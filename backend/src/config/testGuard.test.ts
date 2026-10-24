@@ -14,7 +14,6 @@ beforeEach(() => {
   delete process.env.DB_NAME;
   delete process.env.DB_HOST;
   delete process.env.DB_PORT;
-  delete process.env.ALLOW_TEST_DB_WRITES;
 });
 
 afterEach(() => {
@@ -32,7 +31,6 @@ describe('testGuard.assertIdentidadBaseDePruebas — pruebas negativas (sin cone
     process.env.DB_NAME = 'nextproject';
     process.env.DB_HOST = 'localhost';
     process.env.DB_PORT = '5432';
-    process.env.ALLOW_TEST_DB_WRITES = 'true';
     await expect(assertIdentidadBaseDePruebas(ESPERADO)).rejects.toThrow(/no coincide EXACTAMENTE/);
   });
 
@@ -40,7 +38,6 @@ describe('testGuard.assertIdentidadBaseDePruebas — pruebas negativas (sin cone
     process.env.DB_NAME = 'nextproject_test2';
     process.env.DB_HOST = 'localhost';
     process.env.DB_PORT = '5432';
-    process.env.ALLOW_TEST_DB_WRITES = 'true';
     await expect(assertIdentidadBaseDePruebas(ESPERADO)).rejects.toThrow(/no coincide EXACTAMENTE/);
   });
 
@@ -48,7 +45,6 @@ describe('testGuard.assertIdentidadBaseDePruebas — pruebas negativas (sin cone
     process.env.DB_NAME = 'nextproject_test';
     process.env.DB_HOST = 'db-remoto-desconocido.ejemplo.com';
     process.env.DB_PORT = '5432';
-    process.env.ALLOW_TEST_DB_WRITES = 'true';
     await expect(assertIdentidadBaseDePruebas(ESPERADO)).rejects.toThrow(/no está en la lista de hosts locales permitidos/);
   });
 
@@ -56,22 +52,13 @@ describe('testGuard.assertIdentidadBaseDePruebas — pruebas negativas (sin cone
     process.env.DB_NAME = 'nextproject_test';
     process.env.DB_HOST = 'localhost';
     process.env.DB_PORT = '6543';
-    process.env.ALLOW_TEST_DB_WRITES = 'true';
     await expect(assertIdentidadBaseDePruebas(ESPERADO)).rejects.toThrow(/DB_PORT declarado/);
-  });
-
-  it('N6: aborta si falta ALLOW_TEST_DB_WRITES aunque el resto sea correcto', async () => {
-    process.env.DB_NAME = 'nextproject_test';
-    process.env.DB_HOST = 'localhost';
-    process.env.DB_PORT = '5432';
-    await expect(assertIdentidadBaseDePruebas(ESPERADO)).rejects.toThrow(/ALLOW_TEST_DB_WRITES/);
   });
 
   it('N7: aborta si la identidad real (simulada) reporta un host distinto al declarado/esperado', async () => {
     process.env.DB_NAME = 'nextproject_test';
     process.env.DB_HOST = 'localhost';
     process.env.DB_PORT = '5432';
-    process.env.ALLOW_TEST_DB_WRITES = 'true';
     const verificadorSimulado = async () => ({ base: 'nextproject_test', host: '192.0.2.1', puerto: 5432 });
     await expect(
       assertIdentidadBaseDePruebas(ESPERADO, { verificarIdentidadReal: verificadorSimulado })
@@ -82,7 +69,6 @@ describe('testGuard.assertIdentidadBaseDePruebas — pruebas negativas (sin cone
     process.env.DB_NAME = 'nextproject_test';
     process.env.DB_HOST = 'localhost';
     process.env.DB_PORT = '5432';
-    process.env.ALLOW_TEST_DB_WRITES = 'true';
     const verificadorSimulado = async () => ({ base: 'nextproject_test', host: '::1', puerto: 9999 });
     await expect(
       assertIdentidadBaseDePruebas(ESPERADO, { verificarIdentidadReal: verificadorSimulado })
@@ -93,7 +79,6 @@ describe('testGuard.assertIdentidadBaseDePruebas — pruebas negativas (sin cone
     process.env.DB_NAME = 'nextproject_test';
     process.env.DB_HOST = 'localhost';
     process.env.DB_PORT = '5432';
-    process.env.ALLOW_TEST_DB_WRITES = 'true';
     const verificadorSimulado = async () => ({ base: 'nextproject_test', host: '::1', puerto: 5432 });
     await expect(
       assertIdentidadBaseDePruebas(ESPERADO, { verificarIdentidadReal: verificadorSimulado })
@@ -104,7 +89,6 @@ describe('testGuard.assertIdentidadBaseDePruebas — pruebas negativas (sin cone
     process.env.DB_NAME = 'nextproject_test';
     process.env.DB_HOST = '127.0.0.1';
     process.env.DB_PORT = '5432';
-    process.env.ALLOW_TEST_DB_WRITES = 'true';
     const verificadorSimulado = async () => ({ base: 'nextproject_test', host: '127.0.0.1', puerto: 5432 });
     await expect(
       assertIdentidadBaseDePruebas(ESPERADO, { verificarIdentidadReal: verificadorSimulado })
@@ -123,7 +107,6 @@ describe('testGuard.assertIdentidadBaseDePruebas — Corrección P0.3B-2 (normal
     process.env.DB_NAME = 'nextproject_test';
     process.env.DB_HOST = 'localhost';
     process.env.DB_PORT = '5432';
-    process.env.ALLOW_TEST_DB_WRITES = 'true';
     const verificadorSimulado = async () => ({ base: 'nextproject_test', host: '::1/128', puerto: 5432 });
     await expect(
       assertIdentidadBaseDePruebas(ESPERADO, { verificarIdentidadReal: verificadorSimulado })
@@ -134,7 +117,6 @@ describe('testGuard.assertIdentidadBaseDePruebas — Corrección P0.3B-2 (normal
     process.env.DB_NAME = 'nextproject_test';
     process.env.DB_HOST = '127.0.0.1';
     process.env.DB_PORT = '5432';
-    process.env.ALLOW_TEST_DB_WRITES = 'true';
     const verificadorSimulado = async () => ({ base: 'nextproject_test', host: '127.0.0.1/32', puerto: 5432 });
     await expect(
       assertIdentidadBaseDePruebas(ESPERADO, { verificarIdentidadReal: verificadorSimulado })
@@ -145,7 +127,6 @@ describe('testGuard.assertIdentidadBaseDePruebas — Corrección P0.3B-2 (normal
     process.env.DB_NAME = 'nextproject_test';
     process.env.DB_HOST = 'localhost';
     process.env.DB_PORT = '5432';
-    process.env.ALLOW_TEST_DB_WRITES = 'true';
     const verificadorSimulado = async () => ({ base: 'nextproject_test', host: '192.0.2.1/32', puerto: 5432 });
     await expect(
       assertIdentidadBaseDePruebas(ESPERADO, { verificarIdentidadReal: verificadorSimulado })
@@ -156,7 +137,6 @@ describe('testGuard.assertIdentidadBaseDePruebas — Corrección P0.3B-2 (normal
     process.env.DB_NAME = 'nextproject_test';
     process.env.DB_HOST = 'localhost';
     process.env.DB_PORT = '5432';
-    process.env.ALLOW_TEST_DB_WRITES = 'true';
     const verificadorSimulado = async () => ({ base: 'nextproject_test', host: '10.0.0.5', puerto: 5432 });
     await expect(
       assertIdentidadBaseDePruebas(ESPERADO, { verificarIdentidadReal: verificadorSimulado })

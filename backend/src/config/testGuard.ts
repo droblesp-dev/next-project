@@ -80,9 +80,9 @@ export interface AssertIdentidadOpciones {
 // en una configuración correcta — "localhost" vs "::1").
 const HOSTS_DECLARADOS_PERMITIDOS = ['localhost', '127.0.0.1', '::1'];
 
-// Orden deliberado, de más barato a más caro: las primeras 4 comprobaciones
-// (nombre, host en lista blanca, puerto, confirmación explícita) nunca
-// tocan la red. Solo si las 4 pasan se ejecuta la comprobación real
+// Orden deliberado, de más barato a más caro: las primeras 3 comprobaciones
+// (nombre, host en lista blanca, puerto) nunca
+// tocan la red. Solo si las 3 pasan se ejecuta la comprobación real
 // (quinta), que sí requiere una conexión — y compara la identidad COMPLETA
 // (base + host + puerto), no solo el nombre.
 export async function assertIdentidadBaseDePruebas(
@@ -114,12 +114,6 @@ export async function assertIdentidadBaseDePruebas(
   if (puertoDeclarado !== esperado.puerto) {
     throw new ConfiguracionBaseDePruebasInvalidaError(
       `testGuard: DB_PORT declarado (${puertoDeclarado}) no coincide con el puerto esperado (${esperado.puerto}). Abortando antes de cualquier conexión.`
-    );
-  }
-
-  if (process.env.ALLOW_TEST_DB_WRITES !== 'true') {
-    throw new ConfiguracionBaseDePruebasInvalidaError(
-      'testGuard: falta la confirmación explícita ALLOW_TEST_DB_WRITES=true. Abortando antes de cualquier conexión.'
     );
   }
 

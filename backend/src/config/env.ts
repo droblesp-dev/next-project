@@ -1,5 +1,14 @@
 import "dotenv/config";
 
+function parseTrustProxy(valor: string | undefined): boolean | number | string | undefined {
+  const v = (valor ?? "").trim();
+  if (!v) return undefined;
+  if (v.toLowerCase() === "true") return true;
+  if (v.toLowerCase() === "false") return false;
+  if (/^\d+$/.test(v)) return Number(v);
+  return v;
+}
+
 export const env = {
   port: Number(process.env.PORT) || 3000,
   corsOrigins: (
@@ -8,6 +17,9 @@ export const env = {
     .split(",")
     .map((origen) => origen.trim())
     .filter((origen) => origen.length > 0),
+  // TRUST_PROXY: número de saltos de proxy ("1"), "true"/"false" o una lista de IP/subredes
+  // de Express. Sin definir: undefined (no se toca la configuración por defecto de Express).
+  trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
   db: {
     host: process.env.DB_HOST,
     port: Number(process.env.DB_PORT) || 5432,
@@ -15,6 +27,11 @@ export const env = {
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     ssl: (process.env.DB_SSL ?? "").trim().toLowerCase() === "true",
+    // DB_SSL_REJECT_UNAUTHORIZED=true exige que el certificado del servidor sea de confianza.
+    // Por defecto sigue "false" (comportamiento anterior) hasta que se configure la CA.
+    sslRejectUnauthorized:
+      (process.env.DB_SSL_REJECT_UNAUTHORIZED ?? "").trim().toLowerCase() ===
+      "true",
   },
   jwtSecret: process.env.JWT_SECRET ?? "",
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "8h",

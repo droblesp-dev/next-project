@@ -465,7 +465,7 @@ export async function generarEnlaceCotizacion(id: string): Promise<EnlaceGenerad
   limpiarIntentos(id);
 
   const payload: EnlacePayload = { cotizacionId: id, purpose: ENLACE_PURPOSE };
-  const token = jwt.sign(payload, env.cotizacionLinkSecret, { expiresIn: ENLACE_EXPIRA_EN });
+  const token = jwt.sign(payload, env.cotizacionLinkSecret, { algorithm: 'HS256', expiresIn: ENLACE_EXPIRA_EN });
 
   // Fase 1 (autorización explícita): resuelve el correo real del cliente
   // mediante la relación cotizaciones.solicitud_id -> solicitudes.cliente_id
@@ -542,7 +542,7 @@ function obtenerDatosBancariosSiConfigurados(): DatosBancarios | null {
 function verificarToken(token: string): string {
   let payload: EnlacePayload;
   try {
-    const decoded = jwt.verify(token, env.cotizacionLinkSecret);
+    const decoded = jwt.verify(token, env.cotizacionLinkSecret, { algorithms: ['HS256'] });
     if (typeof decoded !== 'object' || decoded === null) {
       throw new Error('Payload inválido.');
     }

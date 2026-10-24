@@ -36,6 +36,7 @@ export interface LoginResult {
 export function emitirToken(usuarioId: string, rol: string, sessionVersion: number): string {
   const payload: JwtPayload = { sub: usuarioId, rol, sv: sessionVersion };
   const signOptions: jwt.SignOptions = {
+    algorithm: 'HS256',
     expiresIn: env.jwtExpiresIn as jwt.SignOptions['expiresIn'],
   };
   return jwt.sign(payload, env.jwtSecret, signOptions);
@@ -70,7 +71,7 @@ export async function login(email: string, password: string): Promise<LoginResul
 }
 
 export function verifyToken(token: string): JwtPayload {
-  return jwt.verify(token, env.jwtSecret) as JwtPayload;
+  return jwt.verify(token, env.jwtSecret, { algorithms: ['HS256'] }) as JwtPayload;
 }
 
 export async function getUsuarioActual(id: string): Promise<UsuarioPublico | null> {

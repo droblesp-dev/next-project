@@ -40,8 +40,49 @@ variables:
     value: "593939067666"
 
 stages:
+  # Pruebas UNITARIAS de backend y frontend. No usan PostgreSQL ni ningun servicio
+  # externo (las pruebas de integracion que escriben en la BD no se ejecutan en el
+  # pipeline). Si alguna falla, no se construye ni se despliega nada.
+  - stage: UnitTests
+    displayName: "Unit Tests"
+    jobs:
+      - job: BackendUnitTests
+        displayName: "Backend: unit tests"
+        steps:
+          - script: |
+              set -e
+              docker run --rm \
+                --user "$(id -u):$(id -g)" \
+                -e HOME=/tmp \
+                -e CI=true \
+                -e JWT_SECRET=ci-unit-tests-only \
+                -e COTIZACION_LINK_SECRET=ci-unit-tests-only \
+                -e LEAD_LINK_SECRET=ci-unit-tests-only \
+                -v $(Build.SourcesDirectory)/backend:/app \
+                -w /app \
+                node:20-alpine \
+                sh -c "npm ci && npx tsc --noEmit && npm test"
+            displayName: "Backend: typecheck + unit tests"
+
+      - job: FrontendUnitTests
+        displayName: "Frontend: unit tests"
+        steps:
+          - script: |
+              set -e
+              docker run --rm \
+                --user "$(id -u):$(id -g)" \
+                -e HOME=/tmp \
+                -e CI=true \
+                -v $(Build.SourcesDirectory)/frontend:/app \
+                -w /app \
+                node:20-alpine \
+                sh -c "npm ci && npm run lint && npm test"
+            displayName: "Frontend: typecheck + unit tests"
+
   - stage: Build
     displayName: "Build and Push Images"
+    dependsOn: UnitTests
+    condition: succeeded()
     jobs:
       - job: BuildBackendJob
         displayName: "Backend: Docker Build & Push"
@@ -98,7 +139,7 @@ stages:
             cat > "$(Agent.TempDirectory)/migrate.sh" <<'SCRIPT'
             set -e
             psql -v ON_ERROR_STOP=1 -c "CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, applied_at TIMESTAMPTZ DEFAULT now());"
-            for f in $(ls /migrations/*.sql | sort); do
+            for f in $(ls /migrations/*.sql | sed -E 's|.*/V([0-9]+)__.*|\1 &|' | sort -n | cut -d' ' -f2); do
               version=$(basename "$f")
               applied=$(psql -tAc "SELECT 1 FROM schema_migrations WHERE version = '$version'")
               if [ "$applied" = "1" ]; then
@@ -150,8 +191,8 @@ stages:
               -v $(Build.SourcesDirectory)/backend:/app \
               -w /app \
               node:20-alpine \
-              sh -c "npm ci --omit=dev && node scripts/seed-usuarios-roles.js"
-          displayName: "Seed initial users per role"
+              sh -c "npm ci --omit=dev && node scripts/seed-usuarios-roles.js && node scripts/seed-bancos-catalogo.js"
+          displayName: "Seed initial users per role and banks catalog"
           env:
             DB_HOST: $(DEV_DB_HOST)
             DB_PORT: $(DEV_DB_PORT)
@@ -175,7 +216,7 @@ stages:
             cat > "$(Agent.TempDirectory)/migrate.sh" <<'SCRIPT'
             set -e
             psql -v ON_ERROR_STOP=1 -c "CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, applied_at TIMESTAMPTZ DEFAULT now());"
-            for f in $(ls /migrations/*.sql | sort); do
+            for f in $(ls /migrations/*.sql | sed -E 's|.*/V([0-9]+)__.*|\1 &|' | sort -n | cut -d' ' -f2); do
               version=$(basename "$f")
               applied=$(psql -tAc "SELECT 1 FROM schema_migrations WHERE version = '$version'")
               if [ "$applied" = "1" ]; then
@@ -227,8 +268,8 @@ stages:
               -v $(Build.SourcesDirectory)/backend:/app \
               -w /app \
               node:20-alpine \
-              sh -c "npm ci --omit=dev && node scripts/seed-usuarios-roles.js"
-          displayName: "Seed initial users per role"
+              sh -c "npm ci --omit=dev && node scripts/seed-usuarios-roles.js && node scripts/seed-bancos-catalogo.js"
+          displayName: "Seed initial users per role and banks catalog"
           env:
             DB_HOST: $(PROD_DB_HOST)
             DB_PORT: $(PROD_DB_PORT)

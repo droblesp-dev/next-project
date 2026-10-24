@@ -1,4 +1,6 @@
 import express, { type ErrorRequestHandler } from 'express';
+import helmet from 'helmet';
+import { registrarEventoSeguridad } from './services/securityLog.js';
 import { env } from './config/env.js';
 import { checkDatabaseConnection } from './config/db.js';
 import swaggerUi from 'swagger-ui-express';
@@ -18,6 +20,20 @@ import { cuentasBancariasRouter } from './routes/cuentasBancarias.routes.js';
 import { LOGOS_BANCOS_DIR } from './config/uploadsLogosBancos.js';
 
 const app = express();
+
+// Detrás de un proxy/balanceador req.ip sería la IP del proxy y los límites por IP
+// (login, NexIA) compartirían un único contador. TRUST_PROXY (.env) lo declara
+// explícitamente; sin definir se conserva el comportamiento anterior (sin proxy).
+if (env.trustProxy !== undefined) {
+  app.set('trust proxy', env.trustProxy);
+}
+
+// Cabeceras de seguridad (OWASP A05). La API solo sirve JSON y los logos de bancos, así que
+// el CSP por defecto de helmet aplica sin cambios; se excluye /api-docs (Swagger UI, solo
+// fuera de producción) porque necesita scripts en línea. Los logos se cargan desde el
+// origen del frontend, por eso CORP queda en 'cross-origin'.
+const helmetApi = helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } });
+app.use((req, res, next) => (req.path.startsWith('/api-docs') ? next() : helmetApi(req, res, next)));
 
 // CORS mínimo, sin dependencias nuevas: orígenes permitidos configurados en
 // CORS_ORIGINS (.env), no hardcodeados. Sin '*'. No afecta la lógica de
@@ -98,6 +114,14 @@ const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
 };
 
 app.use(errorHandler);
+
+// Express 4 no captura promesas rechazadas de handlers async: por defecto Node 20 termina el
+// proceso (DoS). Se registra y el servicio sigue atendiendo; cada ruta ya usa asyncRoute.
+process.on('unhandledRejection', (motivo) => {
+  registrarEventoSeguridad('PROMESA_NO_CAPTURADA', {
+    detalle: motivo instanceof Error ? motivo.message : String(motivo),
+  });
+});
 
 const server = app.listen(env.port, () => {
   console.log(`NextProject backend escuchando en el puerto ${env.port}`);

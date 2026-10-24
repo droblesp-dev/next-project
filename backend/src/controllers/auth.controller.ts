@@ -12,6 +12,13 @@ import {
   UsuarioNoDisponibleError,
 } from '../services/cambioPassword.service.js';
 import { MENSAJES_PROBLEMA } from '../services/politicaPassword.js';
+import {
+  LimiteLoginError,
+  registrarLoginExitoso,
+  registrarLoginFallido,
+  verificarLoginPermitido,
+} from '../services/loginRateLimit.service.js';
+import { enmascararCorreo, registrarEventoSeguridad } from '../services/securityLog.js';
 
 const MENSAJE_LOGIN_INVALIDO = 'Credenciales inválidas.';
 
@@ -23,13 +30,33 @@ export async function loginController(req: Request, res: Response): Promise<void
     return;
   }
 
+  const ip = req.ip ?? 'desconocida';
+  try {
+    verificarLoginPermitido(ip, email);
+  } catch (error) {
+    if (error instanceof LimiteLoginError) {
+      registrarEventoSeguridad('LOGIN_BLOQUEADO', { ip, email: enmascararCorreo(email) });
+      res.setHeader('Retry-After', String(error.reintentarEnSegundos));
+      res.status(429).json({
+        message: 'Demasiados intentos fallidos. Inténtalo de nuevo más tarde.',
+        reintentarEnSegundos: error.reintentarEnSegundos,
+      });
+      return;
+    }
+    throw error;
+  }
+
   const resultado = await login(email.trim(), password);
 
   if (!resultado) {
+    registrarLoginFallido(ip, email);
+    registrarEventoSeguridad('LOGIN_FALLIDO', { ip, email: enmascararCorreo(email) });
     res.status(401).json({ message: MENSAJE_LOGIN_INVALIDO });
     return;
   }
 
+  registrarLoginExitoso(ip, email);
+  registrarEventoSeguridad('LOGIN_OK', { ip, usuarioId: resultado.usuario.id });
   res.status(200).json({
     token: resultado.token,
     usuario: resultado.usuario,
@@ -73,6 +100,7 @@ export async function cambiarPasswordController(req: Request, res: Response): Pr
       passwordNueva: body.passwordNueva,
       confirmacion: body.confirmacion,
     });
+    registrarEventoSeguridad('PASSWORD_CAMBIADA', { ip: req.ip ?? 'desconocida', usuarioId });
     res.status(200).json({ token: resultado.token, usuario: resultado.usuario });
   } catch (error) {
     if (error instanceof DatosCambioPasswordInvalidosError) {

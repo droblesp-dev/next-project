@@ -49,7 +49,9 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       return;
     }
 
-    req.user = payload;
+    // El rol vigente sale de la BD, no del token: un cambio de rol por un ADMIN rige de
+    // inmediato en lugar de esperar a que expire el JWT ya emitido.
+    req.user = { ...payload, rol: usuario.rol };
     next();
   } catch {
     res.status(401).json({ message: 'Token inválido o expirado.' });
