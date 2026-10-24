@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { Eye } from 'lucide-react';
 import { fetchAutenticado, SesionInvalidaError, type Usuario } from '../lib/authClient';
 import type { Solicitud } from './BandejaSolicitudes';
 
@@ -106,6 +107,27 @@ function fechaEnRangoOrden(fechaIso: string, desde: string, hasta: string): bool
   return true;
 }
 
+// `ordenes.fecha_entrega` es DATE (fecha de calendario, sin hora ni zona
+// horaria real — V0__esquema_base.sql) — el driver `pg` la entrega como un
+// string ISO con hora de medianoche local y sufijo "Z" (ej.
+// "2026-10-06T05:00:00.000Z" para la fecha calendario 2026-10-06 en un
+// servidor en UTC-5; mismo mecanismo ya documentado en
+// DetalleSolicitud.tsx::formatearFechaSolo). Convertirla con `new Date(...)`
+// y formatearla en el navegador arriesga mostrar el día anterior o
+// siguiente si el huso horario del navegador no coincide con el del
+// servidor — por eso se lee directamente el fragmento YYYY-MM-DD de la
+// cadena, sin construir ningún objeto Date ni hacer ninguna conversión de
+// huso horario. Devuelve null ante un valor ausente o no reconocible, para
+// que cada vista use su propio texto de ausencia ya existente ('Sin
+// definir' en el panel de detalle, '—' en tabla/tarjeta).
+function formatearFechaEntrega(valor: string | null): string | null {
+  if (!valor) return null;
+  const coincidencia = valor.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!coincidencia) return null;
+  const [, anio, mes, dia] = coincidencia;
+  return `${dia}/${mes}/${anio}`;
+}
+
 function KpiOrden({
   icono,
   valor,
@@ -124,9 +146,11 @@ function KpiOrden({
       <span className={`inline-flex items-center justify-center w-10 h-10 shrink-0 rounded-full ${claseIcono}`}>
         <span className="material-symbols-outlined text-[20px]">{icono}</span>
       </span>
-      <div>
+      <div className="min-w-0">
         <p className="font-headline-md text-headline-md font-black text-on-surface leading-none">{valor}</p>
-        <p className="font-label-caps text-[10px] text-on-surface-variant uppercase mt-1">{etiqueta}</p>
+        <p className="font-['JetBrains_Mono'] text-[10px] font-bold tracking-[0.02em] leading-[1.2] text-on-surface-variant uppercase mt-1 break-words">
+          {etiqueta}
+        </p>
       </div>
     </div>
   );
@@ -1265,22 +1289,22 @@ export default function GestionOrdenes({
             setOrdenSeleccionada(null);
             setMensajeResponsable(null);
           }}
-          className="mb-6 inline-flex items-center font-['Inter'] text-[14px] font-semibold text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
+          className="min-h-11 -mt-2.5 mb-3.5 inline-flex items-center font-['Inter'] text-[14px] font-semibold text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
         >
           <span className="material-symbols-outlined mr-1 text-[18px]">arrow_back</span>
           VOLVER AL LISTADO
         </button>
 
         <div className="bg-surface sharp-border p-6 space-y-5">
-          <div className="flex justify-between items-start border-b border-outline pb-4">
-            <div>
-              <h3 className="font-headline-md text-headline-md text-on-surface uppercase">{ordenSeleccionada.codigo}</h3>
+          <div className="flex flex-wrap justify-between items-start gap-x-4 gap-y-3 border-b border-outline pb-4">
+            <div className="min-w-0 flex-1 basis-52">
+              <h3 className="font-headline-md text-headline-md text-on-surface uppercase wrap-anywhere">{ordenSeleccionada.codigo}</h3>
               <p className="font-code-sm text-code-sm text-on-surface-variant uppercase mt-1">
                 {cliente} — {servicio}
               </p>
             </div>
-            <span className={`inline-flex px-3 py-1 font-code-sm text-xs uppercase ${claseBadgeEstadoOrden(ordenSeleccionada.estado)}`}>
-              {ordenSeleccionada.estado}
+            <span className={`inline-flex shrink-0 whitespace-nowrap px-3 py-1 font-code-sm text-xs uppercase ${claseBadgeEstadoOrden(ordenSeleccionada.estado)}`}>
+              {ordenSeleccionada.estado.replace(/_/g, ' ')}
             </span>
           </div>
 
@@ -1302,7 +1326,7 @@ export default function GestionOrdenes({
               <div>
                 <dt className="text-on-surface-variant uppercase">Cotización relacionada</dt>
                 <dd className="text-on-surface">
-                  {cotizacion ? `${cotizacion.estado} · ${cotizacion.total ?? cotizacion.valor}` : '—'}
+                  {cotizacion ? `${cotizacion.estado.replace(/_/g, ' ')} · ${cotizacion.total ?? cotizacion.valor}` : '—'}
                 </dd>
               </div>
               <div>
@@ -1321,7 +1345,7 @@ export default function GestionOrdenes({
               </div>
               <div>
                 <dt className="text-on-surface-variant uppercase">Fecha de entrega</dt>
-                <dd className="text-on-surface">{ordenSeleccionada.fecha_entrega ?? 'Sin definir'}</dd>
+                <dd className="text-on-surface">{formatearFechaEntrega(ordenSeleccionada.fecha_entrega) ?? 'Sin definir'}</dd>
               </div>
               <div>
                 <dt className="text-on-surface-variant uppercase">Finalizada</dt>
@@ -1407,7 +1431,7 @@ export default function GestionOrdenes({
 
           <div className="border-t border-outline pt-4">
             <p className="font-label-caps text-[10px] text-primary-container uppercase mb-2">Saldo / Entrega</p>
-            <dl className="grid grid-cols-2 sm:grid-cols-3 gap-4 font-code-sm text-code-sm">
+            <dl className="grid grid-cols-2 sm:grid-cols-3 gap-4 font-code-sm text-code-sm wrap-anywhere">
               <div>
                 <dt className="text-on-surface-variant uppercase">Estado del saldo</dt>
                 <dd className="text-on-surface">{cotizacion?.estado_saldo ?? '—'}</dd>
@@ -1487,7 +1511,7 @@ export default function GestionOrdenes({
             setMensajeCambio(null);
             setMensajeResponsable(null);
           }}
-          className="mb-6 inline-flex items-center font-['Inter'] text-[14px] font-semibold text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
+          className="min-h-11 -mt-2.5 mb-3.5 inline-flex items-center font-['Inter'] text-[14px] font-semibold text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
         >
           <span className="material-symbols-outlined mr-1 text-[18px]">arrow_back</span>
           VOLVER AL LISTADO
@@ -1499,29 +1523,29 @@ export default function GestionOrdenes({
               disponible para COMERCIAL/OPERATIVO desde que cargarApoyo()
               ya no está limitado a esAdmin). Nunca inventa datos: si aún no
               hay apoyo disponible, muestra un estado honesto. */}
-          <div className="flex justify-between items-start border-b border-outline pb-4">
-            <div>
+          <div className="flex flex-wrap justify-between items-start gap-x-4 gap-y-3 border-b border-outline pb-4">
+            <div className="min-w-0 flex-1 basis-52">
               <h3 className="font-label-caps text-label-caps text-primary-container tracking-widest uppercase mb-1">
                 {ordenSeleccionada.codigo}
               </h3>
-              <p className="font-headline-md text-headline-md text-on-surface uppercase">
+              <p className="font-headline-md text-headline-md text-on-surface uppercase wrap-anywhere">
                 {datosClienteServicio(ordenSeleccionada.cotizacion_id).cliente}
               </p>
-              <p className="font-code-sm text-code-sm text-on-surface-variant uppercase mt-1">
+              <p className="font-code-sm text-code-sm text-on-surface-variant uppercase mt-1 wrap-anywhere">
                 {datosClienteServicio(ordenSeleccionada.cotizacion_id).servicio}
               </p>
             </div>
             <span
               className={`inline-flex px-3 py-1 font-code-sm text-xs uppercase ${claseBadgeEstadoOrden(ordenSeleccionada.estado)}`}
             >
-              {ordenSeleccionada.estado}
+              {ordenSeleccionada.estado.replace(/_/g, ' ')}
             </span>
           </div>
 
           {/* B. INFORMACIÓN GENERAL */}
           <div>
             <p className="font-label-caps text-[10px] text-primary-container uppercase mb-2">Información general</p>
-            <dl className="grid grid-cols-2 sm:grid-cols-3 gap-4 font-code-sm text-code-sm">
+            <dl className="grid grid-cols-2 sm:grid-cols-3 gap-4 font-code-sm text-code-sm wrap-anywhere">
               <div>
                 <dt className="text-on-surface-variant uppercase">Cliente</dt>
                 <dd className="text-on-surface">{datosClienteServicio(ordenSeleccionada.cotizacion_id).cliente}</dd>
@@ -1544,7 +1568,7 @@ export default function GestionOrdenes({
               </div>
               <div>
                 <dt className="text-on-surface-variant uppercase">Fecha de entrega</dt>
-                <dd className="text-on-surface">{ordenSeleccionada.fecha_entrega ?? 'Sin definir'}</dd>
+                <dd className="text-on-surface">{formatearFechaEntrega(ordenSeleccionada.fecha_entrega) ?? 'Sin definir'}</dd>
               </div>
               <div>
                 <dt className="text-on-surface-variant uppercase">Fecha de finalización</dt>
@@ -1765,7 +1789,7 @@ export default function GestionOrdenes({
                     onClick={() => handleCambiarEstado(destino)}
                     className="inline-flex items-center px-4 py-2 border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors font-['Inter'] text-[14px] font-semibold disabled:opacity-50 cursor-pointer"
                   >
-                    {destino}
+                    {destino.replace(/_/g, ' ')}
                   </button>
                 ))}
                 {(TRANSICIONES[ordenSeleccionada.estado] ?? []).length === 0 && (
@@ -1937,8 +1961,7 @@ export default function GestionOrdenes({
     return (
       <div className="space-y-8">
         <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase max-w-2xl">
-          Vista de supervisión: consulte el estado, el progreso y la información de las órdenes registradas. Esta
-          vista no permite crear, ejecutar ni cerrar órdenes — esas acciones son responsabilidad de Comercial y
+          Vista de supervisión: solo consulta. Crear, ejecutar o cerrar órdenes es responsabilidad de Comercial y
           Operativo.
         </p>
 
@@ -1953,7 +1976,7 @@ export default function GestionOrdenes({
         {!loadingLista && !errorLista && ordenes && ordenes.length > 0 && (
           <>
             {/* KPI */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
               <KpiOrden
                 icono="inventory_2"
                 valor={kpisAdmin.total}
@@ -2028,7 +2051,7 @@ export default function GestionOrdenes({
                   >
                     {ESTADOS_FILTRO_ORDEN.map((estado) => (
                       <option key={estado} value={estado}>
-                        {estado === 'TODOS' ? 'Estado: Todos' : estado}
+                        {estado === 'TODOS' ? 'Estado: Todos' : estado.replace(/_/g, ' ')}
                       </option>
                     ))}
                   </select>
@@ -2038,7 +2061,7 @@ export default function GestionOrdenes({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 lg:grid-cols-[180px_180px_1fr_auto] gap-4 items-end">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[180px_180px_1fr_auto] gap-4 items-end">
                 <div>
                   <label className="block font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase mb-1">
                     Fecha desde
@@ -2094,7 +2117,7 @@ export default function GestionOrdenes({
             </div>
 
             {/* TABLA — desktop */}
-            <div className="hidden md:block overflow-x-auto bg-surface sharp-border">
+            <div className="hidden xl:block overflow-x-auto bg-surface sharp-border">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-outline">
@@ -2122,9 +2145,9 @@ export default function GestionOrdenes({
                     const { cliente, servicio } = datosClienteServicio(o.cotizacion_id);
                     return (
                       <tr key={o.id} className="border-b border-outline hover:bg-surface-container-high transition-colors">
-                        <td className="py-3 px-4 font-body-md text-body-md text-on-surface">{o.codigo}</td>
-                        <td className="py-3 px-4 font-body-md text-body-md text-on-surface">{cliente}</td>
-                        <td className="py-3 px-4 font-body-md text-body-md text-on-surface">{servicio}</td>
+                        <td className="py-3 px-4 font-code-sm text-code-sm text-on-surface">{o.codigo}</td>
+                        <td className="py-3 px-4 font-['Inter'] text-[14px] font-normal leading-[20px] text-on-surface">{cliente}</td>
+                        <td className="py-3 px-4 font-['Inter'] text-[14px] font-normal leading-[20px] text-on-surface break-words">{servicio}</td>
                         <td className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant">
                           {nombreResponsableAdmin(o.responsable_id)}
                         </td>
@@ -2138,9 +2161,9 @@ export default function GestionOrdenes({
                         </td>
                         <td className="py-3 px-4">
                           <span
-                            className={`inline-flex px-2.5 py-1 font-code-sm text-[10px] uppercase ${claseBadgeEstadoOrden(o.estado)}`}
+                            className={`inline-flex whitespace-nowrap px-2.5 py-1 font-code-sm text-[11px]! leading-tight uppercase ${claseBadgeEstadoOrden(o.estado)}`}
                           >
-                            {o.estado}
+                            {o.estado.replace(/_/g, ' ')}
                           </span>
                         </td>
                         <td className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant">
@@ -2150,9 +2173,11 @@ export default function GestionOrdenes({
                           <button
                             type="button"
                             onClick={() => abrirDetalle(o.id)}
-                            className="inline-flex items-center px-3 py-1 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
+                            aria-label="Ver detalle de la orden"
+                            title="Ver detalle"
+                            className="inline-flex items-center justify-center w-11 h-11 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors cursor-pointer"
                           >
-                            VER
+                            <Eye size={18} aria-hidden="true" />
                           </button>
                         </td>
                       </tr>
@@ -2163,7 +2188,7 @@ export default function GestionOrdenes({
             </div>
 
             {/* TABLA — mobile (tarjetas) */}
-            <div className="md:hidden space-y-3">
+            <div className="xl:hidden space-y-3">
               {datosPaginaAdmin.length === 0 && (
                 <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase text-center py-6">
                   Ningún resultado coincide con estos filtros.
@@ -2173,17 +2198,17 @@ export default function GestionOrdenes({
                 const { cliente, servicio } = datosClienteServicio(o.cotizacion_id);
                 return (
                   <div key={o.id} className="bg-surface sharp-border border-l-4 border-l-primary-container p-4 space-y-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="font-body-md text-body-md text-on-surface font-medium">{o.codigo}</p>
-                        <p className="font-code-sm text-[11px] text-on-surface-variant uppercase mt-0.5">
+                    <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+                      <div className="min-w-0 flex-1 basis-40">
+                        <p className="font-body-md text-body-md text-on-surface font-medium wrap-anywhere">{o.codigo}</p>
+                        <p className="font-code-sm text-[11px] text-on-surface-variant uppercase mt-0.5 wrap-anywhere">
                           {cliente} — {servicio}
                         </p>
                       </div>
                       <span
-                        className={`inline-flex shrink-0 px-2.5 py-1 font-code-sm text-[10px] uppercase ${claseBadgeEstadoOrden(o.estado)}`}
+                        className={`inline-flex shrink-0 whitespace-nowrap px-2.5 py-1 font-code-sm text-[11px]! leading-tight uppercase ${claseBadgeEstadoOrden(o.estado)}`}
                       >
-                        {o.estado}
+                        {o.estado.replace(/_/g, ' ')}
                       </span>
                     </div>
 
@@ -2194,7 +2219,7 @@ export default function GestionOrdenes({
                       <span className="font-code-sm text-[11px] text-on-surface-variant shrink-0">{o.avance}%</span>
                     </div>
 
-                    <dl className="grid grid-cols-2 gap-2 font-code-sm text-[11px]">
+                    <dl className="grid grid-cols-2 gap-2 font-code-sm text-[11px] wrap-anywhere">
                       <div>
                         <dt className="text-on-surface-variant uppercase">Responsable</dt>
                         <dd className="text-on-surface">{nombreResponsableAdmin(o.responsable_id)}</dd>
@@ -2209,9 +2234,11 @@ export default function GestionOrdenes({
                       <button
                         type="button"
                         onClick={() => abrirDetalle(o.id)}
-                        className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
+                        aria-label="Ver detalle de la orden"
+                        title="Ver detalle"
+                        className="flex-1 inline-flex items-center justify-center min-h-11 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors cursor-pointer"
                       >
-                        VER
+                        <Eye size={18} aria-hidden="true" />
                       </button>
                     </div>
                   </div>
@@ -2221,7 +2248,7 @@ export default function GestionOrdenes({
 
             {/* PAGINACIÓN */}
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-surface sharp-border p-4">
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-3 gap-y-2">
                 <span className="font-['Inter'] text-[13px] font-normal text-on-surface-variant">
                   Mostrando {ordenadasAdmin.length === 0 ? 0 : (paginaEfectivaAdmin - 1) * registrosPorPaginaAdmin + 1}–
                   {Math.min(paginaEfectivaAdmin * registrosPorPaginaAdmin, ordenadasAdmin.length)} de{' '}
@@ -2311,7 +2338,7 @@ export default function GestionOrdenes({
         <>
           {/* KPI — mismo componente/lógica ya usados en la vista ADMIN
               (kpisAdmin), reutilizados aquí sin duplicar. */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
             <KpiOrden
               icono="inventory_2"
               valor={kpisAdmin.total}
@@ -2373,7 +2400,7 @@ export default function GestionOrdenes({
               <button
                 type="button"
                 onClick={() => setMostrandoFormularioCrearOrden((v) => !v)}
-                className="w-full flex items-center justify-between cursor-pointer"
+                className="w-full min-h-11 -my-2.5 flex items-center justify-between cursor-pointer"
               >
                 <h3 className="font-label-caps text-label-caps text-primary-container tracking-widest uppercase">
                   + NUEVA ORDEN
@@ -2457,7 +2484,7 @@ export default function GestionOrdenes({
                           </div>
                           <div>
                             <dt className="text-on-surface-variant uppercase">Estado</dt>
-                            <dd className="text-on-surface">{cotizacionSeleccionadaNueva.estado}</dd>
+                            <dd className="text-on-surface">{cotizacionSeleccionadaNueva.estado.replace(/_/g, ' ')}</dd>
                           </div>
                         </dl>
                       </div>
@@ -2500,7 +2527,7 @@ export default function GestionOrdenes({
                                 onClick={() => handleSeleccionarCotizacionNueva(c.id)}
                                 className="w-full text-left p-3 hover:bg-surface-container-high transition-colors cursor-pointer"
                               >
-                                <p className="font-body-md text-sm text-on-surface">
+                                <p className="font-['Inter'] text-[14px] font-normal leading-[20px] text-on-surface">
                                   {datosClienteServicio(c.id).cliente} — {datosClienteServicio(c.id).servicio}
                                 </p>
                                 <p className="font-code-sm text-[11px] text-on-surface-variant mt-0.5 line-clamp-1">
@@ -2582,7 +2609,7 @@ export default function GestionOrdenes({
                     >
                       {ESTADOS_FILTRO_ORDEN.map((estado) => (
                         <option key={estado} value={estado}>
-                          {estado === 'TODOS' ? 'Estado: Todos' : estado}
+                          {estado === 'TODOS' ? 'Estado: Todos' : estado.replace(/_/g, ' ')}
                         </option>
                       ))}
                     </select>
@@ -2592,7 +2619,7 @@ export default function GestionOrdenes({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 lg:grid-cols-[180px_180px_1fr_auto] gap-4 items-end">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[180px_180px_1fr_auto] gap-4 items-end">
                   <div>
                     <label className="block font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase mb-1">
                       Fecha desde
@@ -2648,7 +2675,7 @@ export default function GestionOrdenes({
               </div>
 
               {/* TABLA — desktop */}
-              <div className="hidden md:block overflow-x-auto bg-surface sharp-border">
+              <div className="hidden xl:block overflow-x-auto bg-surface sharp-border">
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="border-b border-outline">
@@ -2678,14 +2705,14 @@ export default function GestionOrdenes({
                       const { cliente, servicio } = datosClienteServicio(o.cotizacion_id);
                       return (
                         <tr key={o.id} className="border-b border-outline hover:bg-surface-container-high transition-colors">
-                          <td className="py-3 px-4 font-body-md text-body-md text-on-surface">{o.codigo}</td>
-                          <td className="py-3 px-4 font-body-md text-body-md text-on-surface">{cliente}</td>
-                          <td className="py-3 px-4 font-body-md text-body-md text-on-surface">{servicio}</td>
+                          <td className="py-3 px-4 font-code-sm text-code-sm text-on-surface">{o.codigo}</td>
+                          <td className="py-3 px-4 font-['Inter'] text-[14px] font-normal leading-[20px] text-on-surface">{cliente}</td>
+                          <td className="py-3 px-4 font-['Inter'] text-[14px] font-normal leading-[20px] text-on-surface break-words">{servicio}</td>
                           <td className="py-3 px-4">
                             <span
-                              className={`inline-flex px-2.5 py-1 font-code-sm text-[10px] uppercase ${claseBadgeEstadoOrden(o.estado)}`}
+                              className={`inline-flex whitespace-nowrap px-2.5 py-1 font-code-sm text-[11px]! leading-tight uppercase ${claseBadgeEstadoOrden(o.estado)}`}
                             >
-                              {o.estado}
+                              {o.estado.replace(/_/g, ' ')}
                             </span>
                           </td>
                           <td className="py-3 px-4">
@@ -2697,7 +2724,7 @@ export default function GestionOrdenes({
                             </div>
                           </td>
                           <td className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant">
-                            {o.fecha_entrega ?? '—'}
+                            {formatearFechaEntrega(o.fecha_entrega) ?? '—'}
                           </td>
                           <td className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant">
                             {new Date(o.creado_en).toLocaleDateString()}
@@ -2706,9 +2733,11 @@ export default function GestionOrdenes({
                             <button
                               type="button"
                               onClick={() => abrirDetalle(o.id)}
-                              className="inline-flex items-center px-3 py-1 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
+                              aria-label="Ver detalle de la orden"
+                              title="Ver detalle"
+                              className="inline-flex items-center justify-center w-11 h-11 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors cursor-pointer"
                             >
-                              VER DETALLE
+                              <Eye size={18} aria-hidden="true" />
                             </button>
                           </td>
                         </tr>
@@ -2719,7 +2748,7 @@ export default function GestionOrdenes({
               </div>
 
               {/* TABLA — mobile (tarjetas) */}
-              <div className="md:hidden space-y-3">
+              <div className="xl:hidden space-y-3">
                 {datosPaginaAdmin.length === 0 && (
                   <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase text-center py-6">
                     Ningún resultado coincide con estos filtros.
@@ -2729,17 +2758,17 @@ export default function GestionOrdenes({
                   const { cliente, servicio } = datosClienteServicio(o.cotizacion_id);
                   return (
                     <div key={o.id} className="bg-surface sharp-border border-l-4 border-l-primary-container p-4 space-y-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <p className="font-body-md text-body-md text-on-surface font-medium">{o.codigo}</p>
-                          <p className="font-code-sm text-[11px] text-on-surface-variant uppercase mt-0.5">
+                      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+                        <div className="min-w-0 flex-1 basis-40">
+                          <p className="font-body-md text-body-md text-on-surface font-medium wrap-anywhere">{o.codigo}</p>
+                          <p className="font-code-sm text-[11px] text-on-surface-variant uppercase mt-0.5 wrap-anywhere">
                             {cliente} — {servicio}
                           </p>
                         </div>
                         <span
-                          className={`inline-flex shrink-0 px-2.5 py-1 font-code-sm text-[10px] uppercase ${claseBadgeEstadoOrden(o.estado)}`}
+                          className={`inline-flex shrink-0 whitespace-nowrap px-2.5 py-1 font-code-sm text-[11px]! leading-tight uppercase ${claseBadgeEstadoOrden(o.estado)}`}
                         >
-                          {o.estado}
+                          {o.estado.replace(/_/g, ' ')}
                         </span>
                       </div>
 
@@ -2750,10 +2779,10 @@ export default function GestionOrdenes({
                         <span className="font-code-sm text-[11px] text-on-surface-variant shrink-0">{o.avance}%</span>
                       </div>
 
-                      <dl className="grid grid-cols-2 gap-2 font-code-sm text-[11px]">
+                      <dl className="grid grid-cols-2 gap-2 font-code-sm text-[11px] wrap-anywhere">
                         <div>
                           <dt className="text-on-surface-variant uppercase">Fecha de entrega</dt>
-                          <dd className="text-on-surface">{o.fecha_entrega ?? '—'}</dd>
+                          <dd className="text-on-surface">{formatearFechaEntrega(o.fecha_entrega) ?? '—'}</dd>
                         </div>
                         <div>
                           <dt className="text-on-surface-variant uppercase">Creada</dt>
@@ -2765,9 +2794,11 @@ export default function GestionOrdenes({
                         <button
                           type="button"
                           onClick={() => abrirDetalle(o.id)}
-                          className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
+                          aria-label="Ver detalle de la orden"
+                          title="Ver detalle"
+                          className="flex-1 inline-flex items-center justify-center min-h-11 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors cursor-pointer"
                         >
-                          VER DETALLE
+                          <Eye size={18} aria-hidden="true" />
                         </button>
                       </div>
                     </div>
@@ -2777,7 +2808,7 @@ export default function GestionOrdenes({
 
               {/* PAGINACIÓN */}
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-surface sharp-border p-4">
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-3 gap-y-2">
                   <span className="font-['Inter'] text-[13px] font-normal text-on-surface-variant">
                     Mostrando {ordenadasAdmin.length === 0 ? 0 : (paginaEfectivaAdmin - 1) * registrosPorPaginaAdmin + 1}–
                     {Math.min(paginaEfectivaAdmin * registrosPorPaginaAdmin, ordenadasAdmin.length)} de{' '}

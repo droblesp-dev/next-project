@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Eye } from 'lucide-react';
 import { fetchAutenticado, SesionInvalidaError } from '../lib/authClient';
+import { esCantidadDesconocida, formatearCantidad } from '../lib/cantidadSolicitud';
 import fabricacionGalleryImg from '../assets/images/fabricacion_gallery_1788229017518.jpg';
 
 export interface Solicitud {
@@ -14,24 +16,7 @@ export interface Solicitud {
   requiere_comprobante: boolean;
   creado_en: string;
   actualizado_en: string;
-}
-
-// FORMULARIO-UX-06.1 (autorización explícita — auditoría previa "AUDITORÍA FORMULARIO —
-// PENDIENTES UX-06"): `cantidad` guarda 1 tanto para "1 unidad real" como para "el cliente
-// marcó Aún no lo sé" (placeholder obligatorio del CHECK de PostgreSQL, ver
-// solicitudes.service.ts::crearSolicitud) — hoy solo `especificaciones` distingue ambos casos,
-// y ese texto no era visible en este listado. No se toca la BD ni el comportamiento de
-// `cantidad_desconocida`: esto es solo una lectura de un texto ya guardado, para mostrar
-// "(a confirmar)" junto al número cuando corresponde. Subcadena estable (no el texto completo)
-// para no depender de puntuación exacta — el texto real lo arma únicamente
-// solicitudes.service.ts::crearSolicitud, nunca se reescribe aquí.
-const MARCA_CANTIDAD_DESCONOCIDA = 'el cliente indicó que aún no la conoce';
-
-function formatearCantidad(cantidad: number, especificaciones: string | null): string {
-  if (especificaciones?.includes(MARCA_CANTIDAD_DESCONOCIDA)) {
-    return `${cantidad} (a confirmar)`;
-  }
-  return String(cantidad);
+  codigo: string | null;
 }
 
 interface BandejaSolicitudesProps {
@@ -53,6 +38,31 @@ interface BandejaSolicitudesProps {
 interface ClienteResumen {
   nombre: string;
   empresa: string | null;
+  telefono: string;
+}
+
+// Lo que se muestra de un cliente: `principal` es la empresa si existe, si
+// no el nombre de la persona de contacto (nunca ambos como principal, para
+// no duplicar). `contacto` es el nombre de la persona, pero solo cuando NO
+// es ya el principal (para no repetirlo); `telefono` es el teléfono, si
+// está disponible. Ambos se etiquetan explícitamente al mostrarse (ver
+// `lineaContacto`) — un teléfono sin etiqueta no se reconoce de inmediato
+// como tal.
+interface InfoCliente {
+  principal: string;
+  contacto: string | null;
+  telefono: string | null;
+}
+
+// Línea compacta, con etiquetas explícitas, para los lugares de espacio
+// reducido (tabla, tarjetas, vista rápida) — nunca duplica el nombre si ya
+// es el principal, y nunca muestra "Contacto:"/"Teléfono:" vacío.
+function lineaContacto(info: InfoCliente): string | null {
+  const partes = [
+    info.contacto ? `Contacto: ${info.contacto}` : null,
+    info.telefono ? `Teléfono: ${info.telefono}` : null,
+  ].filter((v): v is string => Boolean(v));
+  return partes.length ? partes.join(' · ') : null;
 }
 
 type EstadoClientes = 'cargando' | 'disponible' | 'no_autorizado' | 'error';
@@ -107,15 +117,15 @@ function Kpi({
   claseBorde: string;
 }) {
   return (
-    <div className={`bg-surface sharp-border p-5 border-l-4 ${claseBorde} flex items-center gap-4`}>
+    <div className={`bg-surface sharp-border px-5 py-4 border-l-4 ${claseBorde} flex items-center gap-4`}>
       <span
         className={`inline-flex items-center justify-center w-11 h-11 shrink-0 rounded-full ${claseIcono}`}
       >
         <span className="material-symbols-outlined text-[22px]">{icono}</span>
       </span>
-      <div>
-        <p className="font-headline-lg text-headline-lg-mobile font-black text-on-surface leading-none">{valor}</p>
-        <p className="font-label-caps text-label-caps text-on-surface-variant uppercase mt-1">{etiqueta}</p>
+      <div className="min-w-0">
+        <p className="font-['Montserrat'] text-[22px] font-semibold leading-[1.3] text-on-surface">{valor}</p>
+        <p className="font-label-caps text-label-caps text-on-surface-variant uppercase mt-0.5 break-words">{etiqueta}</p>
       </div>
     </div>
   );
@@ -211,11 +221,11 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
         }
 
         const data = (await response.json()) as {
-          clientes: { id: string; nombre: string; empresa: string | null }[];
+          clientes: { id: string; nombre: string; empresa: string | null; telefono: string }[];
         };
         if (!cancelado) {
           const mapa = new Map<string, ClienteResumen>();
-          data.clientes.forEach((c) => mapa.set(c.id, { nombre: c.nombre, empresa: c.empresa }));
+          data.clientes.forEach((c) => mapa.set(c.id, { nombre: c.nombre, empresa: c.empresa, telefono: c.telefono }));
           setClientesPorId(mapa);
           setEstadoClientes('disponible');
         }
@@ -234,13 +244,23 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
     };
   }, [token, onSesionInvalida]);
 
-  function nombreCliente(clienteId: string): string {
-    if (estadoClientes === 'cargando') return 'Cargando…';
-    if (estadoClientes === 'no_autorizado') return '— (sin acceso)';
-    if (estadoClientes === 'error') return '—';
+  function infoCliente(clienteId: string): InfoCliente {
+    if (estadoClientes === 'cargando') return { principal: 'Cargando…', contacto: null, telefono: null };
+    if (estadoClientes === 'no_autorizado') return { principal: '— (sin acceso)', contacto: null, telefono: null };
+    if (estadoClientes === 'error') return { principal: '—', contacto: null, telefono: null };
     const cliente = clientesPorId.get(clienteId);
-    if (!cliente) return '—';
-    return cliente.empresa?.trim() ? cliente.empresa : cliente.nombre;
+    if (!cliente) return { principal: '—', contacto: null, telefono: null };
+
+    const empresa = cliente.empresa?.trim() || null;
+    const nombre = cliente.nombre?.trim() || null;
+    const telefono = cliente.telefono?.trim() || null;
+    const principal = empresa || nombre || '—';
+    // El nombre solo se repite como "contacto" cuando ya se usó la empresa
+    // como principal — si no hay empresa, el nombre ya es el principal y
+    // no debe duplicarse aquí.
+    const contacto = empresa && nombre ? nombre : null;
+
+    return { principal, contacto, telefono };
   }
 
   const serviciosDisponibles = useMemo(() => {
@@ -278,6 +298,7 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
         const coincide =
           s.servicio.toLowerCase().includes(termino) ||
           s.descripcion.toLowerCase().includes(termino) ||
+          (s.codigo?.toLowerCase().includes(termino) ?? false) ||
           (cliente ? cliente.nombre.toLowerCase().includes(termino) : false) ||
           (cliente?.empresa ? cliente.empresa.toLowerCase().includes(termino) : false);
         if (!coincide) return false;
@@ -344,6 +365,12 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
     return solicitudes.find((s) => s.id === vistaRapidaId) ?? null;
   }, [solicitudes, vistaRapidaId]);
 
+  const infoClienteVistaRapida = useMemo(() => {
+    if (!vistaRapida) return null;
+    return infoCliente(vistaRapida.cliente_id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vistaRapida, clientesPorId, estadoClientes]);
+
   if (loading) {
     return <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">CARGANDO SOLICITUDES...</p>;
   }
@@ -359,7 +386,7 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
   return (
     <div className="space-y-8">
       {/* KPI */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <Kpi
           icono="description"
           valor={kpis.total}
@@ -408,7 +435,7 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
               type="text"
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
-              placeholder="Buscar por cliente, servicio o descripción…"
+              placeholder="Buscar por código, cliente, servicio o descripción…"
               className="w-full bg-background border border-outline pl-10 pr-3 py-2.5 text-on-surface text-sm focus:border-primary-container focus:outline-hidden font-body-md"
             />
           </div>
@@ -421,7 +448,7 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
             >
               {ESTADOS_FILTRO.map((estado) => (
                 <option key={estado} value={estado}>
-                  {estado === 'TODOS' ? 'Estado: Todos' : estado}
+                  {estado === 'TODOS' ? 'Estado: Todos' : estado.replace(/_/g, ' ')}
                 </option>
               ))}
             </select>
@@ -449,7 +476,7 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
           </div>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-[180px_180px_1fr_auto] gap-4 items-end">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[180px_180px_1fr_auto] gap-4 items-end">
           <div>
             <label className="block font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase mb-1">
               Fecha desde
@@ -503,10 +530,11 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
       </div>
 
       {/* TABLA — desktop */}
-      <div className="hidden md:block overflow-x-auto bg-surface sharp-border">
+      <div className="hidden xl:block overflow-x-auto bg-surface sharp-border">
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="border-b border-outline">
+              <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">N.º Solicitud</th>
               <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Fecha</th>
               <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Cliente</th>
               <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Servicio</th>
@@ -519,12 +547,14 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
           <tbody>
             {datosPagina.length === 0 && (
               <tr>
-                <td colSpan={7} className="py-6 px-4 text-center font-code-sm text-code-sm text-on-surface-variant uppercase">
+                <td colSpan={8} className="py-6 px-4 text-center font-code-sm text-code-sm text-on-surface-variant uppercase">
                   Ningún resultado coincide con estos filtros.
                 </td>
               </tr>
             )}
-            {datosPagina.map((s) => (
+            {datosPagina.map((s) => {
+              const infoClienteFila = infoCliente(s.cliente_id);
+              return (
               <tr
                 key={s.id}
                 onClick={() => setVistaRapidaId(s.id)}
@@ -532,15 +562,23 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
                   vistaRapidaId === s.id ? 'bg-surface-container-high' : ''
                 }`}
               >
+                <td className="py-3 px-4 font-code-sm text-code-sm text-on-surface whitespace-nowrap">{s.codigo ?? '—'}</td>
                 <td className="py-3 px-4 font-['Inter'] text-[14px] font-normal text-on-surface-variant">
                   {new Date(s.creado_en).toLocaleDateString()}
                 </td>
-                <td className="py-3 px-4 font-body-md text-body-md text-on-surface">{nombreCliente(s.cliente_id)}</td>
-                <td className="py-3 px-4 font-body-md text-body-md text-on-surface">{s.servicio}</td>
-                <td className="py-3 px-4 font-body-md text-body-md text-on-surface">{formatearCantidad(s.cantidad, s.especificaciones)}</td>
+                <td className="py-3 px-4 font-['Inter'] text-[14px] font-normal leading-[20px] text-on-surface">
+                  <div>{infoClienteFila.principal}</div>
+                  {lineaContacto(infoClienteFila) && (
+                    <div className="font-code-sm text-[11px] text-on-surface-variant mt-0.5 wrap-anywhere">
+                      {lineaContacto(infoClienteFila)}
+                    </div>
+                  )}
+                </td>
+                <td className="py-3 px-4 font-['Inter'] text-[14px] font-normal leading-[20px] text-on-surface break-words">{s.servicio}</td>
+                <td className="py-3 px-4 font-['Inter'] text-[14px] font-normal leading-[20px] text-on-surface">{formatearCantidad(s.cantidad, s.especificaciones)}</td>
                 <td className="py-3 px-4">
-                  <span className={`inline-flex px-2.5 py-1 font-code-sm text-[10px] uppercase ${claseBadgeEstado(s.estado)}`}>
-                    {s.estado}
+                  <span className={`inline-flex whitespace-nowrap px-2.5 py-1 font-code-sm text-[11px]! leading-tight uppercase ${claseBadgeEstado(s.estado)}`}>
+                    {s.estado.replace(/_/g, ' ')}
                   </span>
                 </td>
                 <td className="py-3 px-4 font-['Inter'] text-[14px] font-normal text-on-surface-variant">
@@ -548,50 +586,53 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
                 </td>
                 <td className="py-3 px-4">
                   <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                    {puedeChatear && (
-                      <span
-                        title="Canal de comunicación técnica disponible para esta solicitud"
-                        aria-label="Comunicación técnica disponible"
-                        className="inline-flex items-center justify-center w-7 h-7 border border-primary-container text-primary-container"
-                      >
-                        <span className="material-symbols-outlined text-[16px]">forum</span>
-                      </span>
-                    )}
                     <button
                       type="button"
                       onClick={() => onSeleccionar(s.id)}
-                      className="inline-flex items-center px-3 py-1 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
+                      aria-label="Ver detalle de la solicitud"
+                      title="Ver detalle"
+                      className="inline-flex items-center justify-center w-11 h-11 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors cursor-pointer"
                     >
-                      VER DETALLE
+                      <Eye size={18} aria-hidden="true" />
                     </button>
                   </div>
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
 
       {/* TABLA — mobile (tarjetas, no tabla comprimida) */}
-      <div className="md:hidden space-y-3">
+      <div className="xl:hidden space-y-3">
         {datosPagina.length === 0 && (
           <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase text-center py-6">
             Ningún resultado coincide con estos filtros.
           </p>
         )}
-        {datosPagina.map((s) => (
+        {datosPagina.map((s) => {
+          const infoClienteTarjeta = infoCliente(s.cliente_id);
+          return (
           <div key={s.id} className="bg-surface sharp-border border-l-4 border-l-primary-container p-4 space-y-3">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <p className="font-body-md text-body-md text-on-surface font-medium">{s.servicio}</p>
-                <p className="font-code-sm text-[11px] text-on-surface-variant uppercase mt-0.5">{nombreCliente(s.cliente_id)}</p>
+            <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+              <div className="min-w-0 flex-1 basis-40">
+                <p className="font-body-md text-body-md text-on-surface font-medium wrap-anywhere">{s.servicio}</p>
+                <p className="font-code-sm text-[11px] text-on-surface-variant uppercase mt-0.5 wrap-anywhere">{infoClienteTarjeta.principal}</p>
+                {lineaContacto(infoClienteTarjeta) && (
+                  <p className="font-code-sm text-[11px] text-on-surface-variant mt-0.5 wrap-anywhere">{lineaContacto(infoClienteTarjeta)}</p>
+                )}
               </div>
-              <span className={`inline-flex shrink-0 px-2.5 py-1 font-code-sm text-[10px] uppercase ${claseBadgeEstado(s.estado)}`}>
-                {s.estado}
+              <span className={`inline-flex shrink-0 whitespace-nowrap px-2.5 py-1 font-code-sm text-[11px]! leading-tight uppercase ${claseBadgeEstado(s.estado)}`}>
+                {s.estado.replace(/_/g, ' ')}
               </span>
             </div>
 
-            <dl className="grid grid-cols-2 gap-2 font-code-sm text-[11px]">
+            <dl className="grid grid-cols-2 gap-2 font-code-sm text-[11px] wrap-anywhere">
+              <div className="col-span-2">
+                <dt className="text-on-surface-variant uppercase">N.º Solicitud</dt>
+                <dd className="text-on-surface">{s.codigo ?? '—'}</dd>
+              </div>
               <div>
                 <dt className="text-on-surface-variant uppercase">Cantidad</dt>
                 <dd className="text-on-surface">{formatearCantidad(s.cantidad, s.especificaciones)}</dd>
@@ -607,30 +648,24 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
             </dl>
 
             <div className="flex items-center justify-end gap-2 pt-1 border-t border-outline">
-              {puedeChatear && (
-                <span
-                  title="Canal de comunicación técnica disponible para esta solicitud"
-                  aria-label="Comunicación técnica disponible"
-                  className="inline-flex items-center justify-center w-8 h-8 border border-primary-container text-primary-container"
-                >
-                  <span className="material-symbols-outlined text-[18px]">forum</span>
-                </span>
-              )}
               <button
                 type="button"
                 onClick={() => onSeleccionar(s.id)}
-                className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
+                aria-label="Ver detalle de la solicitud"
+                title="Ver detalle"
+                className="flex-1 inline-flex items-center justify-center min-h-11 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors cursor-pointer"
               >
-                VER DETALLE
+                <Eye size={18} aria-hidden="true" />
               </button>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* PAGINACIÓN */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-surface sharp-border p-4">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-3 gap-y-2">
           <span className="font-['Inter'] text-[13px] font-normal text-on-surface-variant">
             Mostrando {ordenadas.length === 0 ? 0 : (paginaEfectiva - 1) * registrosPorPagina + 1}–
             {Math.min(paginaEfectiva * registrosPorPagina, ordenadas.length)} de {ordenadas.length} solicitudes
@@ -697,7 +732,7 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
 
       {/* VISTA RÁPIDA + DISTRIBUCIÓN + IDENTIDAD */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="bg-surface sharp-border p-5">
+        <div className="bg-surface sharp-border p-5 flex flex-col lg:min-h-[19rem]">
           <p className="font-label-caps text-label-caps text-primary-container uppercase mb-4 flex items-center gap-2">
             <span className="material-symbols-outlined text-[16px]">visibility</span>
             Vista rápida
@@ -706,59 +741,74 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
             <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">Seleccione una fila de la tabla.</p>
           )}
           {vistaRapida && (
-            <div className="space-y-2">
+            <div className="flex-1 flex flex-col gap-2">
               <div className="flex items-center justify-between">
-                <span className={`inline-flex px-2.5 py-1 font-code-sm text-[10px] uppercase ${claseBadgeEstado(vistaRapida.estado)}`}>
-                  {vistaRapida.estado}
+                <span className={`inline-flex whitespace-nowrap px-2.5 py-1 font-code-sm text-[11px]! leading-tight uppercase ${claseBadgeEstado(vistaRapida.estado)}`}>
+                  {vistaRapida.estado.replace(/_/g, ' ')}
                 </span>
                 <span className="font-code-sm text-[10px] text-on-surface-variant">
                   {new Date(vistaRapida.creado_en).toLocaleDateString()}
                 </span>
               </div>
-              <p className="font-body-md text-body-md text-on-surface">{nombreCliente(vistaRapida.cliente_id)}</p>
+              <p className="font-body-md text-body-md text-on-surface">{infoClienteVistaRapida?.principal}</p>
+              {infoClienteVistaRapida && lineaContacto(infoClienteVistaRapida) && (
+                <p className="font-code-sm text-[11px] text-on-surface-variant">{lineaContacto(infoClienteVistaRapida)}</p>
+              )}
               <p className="font-code-sm text-code-sm text-on-surface-variant uppercase">{vistaRapida.servicio}</p>
               <p className="font-code-sm text-[11px] text-on-surface-variant">
-                {formatearCantidad(vistaRapida.cantidad, vistaRapida.especificaciones)} unidades
+                {esCantidadDesconocida(vistaRapida.especificaciones)
+                  ? `Cantidad: ${formatearCantidad(vistaRapida.cantidad, vistaRapida.especificaciones)}`
+                  : `${formatearCantidad(vistaRapida.cantidad, vistaRapida.especificaciones)} unidades`}
               </p>
               <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">
                 Últ. actualización: {new Date(vistaRapida.actualizado_en).toLocaleString()}
               </p>
-              <button
-                type="button"
-                onClick={() => onSeleccionar(vistaRapida.id)}
-                className="mt-2 inline-flex items-center px-4 py-2 border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
-              >
-                VER DETALLE
-              </button>
+              <div className="mt-auto pt-3 border-t border-outline">
+                <button
+                  type="button"
+                  onClick={() => onSeleccionar(vistaRapida.id)}
+                  aria-label="Ver detalle de la solicitud"
+                  title="Ver detalle"
+                  className="w-full inline-flex items-center justify-center h-11 border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors cursor-pointer"
+                >
+                  <Eye size={18} aria-hidden="true" />
+                </button>
+              </div>
             </div>
           )}
         </div>
 
-        <div className="bg-surface sharp-border p-5">
+        <div className="bg-surface sharp-border p-5 flex flex-col lg:min-h-[19rem]">
           <p className="font-label-caps text-label-caps text-primary-container uppercase mb-4 flex items-center gap-2">
             <span className="material-symbols-outlined text-[16px]">bar_chart</span>
             Distribución de solicitudes
           </p>
-          <div className="flex items-end justify-between gap-3 h-32">
+          <div className="flex-1 flex items-end justify-between gap-2 sm:gap-3 min-h-32">
             {(['NUEVA', 'EN_REVISION', 'COTIZADA', 'CANCELADA'] as const).map((estado) => {
               const valor = kpis[estado];
               const maximo = Math.max(kpis.NUEVA, kpis.EN_REVISION, kpis.COTIZADA, kpis.CANCELADA, 1);
               const alturaPorcentaje = Math.max((valor / maximo) * 100, valor > 0 ? 6 : 0);
               return (
-                <div key={estado} className="flex-1 flex flex-col items-center justify-end h-full gap-1">
+                <div key={estado} className="flex-1 min-w-0 flex flex-col items-center justify-end h-full gap-1">
                   <span className="font-code-sm text-xs text-on-surface">{valor}</span>
                   <div
                     className={`w-full ${estado === 'CANCELADA' ? 'bg-error' : 'bg-primary-container'}`}
                     style={{ height: `${alturaPorcentaje}%`, opacity: estado === 'EN_REVISION' ? 0.6 : 1 }}
                   />
-                  <span className="font-code-sm text-[9px] text-on-surface-variant uppercase text-center">{estado}</span>
+                  <span
+                    className={`font-code-sm text-[9px]! text-on-surface-variant max-w-full uppercase text-center flex sm:inline items-center justify-center h-8 sm:h-auto ${
+                      estado === 'EN_REVISION' ? 'sm:whitespace-nowrap' : ''
+                    }`}
+                  >
+                    {estado === 'EN_REVISION' ? 'En revisión' : estado}
+                  </span>
                 </div>
               );
             })}
           </div>
         </div>
 
-        <div className="relative overflow-hidden sharp-border min-h-[180px] flex items-end">
+        <div className="relative overflow-hidden sharp-border min-h-[180px] lg:min-h-[19rem] flex items-end">
           <img src={fabricacionGalleryImg} alt="" className="absolute inset-0 w-full h-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-background/20" />
           <div className="relative z-10 p-5">

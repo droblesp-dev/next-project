@@ -96,6 +96,38 @@
     line-height: 1.2;
     font-weight: 700;
   }
+  /* B1 (auditoría responsive): App.tsx combinaba `font-headline-lg`/`font-display-lg`
+     (tamaño fijo) con `text-headline-lg-mobile`/`md:text-headline-lg`/`md:text-display-lg`,
+     clases que nunca existieron (ni como token `--text-*` en @theme ni como clase aquí) —
+     nunca tuvieron efecto, los títulos no se reducían en móvil. Estas dos clases nuevas
+     reemplazan esa combinación rota por una responsividad real (media query), usando los
+     mismos tamaños ya existentes (24px móvil / 32px y 48px escritorio desde 768px).
+     Uso exclusivo de App.tsx — no se tocó `.font-headline-lg`/`.font-display-lg` para no
+     afectar otros archivos que ya usan esas clases. */
+  .font-headline-lg-responsive {
+    font-family: "Montserrat", sans-serif;
+    font-size: 24px;
+    line-height: 1.2;
+    font-weight: 700;
+  }
+  @media (min-width: 768px) {
+    .font-headline-lg-responsive {
+      font-size: 32px;
+    }
+  }
+  .font-display-lg-responsive {
+    font-family: "Montserrat", sans-serif;
+    font-size: 24px;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+    font-weight: 800;
+  }
+  @media (min-width: 768px) {
+    .font-display-lg-responsive {
+      font-size: 48px;
+      line-height: 1.1;
+    }
+  }
   .font-headline-md {
     font-family: "Montserrat", sans-serif;
     font-size: 24px;
@@ -152,4 +184,15 @@ html {
 
 section {
   scroll-margin-top: 80px;
+}
+
+/* Auditoría responsive (filtros): en móvil, iOS Safari amplía la página al enfocar un
+   campo con fuente < 16px. Los selects/fechas de filtros usaban 13px (`font-code-sm`).
+   Regla sin capa para que prevalezca sobre las utilidades solo por debajo de 768px. */
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }

@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import {
   listarUsuarios,
+  listarAdminsActivos,
   crearUsuario,
   cambiarActivo,
   cambiarRol,
@@ -13,6 +14,15 @@ import {
 export async function listarController(_req: Request, res: Response): Promise<void> {
   const usuarios = await listarUsuarios();
   res.status(200).json({ usuarios });
+}
+
+// PC-2026-01 (continuación — Frontend Secciones C/D): accesible también a
+// COMERCIAL (ver routes/usuarios.routes.ts, registrada antes del bloque
+// requireRole('ADMIN') del router) — solo id+nombre, nunca el listado
+// completo de usuarios.
+export async function listarAdminsActivosController(_req: Request, res: Response): Promise<void> {
+  const admins = await listarAdminsActivos();
+  res.status(200).json({ admins });
 }
 
 export async function crearController(req: Request, res: Response): Promise<void> {

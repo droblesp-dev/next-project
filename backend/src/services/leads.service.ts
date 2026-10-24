@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import type { PoolClient } from 'pg';
 import { pool } from '../config/db.js';
 import { env } from '../config/env.js';
 import * as leadsRepo from '../repositories/leads.repository.js';
@@ -365,6 +366,59 @@ export async function listarSeguimientosDeLead(id: string): Promise<LeadSeguimie
     throw new LeadNoEncontradoError();
   }
   return leadsRepo.listarSeguimientos(id);
+}
+
+// ---------------------------------------------------------------------
+// C2 (Corrección B) / C2.2 (autorización explícita — alternativa B de la
+// auditoría C2.1): efecto de aceptar válidamente una cotización — el lead
+// vinculado a su solicitud pasa a CONVERTIDO. Llamada exclusivamente desde
+// cotizaciones.service.ts::aceptarCotizacionPublica(), DENTRO de la MISMA
+// transacción que registra la aceptación (recibe el `client` de esa
+// transacción — nunca abre ni gestiona su propio BEGIN/COMMIT/ROLLBACK, eso
+// es responsabilidad exclusiva del llamador).
+//
+// C2.2: a diferencia de la versión de C2, YA NO atrapa errores reales de
+// PostgreSQL — un fallo genuino (conexión perdida, violación inesperada,
+// etc.) se propaga tal cual, para que aceptarCotizacionPublica() haga
+// ROLLBACK de la aceptación también: "la aceptación y la clasificación del
+// lead deben quedar consistentes" (C2.1/C2.2). Lo que NO cambia es la
+// distinción de los 3 casos posibles del número de leads vinculados a esta
+// solicitud (no hay UNIQUE(leads.solicitud_id) en el esquema, así que no se
+// asume que siempre hay exactamente uno) — ninguno de los tres es un error:
+//   0 leads  -> no se crea ninguno (no hay regla aprobada para inventar un
+//               lead a partir de una cotización aceptada). La transacción
+//               sigue su curso normal hacia COMMIT.
+//   1 lead   -> se convierte, solo si su estado/clasificación lo permiten
+//               (ver leadsRepo.convertirPorAceptacion: ACTIVO y no ya
+//               CONVERTIDO/RECURRENTE — nunca los degrada ni los reescribe).
+//   >1 leads -> estado anómalo según las invariantes actuales del sistema;
+//               NO se modifica ninguno automáticamente (evitar una
+//               modificación indiscriminada) — se registra para revisión
+//               manual vía PATCH /leads/:id, que sigue disponible. Tampoco
+//               aborta la transacción: es un resultado válido, no un fallo.
+export async function convertirLeadPorAceptacion(solicitudId: string, client: PoolClient): Promise<void> {
+  const leadsDeLaSolicitud = await leadsRepo.listarPorSolicitud(solicitudId, client);
+
+  if (leadsDeLaSolicitud.length === 0) {
+    console.info(
+      `[leads] aceptación de cotización: ninguna fila de leads vinculada a la solicitud ${solicitudId}; no se crea ninguna automáticamente.`
+    );
+    return;
+  }
+
+  if (leadsDeLaSolicitud.length > 1) {
+    console.warn(
+      `[leads] aceptación de cotización: ${leadsDeLaSolicitud.length} leads vinculados a la solicitud ${solicitudId} (se esperaba a lo sumo 1) — no se modifica ninguno automáticamente. Requiere revisión manual.`
+    );
+    return;
+  }
+
+  const convertido = await leadsRepo.convertirPorAceptacion(leadsDeLaSolicitud[0].id, client);
+  if (!convertido) {
+    console.info(
+      `[leads] aceptación de cotización: el lead ${leadsDeLaSolicitud[0].id} (solicitud ${solicitudId}) no cambió — ya estaba CONVERTIDO/RECURRENTE o no está ACTIVO.`
+    );
+  }
 }
 
 // ---------------------------------------------------------------------

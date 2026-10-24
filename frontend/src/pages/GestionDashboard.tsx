@@ -50,9 +50,9 @@ function KpiDashboard({
       <span className={`inline-flex items-center justify-center w-10 h-10 shrink-0 rounded-full ${claseIcono}`}>
         <span className="material-symbols-outlined text-[20px]">{icono}</span>
       </span>
-      <div>
+      <div className="min-w-0">
         <p className="font-headline-md text-headline-md font-black text-on-surface leading-none">{valor}</p>
-        <p className="font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase mt-1">{etiqueta}</p>
+        <p className="font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase mt-1 break-words">{etiqueta}</p>
       </div>
     </div>
   );
@@ -209,13 +209,13 @@ function FilaEstadosCompacta({ titulo, datos }: { titulo: string; datos: ConteoP
       {datos.length === 0 ? (
         <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">Sin datos.</p>
       ) : (
-        <div className="flex flex-wrap lg:flex-nowrap justify-center gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-flow-col lg:auto-cols-fr gap-4">
           {datos.map((d) => {
             const porcentaje = calcularPorcentaje(d.total, total);
             return (
               <div
                 key={d.estado}
-                className="w-[calc(50%-0.5rem)] sm:w-44 lg:w-48 border border-outline p-4 flex flex-col gap-2.5 justify-center"
+                className="min-w-0 border border-outline p-4 flex flex-col gap-2.5 justify-center"
               >
                 <span
                   className={`inline-flex self-start px-2 py-0.5 font-code-sm text-[10px] uppercase ${claseBadgeEstadoDashboard(d.estado)}`}
@@ -264,6 +264,27 @@ function BloquesCompactos({ titulo, datos }: { titulo: string; datos: ConteoPorE
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+// Bloque de Análisis IA: etiqueta (mismo estilo de badge que los demás bloques compactos), cifra y detalle.
+function BloqueIa({
+  etiqueta,
+  valor,
+  detalle,
+  claseEtiqueta,
+}: {
+  etiqueta: string;
+  valor: number;
+  detalle: string;
+  claseEtiqueta: string;
+}) {
+  return (
+    <div className="border border-outline p-3 text-center flex flex-col items-center justify-center gap-1.5 min-w-0">
+      <span className={`inline-flex px-1.5 py-0.5 font-code-sm text-[9px] uppercase ${claseEtiqueta}`}>{etiqueta}</span>
+      <p className="font-headline-md text-2xl font-black text-on-surface leading-none">{valor}</p>
+      <p className="font-code-sm text-[10px] text-on-surface-variant uppercase">{detalle}</p>
     </div>
   );
 }
@@ -317,10 +338,9 @@ export default function GestionDashboard({ token, onSesionInvalida }: GestionDas
 
   return (
     <div className="space-y-6">
-      {/* Advertencia de datos de prueba — texto sin ningún cambio */}
+      {/* Advertencia de datos de prueba — texto compactado a pedido (mismo significado) */}
       <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">
-        Los datos actuales son principalmente datos de prueba generados durante fases anteriores del proyecto — no
-        representan operación productiva real.
+        Datos principalmente de prueba: no reflejan la operación real.
       </p>
 
       {/* KPI — totales */}
@@ -380,7 +400,7 @@ export default function GestionDashboard({ token, onSesionInvalida }: GestionDas
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4">
           <KpiDashboard
             icono="schedule"
             valor={resumen.alertas.pendientes}
@@ -406,7 +426,7 @@ export default function GestionDashboard({ token, onSesionInvalida }: GestionDas
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <BloquesCompactos titulo="Leads por clasificación" datos={resumen.leads.porClasificacion} />
 
-        <div className="bg-surface sharp-border p-6 h-full">
+        <div className="bg-surface sharp-border p-6 h-full flex flex-col">
           <div className="flex items-center gap-2 mb-4">
             <span className="material-symbols-outlined text-primary-container text-[22px]">psychology</span>
             <p className="font-label-caps text-label-caps text-primary-container uppercase">
@@ -418,22 +438,39 @@ export default function GestionDashboard({ token, onSesionInvalida }: GestionDas
               [PENDIENTE] No existen ejecuciones registradas del módulo de IA.
             </p>
           ) : (
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="font-body-md text-body-md text-on-surface">
-                  {resumen.analisisIa.totalEjecuciones} ejecuciones registradas
-                </span>
-                <span className="inline-flex px-2.5 py-1 font-code-sm text-[10px] uppercase border border-primary-container bg-primary-container text-on-primary-container">
-                  {resumen.analisisIa.completadas} COMPLETADO
-                </span>
-                <span className="inline-flex px-2.5 py-1 font-code-sm text-[10px] uppercase border border-error text-error bg-error-container/20">
-                  {resumen.analisisIa.conError} ERROR
-                </span>
+            <div className="flex-1 flex flex-col gap-2">
+              <div className="grid grid-cols-3 gap-2">
+                <BloqueIa
+                  etiqueta="Ejecuciones"
+                  valor={resumen.analisisIa.totalEjecuciones}
+                  detalle="registradas"
+                  claseEtiqueta="border border-outline text-on-surface-variant"
+                />
+                <BloqueIa
+                  etiqueta="Completado"
+                  valor={resumen.analisisIa.completadas}
+                  detalle={`${calcularPorcentaje(resumen.analisisIa.completadas, resumen.analisisIa.totalEjecuciones).toFixed(1)}%`}
+                  claseEtiqueta="border border-primary-container bg-primary-container text-on-primary-container"
+                />
+                <BloqueIa
+                  etiqueta="Error"
+                  valor={resumen.analisisIa.conError}
+                  detalle={`${calcularPorcentaje(resumen.analisisIa.conError, resumen.analisisIa.totalEjecuciones).toFixed(1)}%`}
+                  claseEtiqueta="border border-error text-error bg-error-container/20"
+                />
               </div>
-              <p className="font-body-md text-body-md text-on-surface">
-                {resumen.analisisIa.revisadas} de {resumen.analisisIa.totalEjecuciones} revisadas
-              </p>
-              <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase mt-2">
+              <div className="flex-1 border border-outline p-3 flex flex-col justify-center gap-2">
+                <p className="font-body-md text-body-md text-on-surface">
+                  {resumen.analisisIa.revisadas} de {resumen.analisisIa.totalEjecuciones} revisadas
+                </p>
+                <div className="w-full h-2 bg-surface-container-high">
+                  <div
+                    className="h-2 bg-primary-container"
+                    style={{ width: `${calcularPorcentaje(resumen.analisisIa.revisadas, resumen.analisisIa.totalEjecuciones)}%` }}
+                  />
+                </div>
+              </div>
+              <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">
                 {resumen.analisisIa.nota}
               </p>
             </div>

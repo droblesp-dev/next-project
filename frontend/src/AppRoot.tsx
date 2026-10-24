@@ -79,6 +79,13 @@ export default function AppRoot() {
     setVista('privado');
   }
 
+  // Tras cambiar la contraseña el servidor emite un token NUEVO y invalida los anteriores: se
+  // reemplaza el de esta sesión para que el usuario siga dentro sin volver a iniciar sesión.
+  function handleSesionRenovada(nuevaSesion: Sesion) {
+    guardarSesion(nuevaSesion);
+    setSesion(nuevaSesion);
+  }
+
   function handleLogout() {
     limpiarSesion();
     setSesion(null);
@@ -128,6 +135,7 @@ export default function AppRoot() {
         token={sesion.token}
         onLogout={handleLogout}
         onSesionInvalida={handleSesionInvalida}
+        onSesionRenovada={handleSesionRenovada}
       />
     );
   }

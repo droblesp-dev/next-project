@@ -1,9 +1,18 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { Eye } from 'lucide-react';
 import { fetchAutenticado, SesionInvalidaError } from '../lib/authClient';
 import type { Solicitud } from './BandejaSolicitudes';
+import {
+  estadoSelectorCuentas,
+  etiquetaCuentaReceptora,
+  resumenCuentaReceptora,
+  TEXTO_CUENTA_NO_REGISTRADA,
+  type CuentaReceptora,
+} from '../lib/cuentasReceptoras';
 
 export interface Cotizacion {
   id: string;
+  codigo: string | null;
   solicitud_id: string;
   valor: string;
   estado: string;
@@ -27,6 +36,168 @@ export interface Cotizacion {
   estado_saldo: string;
   saldo_confirmado_en: string | null;
   saldo_comprobante_recibido: boolean;
+}
+
+// PC-2026-01 (continuación — Frontend Secciones C/D): un registro del
+// historial real de transferencias_pago (GET /api/cotizaciones/:id/
+// transferencias) — nunca se filtra en el backend, incluye intentos
+// rechazados y no vigentes. Nombres de campo copiados exactamente del
+// contrato real (backend/src/repositories/transferenciasPago.repository.ts),
+// no asumidos.
+interface TransferenciaPago {
+  id: string;
+  tipo_pago: string;
+  importe_declarado: string;
+  estado: string;
+  medio_confirmacion: string | null;
+  vigente: boolean;
+  creado_en: string;
+  banco_origen: string | null;
+  referencia_bancaria: string | null;
+  motivo_rechazo: string | null;
+  motivo_rechazo_detalle: string | null;
+  // Cuenta receptora elegida al gestionar el pago, con la COPIA de sus datos en
+  // ese momento (no cambia si la cuenta se edita o desactiva después). Todos
+  // null en los pagos anteriores a esta función o gestionados sin elegirla.
+  cuenta_bancaria_id: string | null;
+  banco_cuenta_snapshot: string | null;
+  titular_cuenta_snapshot: string | null;
+  tipo_cuenta_snapshot: string | null;
+  numero_cuenta_snapshot: string | null;
+}
+
+// Catálogo real de motivos de rechazo (backend/src/services/
+// transferenciasPago.service.ts::MOTIVOS_RECHAZO) — OTRO exige
+// motivoRechazoDetalle, validado también en el backend.
+const MOTIVOS_RECHAZO_PAGO = ['COMPROBANTE_INCORRECTO', 'IMPORTE_INCORRECTO', 'COMPROBANTE_ILEGIBLE', 'OTRO'] as const;
+type MotivoRechazoPago = (typeof MOTIVOS_RECHAZO_PAGO)[number];
+
+const ETIQUETA_MOTIVO_RECHAZO: Record<MotivoRechazoPago, string> = {
+  COMPROBANTE_INCORRECTO: 'Comprobante incorrecto',
+  IMPORTE_INCORRECTO: 'Importe incorrecto',
+  COMPROBANTE_ILEGIBLE: 'Comprobante ilegible',
+  OTRO: 'Otro motivo',
+};
+
+const ETIQUETA_MEDIO_CONFIRMACION: Record<string, string> = {
+  DIRECTO: 'Confirmación directa (ADMIN)',
+  TELEFONICO: 'Confirmación telefónica',
+};
+
+function claseBadgeEstadoTransferencia(estado: string): string {
+  if (estado === 'VALIDADO') return 'border border-primary-container bg-primary-container text-on-primary-container';
+  if (estado === 'RECHAZADO') return 'border border-error text-error bg-error-container/20';
+  return 'border border-outline text-on-surface-variant';
+}
+
+// Selector de la cuenta bancaria receptora al gestionar un pago (anticipo o
+// saldo). Es opcional (como hasta ahora): «Sin especificar» no envía cuenta. Si las
+// cuentas no cargan o no hay ninguna activa, solo se muestra el aviso: el resto del
+// formulario sigue funcionando.
+function SelectorCuentaReceptora({
+  valor,
+  onCambio,
+  cuentas,
+  cargando,
+  error,
+}: {
+  valor: string;
+  onCambio: (id: string) => void;
+  cuentas: CuentaReceptora[] | null;
+  cargando: boolean;
+  error: string | null;
+}) {
+  const estado = estadoSelectorCuentas(cuentas, cargando, error);
+  return (
+    <div className="sm:col-span-2">
+      <label className="block font-code-sm text-code-sm text-on-surface-variant uppercase mb-2">Cuenta receptora</label>
+      {estado === 'listo' && cuentas ? (
+        <select
+          value={valor}
+          onChange={(e) => onCambio(e.target.value)}
+          className="w-full bg-background border border-outline text-on-surface px-2 py-2 focus:ring-0 focus:border-primary-container transition-colors font-code-sm text-code-sm outline-none cursor-pointer"
+        >
+          <option value="">— Sin especificar —</option>
+          {cuentas.map((c) => (
+            <option key={c.id} value={c.id}>
+              {etiquetaCuentaReceptora(c)}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <p
+          className={`font-code-sm text-[12px] uppercase ${estado === 'error' ? 'text-error' : 'text-on-surface-variant'}`}
+        >
+          {estado === 'cargando' && 'Cargando cuentas receptoras…'}
+          {estado === 'error' && error}
+          {estado === 'sin_cuentas' && 'No hay cuentas bancarias activas. Un administrador debe registrar una.'}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// Fila de solo lectura del historial — nunca presenta un intento PENDIENTE
+// como dinero acreditado (regla explícita de esta tarea); solo VALIDADO
+// muestra "acreditación confirmada".
+function FilaHistorialTransferencia({ transferencia }: { transferencia: TransferenciaPago }) {
+  const cuentaReceptora = resumenCuentaReceptora(transferencia);
+  return (
+    <div className={`border p-3 space-y-1.5 ${transferencia.vigente ? 'border-primary-container' : 'border-outline opacity-80'}`}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className={`inline-flex px-2 py-0.5 font-code-sm text-[11px] uppercase ${claseBadgeEstadoTransferencia(transferencia.estado)}`}>
+          {transferencia.estado}
+        </span>
+        <span className="font-code-sm text-[11px] text-on-surface-variant uppercase">
+          {transferencia.vigente ? 'Intento vigente' : 'Intento anterior'} · {new Date(transferencia.creado_en).toLocaleString()}
+        </span>
+      </div>
+      <dl className="grid grid-cols-2 sm:grid-cols-3 gap-2 font-code-sm text-[12px]">
+        <div>
+          <dt className="text-on-surface-variant uppercase">Importe declarado</dt>
+          <dd className="text-on-surface">{transferencia.importe_declarado}</dd>
+        </div>
+        <div>
+          <dt className="text-on-surface-variant uppercase">Banco de origen</dt>
+          <dd className="text-on-surface">{transferencia.banco_origen ?? '—'}</dd>
+        </div>
+        <div>
+          <dt className="text-on-surface-variant uppercase">Referencia</dt>
+          <dd className="text-on-surface">{transferencia.referencia_bancaria ?? '—'}</dd>
+        </div>
+        <div className="col-span-2 sm:col-span-3">
+          <dt className="text-on-surface-variant uppercase">Cuenta receptora</dt>
+          <dd className="text-on-surface">
+            {cuentaReceptora ? (
+              <>
+                {cuentaReceptora.banco} · {cuentaReceptora.tipo} · {cuentaReceptora.numero}
+                <span className="block text-on-surface-variant">Titular: {cuentaReceptora.titular}</span>
+              </>
+            ) : (
+              TEXTO_CUENTA_NO_REGISTRADA
+            )}
+          </dd>
+        </div>
+      </dl>
+      {transferencia.estado === 'RECHAZADO' && (
+        <p className="font-code-sm text-[12px] text-error uppercase">
+          Motivo: {ETIQUETA_MOTIVO_RECHAZO[transferencia.motivo_rechazo as MotivoRechazoPago] ?? transferencia.motivo_rechazo}
+          {transferencia.motivo_rechazo_detalle ? ` — ${transferencia.motivo_rechazo_detalle}` : ''}
+        </p>
+      )}
+      {transferencia.estado === 'VALIDADO' && (
+        <p className="font-code-sm text-[12px] text-primary-container uppercase">
+          Acreditación confirmada
+          {transferencia.medio_confirmacion ? ` · ${ETIQUETA_MEDIO_CONFIRMACION[transferencia.medio_confirmacion] ?? transferencia.medio_confirmacion}` : ''}
+        </p>
+      )}
+      {transferencia.estado === 'PENDIENTE' && (
+        <p className="font-code-sm text-[12px] text-on-surface-variant uppercase">
+          Comprobante en revisión — todavía no representa un ingreso confirmado.
+        </p>
+      )}
+    </div>
+  );
 }
 
 interface GestionCotizacionesProps {
@@ -55,6 +226,31 @@ interface GestionCotizacionesProps {
 interface ClienteResumen {
   nombre: string;
   empresa: string | null;
+  telefono: string;
+}
+
+// Mismo criterio que BandejaSolicitudes.tsx/DetalleSolicitud.tsx: `principal`
+// es la empresa si existe, si no el nombre de la persona de contacto.
+// `contacto` es el nombre de la persona, solo cuando NO es ya el principal
+// (para no repetirlo); `telefono` es el teléfono, si está disponible. Cada
+// uno se etiqueta explícitamente al mostrarse — un teléfono sin etiqueta no
+// se reconoce de inmediato como tal.
+interface InfoCliente {
+  principal: string;
+  contacto: string | null;
+  telefono: string | null;
+}
+
+// Línea compacta, con etiquetas explícitas, para los lugares de espacio
+// reducido (tablas, tarjetas, selección de solicitud) — nunca duplica el
+// nombre si ya es el principal, y nunca muestra "Contacto:"/"Teléfono:"
+// vacío.
+function lineaContacto(info: InfoCliente): string | null {
+  const partes = [
+    info.contacto ? `Contacto: ${info.contacto}` : null,
+    info.telefono ? `Teléfono: ${info.telefono}` : null,
+  ].filter((v): v is string => Boolean(v));
+  return partes.length ? partes.join(' · ') : null;
 }
 
 type EstadoApoyo = 'cargando' | 'disponible' | 'error';
@@ -129,9 +325,9 @@ function KpiCotizacion({
       <span className={`inline-flex items-center justify-center w-10 h-10 shrink-0 rounded-full ${claseIcono}`}>
         <span className="material-symbols-outlined text-[20px]">{icono}</span>
       </span>
-      <div>
+      <div className="min-w-0">
         <p className="font-headline-md text-headline-md font-black text-on-surface leading-none">{valor}</p>
-        <p className="font-label-caps text-[10px] text-on-surface-variant uppercase mt-1">{etiqueta}</p>
+        <p className="font-label-caps text-[10px] text-on-surface-variant uppercase mt-1 break-words">{etiqueta}</p>
       </div>
     </div>
   );
@@ -231,6 +427,61 @@ export default function GestionCotizaciones({
   const [descargandoComprobanteSaldo, setDescargandoComprobanteSaldo] = useState(false);
   const [metodoSaldoElegido, setMetodoSaldoElegido] = useState('EFECTIVO');
 
+  // PC-2026-01 (continuación — Frontend Secciones C/D): historial real de
+  // transferencias_pago de la cotización abierta (ambos tipos, se filtra en
+  // el cliente — ver historialAnticipo/historialSaldo más abajo).
+  const [historialTransferencias, setHistorialTransferencias] = useState<TransferenciaPago[] | null>(null);
+  const [cargandoHistorial, setCargandoHistorial] = useState(false);
+  const [errorHistorial, setErrorHistorial] = useState<string | null>(null);
+
+  // Gestión documental del pago (accion=GESTIONAR) — anticipo y saldo
+  // mantenidos por separado, mismo criterio de duplicación ya usado en todo
+  // este archivo para anticipo/saldo.
+  const [importeAnticipoGestion, setImporteAnticipoGestion] = useState('');
+  const [bancoOrigenAnticipoGestion, setBancoOrigenAnticipoGestion] = useState('');
+  const [referenciaAnticipoGestion, setReferenciaAnticipoGestion] = useState('');
+  const [importeSaldoGestion, setImporteSaldoGestion] = useState('');
+  const [bancoOrigenSaldoGestion, setBancoOrigenSaldoGestion] = useState('');
+  const [referenciaSaldoGestion, setReferenciaSaldoGestion] = useState('');
+
+  // Cuenta bancaria receptora del pago (opcional): lista de cuentas ACTIVAS
+  // (GET /api/cotizaciones/cuentas-receptoras, ADMIN/COMERCIAL) y la elegida en
+  // cada formulario, por separado para anticipo y saldo.
+  const [cuentasReceptoras, setCuentasReceptoras] = useState<CuentaReceptora[] | null>(null);
+  const [cargandoCuentasReceptoras, setCargandoCuentasReceptoras] = useState(true);
+  const [errorCuentasReceptoras, setErrorCuentasReceptoras] = useState<string | null>(null);
+  const [cuentaReceptoraAnticipoGestion, setCuentaReceptoraAnticipoGestion] = useState('');
+  const [cuentaReceptoraSaldoGestion, setCuentaReceptoraSaldoGestion] = useState('');
+
+  // Rechazo con catálogo de motivos (accion=RECHAZAR).
+  const [mostrandoRechazoAnticipo, setMostrandoRechazoAnticipo] = useState(false);
+  const [motivoRechazoAnticipo, setMotivoRechazoAnticipo] = useState<MotivoRechazoPago>('COMPROBANTE_INCORRECTO');
+  const [detalleRechazoAnticipo, setDetalleRechazoAnticipo] = useState('');
+  const [mostrandoRechazoSaldo, setMostrandoRechazoSaldo] = useState(false);
+  const [motivoRechazoSaldo, setMotivoRechazoSaldo] = useState<MotivoRechazoPago>('COMPROBANTE_INCORRECTO');
+  const [detalleRechazoSaldo, setDetalleRechazoSaldo] = useState('');
+
+  // «Llamada a ADMIN» (accion=CONFIRMAR_TELEFONICA) — GET
+  // /api/usuarios/admins-activos (nuevo, solo id+nombre de ADMIN activos,
+  // nunca el listado completo de usuarios) se carga una sola vez, no por
+  // cada cotización.
+  const [adminsActivos, setAdminsActivos] = useState<{ id: string; nombre: string }[] | null>(null);
+  const [cargandoAdmins, setCargandoAdmins] = useState(false);
+  const [errorAdmins, setErrorAdmins] = useState<string | null>(null);
+  const [mostrandoLlamadaAdminAnticipo, setMostrandoLlamadaAdminAnticipo] = useState(false);
+  const [verificadorAnticipo, setVerificadorAnticipo] = useState('');
+  const [mostrandoLlamadaAdminSaldo, setMostrandoLlamadaAdminSaldo] = useState(false);
+  const [verificadorSaldo, setVerificadorSaldo] = useState('');
+
+  const historialAnticipo = useMemo(
+    () => (historialTransferencias ?? []).filter((t) => t.tipo_pago === 'ANTICIPO'),
+    [historialTransferencias]
+  );
+  const historialSaldo = useMemo(
+    () => (historialTransferencias ?? []).filter((t) => t.tipo_pago === 'SALDO'),
+    [historialTransferencias]
+  );
+
   // Bloque enlace público (autorización explícita — "IMPLEMENTACIÓN
   // AUTORIZADA — SOLICITUDES COMERCIAL", Parte B): expone
   // POST /api/cotizaciones/:id/enlace, ya existente en el backend pero sin
@@ -277,6 +528,35 @@ export default function GestionCotizaciones({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
+  // Cuentas receptoras activas para el selector de la gestión de pagos. Un fallo
+  // aquí solo deshabilita el selector (aviso en pantalla); no afecta al resto.
+  async function cargarCuentasReceptoras() {
+    setCargandoCuentasReceptoras(true);
+    setErrorCuentasReceptoras(null);
+    try {
+      const response = await fetchAutenticado('/api/cotizaciones/cuentas-receptoras', token);
+      if (!response.ok) {
+        setErrorCuentasReceptoras('No se pudieron cargar las cuentas receptoras.');
+        return;
+      }
+      const data = (await response.json()) as { cuentas: CuentaReceptora[] };
+      setCuentasReceptoras(data.cuentas);
+    } catch (err) {
+      if (err instanceof SesionInvalidaError) {
+        onSesionInvalida();
+        return;
+      }
+      setErrorCuentasReceptoras('No se pudieron cargar las cuentas receptoras.');
+    } finally {
+      setCargandoCuentasReceptoras(false);
+    }
+  }
+
+  useEffect(() => {
+    cargarCuentasReceptoras();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
   useEffect(() => {
     if (cotizacionIdInicial) {
       abrirDetalle(cotizacionIdInicial);
@@ -309,14 +589,14 @@ export default function GestionCotizaciones({
 
         const dataSolicitudes = (await respSolicitudes.json()) as { solicitudes: Solicitud[] };
         const dataClientes = (await respClientes.json()) as {
-          clientes: { id: string; nombre: string; empresa: string | null }[];
+          clientes: { id: string; nombre: string; empresa: string | null; telefono: string }[];
         };
 
         if (!cancelado) {
           const mapaSolicitudes = new Map<string, Solicitud>();
           dataSolicitudes.solicitudes.forEach((s) => mapaSolicitudes.set(s.id, s));
           const mapaClientes = new Map<string, ClienteResumen>();
-          dataClientes.clientes.forEach((c) => mapaClientes.set(c.id, { nombre: c.nombre, empresa: c.empresa }));
+          dataClientes.clientes.forEach((c) => mapaClientes.set(c.id, { nombre: c.nombre, empresa: c.empresa, telefono: c.telefono }));
           setSolicitudesPorId(mapaSolicitudes);
           setClientesPorId(mapaClientes);
           setEstadoApoyo('disponible');
@@ -336,13 +616,20 @@ export default function GestionCotizaciones({
     };
   }, [token, onSesionInvalida]);
 
-  function nombreClienteAdmin(clienteId: string | undefined): string {
-    if (!clienteId) return '—';
-    if (estadoApoyo === 'cargando') return 'Cargando…';
-    if (estadoApoyo === 'error') return '—';
+  function infoClienteAdmin(clienteId: string | undefined): InfoCliente {
+    if (!clienteId) return { principal: '—', contacto: null, telefono: null };
+    if (estadoApoyo === 'cargando') return { principal: 'Cargando…', contacto: null, telefono: null };
+    if (estadoApoyo === 'error') return { principal: '—', contacto: null, telefono: null };
     const cliente = clientesPorId.get(clienteId);
-    if (!cliente) return '—';
-    return cliente.empresa?.trim() ? cliente.empresa : cliente.nombre;
+    if (!cliente) return { principal: '—', contacto: null, telefono: null };
+
+    const empresa = cliente.empresa?.trim() || null;
+    const nombre = cliente.nombre?.trim() || null;
+    const telefono = cliente.telefono?.trim() || null;
+    const principal = empresa || nombre || '—';
+    const contacto = empresa && nombre ? nombre : null;
+
+    return { principal, contacto, telefono };
   }
 
   const kpisAdmin = useMemo(() => {
@@ -375,7 +662,9 @@ export default function GestionCotizaciones({
           (cliente?.nombre.toLowerCase().includes(termino) ?? false) ||
           (cliente?.empresa ? cliente.empresa.toLowerCase().includes(termino) : false) ||
           c.id.toLowerCase().includes(termino) ||
-          c.solicitud_id.toLowerCase().includes(termino);
+          c.solicitud_id.toLowerCase().includes(termino) ||
+          (solicitud?.codigo?.toLowerCase().includes(termino) ?? false) ||
+          (c.codigo?.toLowerCase().includes(termino) ?? false);
         if (!coincide) return false;
       }
 
@@ -545,15 +834,247 @@ export default function GestionCotizaciones({
     // una cotización distinta a la que se está por mostrar.
     setEditando(false);
     setMensajeEdicion(null);
+    // PC-2026-01 (continuación — Frontend Secciones C/D): ningún panel de
+    // gestión/rechazo/llamada a ADMIN de una cotización distinta debe
+    // arrastrarse a la que se está por mostrar.
+    setHistorialTransferencias(null);
+    setErrorHistorial(null);
+    setMensajeAnticipo(null);
+    setMensajeSaldo(null);
+    setBancoOrigenAnticipoGestion('');
+    setReferenciaAnticipoGestion('');
+    setBancoOrigenSaldoGestion('');
+    setReferenciaSaldoGestion('');
+    setMostrandoRechazoAnticipo(false);
+    setMotivoRechazoAnticipo('COMPROBANTE_INCORRECTO');
+    setDetalleRechazoAnticipo('');
+    setMostrandoRechazoSaldo(false);
+    setMotivoRechazoSaldo('COMPROBANTE_INCORRECTO');
+    setDetalleRechazoSaldo('');
+    setMostrandoLlamadaAdminAnticipo(false);
+    setVerificadorAnticipo('');
+    setMostrandoLlamadaAdminSaldo(false);
+    setVerificadorSaldo('');
     try {
       const response = await fetchAutenticado(`/api/cotizaciones/${id}`, token);
       if (!response.ok) return;
       const data = (await response.json()) as { cotizacion: Cotizacion };
       setCotizacionSeleccionada(data.cotizacion);
+      setImporteAnticipoGestion(data.cotizacion.anticipo_valor ?? '');
+      setImporteSaldoGestion(data.cotizacion.saldo_pendiente ?? '');
+      if (!esAdmin) {
+        await cargarHistorialTransferencias(id);
+      }
     } catch (err) {
       if (err instanceof SesionInvalidaError) {
         onSesionInvalida();
       }
+    }
+  }
+
+  // PC-2026-01 (continuación — Frontend Secciones C/D): historial completo
+  // (GET /api/cotizaciones/:id/transferencias) — nunca filtra intentos
+  // rechazados ni no vigentes; se vuelve a llamar después de cada
+  // gestión/rechazo/confirmación para mantenerlo actualizado.
+  async function cargarHistorialTransferencias(cotizacionId: string) {
+    setCargandoHistorial(true);
+    setErrorHistorial(null);
+    try {
+      const response = await fetchAutenticado(`/api/cotizaciones/${cotizacionId}/transferencias`, token);
+      if (!response.ok) {
+        setErrorHistorial('No se pudo cargar el historial de transferencias.');
+        return;
+      }
+      const data = (await response.json()) as { transferencias: TransferenciaPago[] };
+      setHistorialTransferencias(data.transferencias);
+    } catch (err) {
+      if (err instanceof SesionInvalidaError) {
+        onSesionInvalida();
+        return;
+      }
+      setErrorHistorial('No se pudo cargar el historial de transferencias.');
+    } finally {
+      setCargandoHistorial(false);
+    }
+  }
+
+  // Lista mínima (id+nombre) de ADMIN activos — GET
+  // /api/usuarios/admins-activos (nuevo), cargada una sola vez por sesión
+  // de edición, no en cada apertura del panel «Llamada a ADMIN».
+  async function cargarAdminsActivos() {
+    if (adminsActivos || cargandoAdmins) return;
+    setCargandoAdmins(true);
+    setErrorAdmins(null);
+    try {
+      const response = await fetchAutenticado('/api/usuarios/admins-activos', token);
+      if (!response.ok) {
+        setErrorAdmins('No se pudo cargar la lista de administradores.');
+        return;
+      }
+      const data = (await response.json()) as { admins: { id: string; nombre: string }[] };
+      setAdminsActivos(data.admins);
+    } catch (err) {
+      if (err instanceof SesionInvalidaError) {
+        onSesionInvalida();
+        return;
+      }
+      setErrorAdmins('No se pudo cargar la lista de administradores.');
+    } finally {
+      setCargandoAdmins(false);
+    }
+  }
+
+  // Registra la gestión documental (accion=GESTIONAR) — nunca cambia
+  // estado_anticipo/estado_saldo, solo crea el nuevo intento vigente en el
+  // historial. Mantiene separados anticipo y saldo (misma ruta distinta,
+  // mismo criterio del resto del archivo).
+  async function handleRegistrarGestionPago(tipoPago: 'ANTICIPO' | 'SALDO') {
+    if (!cotizacionSeleccionada) return;
+    const importe = tipoPago === 'ANTICIPO' ? importeAnticipoGestion : importeSaldoGestion;
+    const bancoOrigen = tipoPago === 'ANTICIPO' ? bancoOrigenAnticipoGestion : bancoOrigenSaldoGestion;
+    const referencia = tipoPago === 'ANTICIPO' ? referenciaAnticipoGestion : referenciaSaldoGestion;
+    const cuentaReceptoraId = tipoPago === 'ANTICIPO' ? cuentaReceptoraAnticipoGestion : cuentaReceptoraSaldoGestion;
+    const setMensaje = tipoPago === 'ANTICIPO' ? setMensajeAnticipo : setMensajeSaldo;
+    const setGestionando = tipoPago === 'ANTICIPO' ? setGestionandoAnticipo : setGestionandoSaldo;
+    const ruta = tipoPago === 'ANTICIPO' ? 'anticipo' : 'saldo';
+    const importeNum = Number(importe);
+
+    if (!importe || Number.isNaN(importeNum) || importeNum <= 0) {
+      setMensaje('El importe declarado debe ser un número mayor que cero.');
+      return;
+    }
+
+    setGestionando(true);
+    setMensaje(null);
+    try {
+      const response = await fetchAutenticado(`/api/cotizaciones/${cotizacionSeleccionada.id}/${ruta}`, token, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          accion: 'GESTIONAR',
+          importeDeclarado: importeNum,
+          bancoOrigen: bancoOrigen.trim() || undefined,
+          referenciaBancaria: referencia.trim() || undefined,
+          cuentaBancariaId: cuentaReceptoraId || undefined,
+        }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        setMensaje(data?.message || 'No se pudo registrar la gestión del pago.');
+        return;
+      }
+      setCotizacionSeleccionada(data.cotizacion as Cotizacion);
+      setMensaje('Gestión registrada correctamente.');
+      await cargarHistorialTransferencias(cotizacionSeleccionada.id);
+      await cargar();
+    } catch (err) {
+      if (err instanceof SesionInvalidaError) {
+        onSesionInvalida();
+        return;
+      }
+      setMensaje('No se pudo registrar la gestión del pago.');
+    } finally {
+      setGestionando(false);
+    }
+  }
+
+  // Rechazo documental con catálogo de motivos (accion=RECHAZAR) —
+  // exclusivo de COMERCIAL en el backend (el botón "VALIDAR" directo ya no
+  // se muestra en esta vista, reservado a ADMIN). motivoRechazoDetalle es
+  // obligatorio solo cuando el motivo es OTRO, validado también en el
+  // backend.
+  async function handleRechazarPago(tipoPago: 'ANTICIPO' | 'SALDO') {
+    if (!cotizacionSeleccionada) return;
+    const motivo = tipoPago === 'ANTICIPO' ? motivoRechazoAnticipo : motivoRechazoSaldo;
+    const detalle = tipoPago === 'ANTICIPO' ? detalleRechazoAnticipo : detalleRechazoSaldo;
+    const setMensaje = tipoPago === 'ANTICIPO' ? setMensajeAnticipo : setMensajeSaldo;
+    const setGestionando = tipoPago === 'ANTICIPO' ? setGestionandoAnticipo : setGestionandoSaldo;
+    const setMostrandoRechazo = tipoPago === 'ANTICIPO' ? setMostrandoRechazoAnticipo : setMostrandoRechazoSaldo;
+    const ruta = tipoPago === 'ANTICIPO' ? 'anticipo' : 'saldo';
+
+    if (motivo === 'OTRO' && !detalle.trim()) {
+      setMensaje('Debe explicar brevemente el motivo cuando selecciona "Otro motivo".');
+      return;
+    }
+
+    setGestionando(true);
+    setMensaje(null);
+    try {
+      const response = await fetchAutenticado(`/api/cotizaciones/${cotizacionSeleccionada.id}/${ruta}`, token, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          accion: 'RECHAZAR',
+          motivoRechazo: motivo,
+          motivoRechazoDetalle: motivo === 'OTRO' ? detalle.trim() : undefined,
+        }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        setMensaje(data?.message || 'No se pudo rechazar el pago.');
+        return;
+      }
+      setCotizacionSeleccionada(data.cotizacion as Cotizacion);
+      setMensaje(tipoPago === 'ANTICIPO' ? 'Anticipo rechazado correctamente.' : 'Saldo rechazado correctamente.');
+      setMostrandoRechazo(false);
+      await cargarHistorialTransferencias(cotizacionSeleccionada.id);
+      await cargar();
+    } catch (err) {
+      if (err instanceof SesionInvalidaError) {
+        onSesionInvalida();
+        return;
+      }
+      setMensaje('No se pudo rechazar el pago.');
+    } finally {
+      setGestionando(false);
+    }
+  }
+
+  // «Llamada a ADMIN» (accion=CONFIRMAR_TELEFONICA) — exclusivo de
+  // COMERCIAL en el backend; verificadorId debe ser un ADMIN activo real,
+  // validado server-side (nunca se confía en el valor elegido aquí). metodo
+  // solo se envía para SALDO cuando todavía no tiene uno fijado (mismo
+  // criterio ya usado por el VALIDAR SALDO anterior).
+  async function handleConfirmarTelefonica(tipoPago: 'ANTICIPO' | 'SALDO') {
+    if (!cotizacionSeleccionada) return;
+    const verificadorId = tipoPago === 'ANTICIPO' ? verificadorAnticipo : verificadorSaldo;
+    const setMensaje = tipoPago === 'ANTICIPO' ? setMensajeAnticipo : setMensajeSaldo;
+    const setGestionando = tipoPago === 'ANTICIPO' ? setGestionandoAnticipo : setGestionandoSaldo;
+    const setMostrandoLlamada = tipoPago === 'ANTICIPO' ? setMostrandoLlamadaAdminAnticipo : setMostrandoLlamadaAdminSaldo;
+    const ruta = tipoPago === 'ANTICIPO' ? 'anticipo' : 'saldo';
+
+    if (!verificadorId) {
+      setMensaje('Debe seleccionar el ADMIN que confirmó telefónicamente.');
+      return;
+    }
+
+    setGestionando(true);
+    setMensaje(null);
+    try {
+      const body: Record<string, unknown> = { accion: 'CONFIRMAR_TELEFONICA', verificadorId };
+      if (tipoPago === 'SALDO' && !cotizacionSeleccionada.metodo_saldo) {
+        body.metodo = metodoSaldoElegido;
+      }
+      const response = await fetchAutenticado(`/api/cotizaciones/${cotizacionSeleccionada.id}/${ruta}`, token, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        setMensaje(data?.message || 'No se pudo registrar la confirmación telefónica.');
+        return;
+      }
+      setCotizacionSeleccionada(data.cotizacion as Cotizacion);
+      setMensaje(tipoPago === 'ANTICIPO' ? 'Anticipo confirmado por llamada a ADMIN.' : 'Saldo confirmado por llamada a ADMIN.');
+      setMostrandoLlamada(false);
+      await cargarHistorialTransferencias(cotizacionSeleccionada.id);
+      await cargar();
+    } catch (err) {
+      if (err instanceof SesionInvalidaError) {
+        onSesionInvalida();
+        return;
+      }
+      setMensaje('No se pudo registrar la confirmación telefónica.');
+    } finally {
+      setGestionando(false);
     }
   }
 
@@ -730,41 +1251,6 @@ export default function GestionCotizaciones({
     }
   }
 
-  // Fase D.6: exclusivo de ADMIN/COMERCIAL — el backend rechaza esta
-  // acción para cualquier solicitante sin JWT interno válido, sin
-  // importar si conoce el enlace/código público de la cotización.
-  async function handleGestionarAnticipo(accion: 'VALIDAR' | 'RECHAZAR') {
-    if (!cotizacionSeleccionada) return;
-    setGestionandoAnticipo(true);
-    setMensajeAnticipo(null);
-
-    try {
-      const response = await fetchAutenticado(`/api/cotizaciones/${cotizacionSeleccionada.id}/anticipo`, token, {
-        method: 'PATCH',
-        body: JSON.stringify({ accion }),
-      });
-
-      const data = await response.json().catch(() => null);
-
-      if (!response.ok) {
-        setMensajeAnticipo(data?.message || 'No se pudo gestionar el anticipo.');
-        return;
-      }
-
-      setCotizacionSeleccionada(data.cotizacion as Cotizacion);
-      setMensajeAnticipo(accion === 'VALIDAR' ? 'Anticipo confirmado correctamente.' : 'Anticipo rechazado correctamente.');
-      await cargar();
-    } catch (err) {
-      if (err instanceof SesionInvalidaError) {
-        onSesionInvalida();
-        return;
-      }
-      setMensajeAnticipo('No se pudo gestionar el anticipo.');
-    } finally {
-      setGestionandoAnticipo(false);
-    }
-  }
-
   // La ruta de descarga está protegida (requireAuth+requireRole): se pide
   // como blob autenticado, nunca como enlace directo, y el nombre real
   // del archivo nunca llega al frontend — solo el navegador local lo ve
@@ -796,47 +1282,6 @@ export default function GestionCotizaciones({
       setMensajeAnticipo('No se pudo descargar el comprobante.');
     } finally {
       setDescargandoComprobante(false);
-    }
-  }
-
-  // Bloque saldo/entrega/cierre. `metodo` solo se envía cuando la
-  // cotización todavía no tiene un método de saldo fijado (caso EFECTIVO,
-  // que nunca pasa por la subida pública de comprobante) — si ya viene
-  // fijado (TRANSFERENCIA, por un comprobante ya subido), se omite.
-  async function handleGestionarSaldo(accion: 'VALIDAR' | 'RECHAZAR') {
-    if (!cotizacionSeleccionada) return;
-    setGestionandoSaldo(true);
-    setMensajeSaldo(null);
-
-    try {
-      const body: Record<string, unknown> = { accion };
-      if (accion === 'VALIDAR' && !cotizacionSeleccionada.metodo_saldo) {
-        body.metodo = metodoSaldoElegido;
-      }
-
-      const response = await fetchAutenticado(`/api/cotizaciones/${cotizacionSeleccionada.id}/saldo`, token, {
-        method: 'PATCH',
-        body: JSON.stringify(body),
-      });
-
-      const data = await response.json().catch(() => null);
-
-      if (!response.ok) {
-        setMensajeSaldo(data?.message || 'No se pudo gestionar el saldo.');
-        return;
-      }
-
-      setCotizacionSeleccionada(data.cotizacion as Cotizacion);
-      setMensajeSaldo(accion === 'VALIDAR' ? 'Saldo confirmado correctamente.' : 'Saldo rechazado correctamente.');
-      await cargar();
-    } catch (err) {
-      if (err instanceof SesionInvalidaError) {
-        onSesionInvalida();
-        return;
-      }
-      setMensajeSaldo('No se pudo gestionar el saldo.');
-    } finally {
-      setGestionandoSaldo(false);
     }
   }
 
@@ -909,34 +1354,31 @@ export default function GestionCotizaciones({
   // alcanza cuando esAdmin es false.
   if (cotizacionSeleccionada && esAdmin) {
     const solicitud = solicitudesPorId.get(cotizacionSeleccionada.solicitud_id) ?? null;
-    const cliente = solicitud ? clientesPorId.get(solicitud.cliente_id) ?? null : null;
-    const nombreClienteDetalle = cliente
-      ? cliente.empresa?.trim()
-        ? cliente.empresa
-        : cliente.nombre
-      : nombreClienteAdmin(solicitud?.cliente_id);
+    const infoClienteDetalle = infoClienteAdmin(solicitud?.cliente_id);
 
     return (
       <div>
         <button
           type="button"
           onClick={() => setCotizacionSeleccionada(null)}
-          className="mb-6 inline-flex items-center font-['Inter'] text-[14px] font-semibold text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
+          className="min-h-11 -mt-2.5 mb-3.5 inline-flex items-center font-['Inter'] text-[14px] font-semibold text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
         >
           <span className="material-symbols-outlined mr-1 text-[18px]">arrow_back</span>
           VOLVER AL LISTADO
         </button>
 
         <div className="bg-surface sharp-border p-6 space-y-5">
-          <div className="flex justify-between items-start border-b border-outline pb-4">
-            <div>
-              <h3 className="font-headline-md text-headline-md text-on-surface uppercase">{nombreClienteDetalle}</h3>
+          <div className="flex flex-wrap justify-between items-start gap-x-4 gap-y-3 border-b border-outline pb-4">
+            <div className="min-w-0 flex-1 basis-52">
+              <h3 className="font-headline-md text-headline-md text-on-surface uppercase wrap-anywhere">{infoClienteDetalle.principal}</h3>
+              <p className="font-code-sm text-[11px] text-on-surface-variant mt-0.5">N.º Solicitud: {solicitud?.codigo ?? '—'}</p>
+              <p className="font-code-sm text-[11px] text-on-surface-variant mt-0.5">N.º Cotización: {cotizacionSeleccionada.codigo ?? '—'}</p>
               <p className="font-code-sm text-code-sm text-on-surface-variant uppercase mt-1">
                 {solicitud?.servicio ?? 'Servicio no disponible'}
               </p>
             </div>
-            <span className={`inline-flex px-3 py-1 font-code-sm text-xs uppercase ${claseBadgeEstadoCotizacion(cotizacionSeleccionada.estado)}`}>
-              {cotizacionSeleccionada.estado}
+            <span className={`inline-flex shrink-0 whitespace-nowrap px-3 py-1 font-code-sm text-xs uppercase ${claseBadgeEstadoCotizacion(cotizacionSeleccionada.estado)}`}>
+              {cotizacionSeleccionada.estado.replace(/_/g, ' ')}
             </span>
           </div>
 
@@ -944,6 +1386,18 @@ export default function GestionCotizaciones({
             <p className="font-label-caps text-[10px] text-primary-container uppercase mb-2">Solicitud relacionada</p>
             {solicitud ? (
               <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 font-code-sm text-code-sm">
+                {infoClienteDetalle.contacto && (
+                  <div>
+                    <dt className="text-on-surface-variant uppercase">Contacto</dt>
+                    <dd className="text-on-surface">{infoClienteDetalle.contacto}</dd>
+                  </div>
+                )}
+                {infoClienteDetalle.telefono && (
+                  <div>
+                    <dt className="text-on-surface-variant uppercase">Teléfono</dt>
+                    <dd className="text-on-surface">{infoClienteDetalle.telefono}</dd>
+                  </div>
+                )}
                 <div className="sm:col-span-2">
                   <dt className="text-on-surface-variant uppercase">Descripción</dt>
                   <dd className="text-on-surface">{solicitud.descripcion}</dd>
@@ -962,7 +1416,7 @@ export default function GestionCotizaciones({
                 </div>
                 <div>
                   <dt className="text-on-surface-variant uppercase">Estado de la solicitud</dt>
-                  <dd className="text-on-surface">{solicitud.estado}</dd>
+                  <dd className="text-on-surface">{solicitud.estado.replace(/_/g, ' ')}</dd>
                 </div>
               </dl>
             ) : (
@@ -974,7 +1428,7 @@ export default function GestionCotizaciones({
 
           <div className="border-t border-outline pt-4">
             <p className="font-label-caps text-[10px] text-primary-container uppercase mb-2">Condiciones comerciales</p>
-            <dl className="grid grid-cols-2 sm:grid-cols-3 gap-4 font-code-sm text-code-sm">
+            <dl className="grid grid-cols-2 sm:grid-cols-3 gap-4 font-code-sm text-code-sm wrap-anywhere">
               <div>
                 <dt className="text-on-surface-variant uppercase">Valor</dt>
                 <dd className="text-on-surface">{cotizacionSeleccionada.valor}</dd>
@@ -1002,7 +1456,7 @@ export default function GestionCotizaciones({
 
           <div className="border-t border-outline pt-4">
             <p className="font-label-caps text-[10px] text-primary-container uppercase mb-2">Anticipo</p>
-            <dl className="grid grid-cols-2 sm:grid-cols-3 gap-4 font-code-sm text-code-sm">
+            <dl className="grid grid-cols-2 sm:grid-cols-3 gap-4 font-code-sm text-code-sm wrap-anywhere">
               <div>
                 <dt className="text-on-surface-variant uppercase">Porcentaje</dt>
                 <dd className="text-on-surface">{cotizacionSeleccionada.anticipo_porcentaje ?? '—'}%</dd>
@@ -1024,7 +1478,7 @@ export default function GestionCotizaciones({
 
           <div className="border-t border-outline pt-4">
             <p className="font-label-caps text-[10px] text-primary-container uppercase mb-2">Saldo</p>
-            <dl className="grid grid-cols-2 sm:grid-cols-3 gap-4 font-code-sm text-code-sm">
+            <dl className="grid grid-cols-2 sm:grid-cols-3 gap-4 font-code-sm text-code-sm wrap-anywhere">
               <div>
                 <dt className="text-on-surface-variant uppercase">Pendiente</dt>
                 <dd className="text-on-surface">{cotizacionSeleccionada.saldo_pendiente ?? '—'}</dd>
@@ -1060,12 +1514,7 @@ export default function GestionCotizaciones({
     // más arriba). Sin datos inventados: si la solicitud o el cliente no
     // están disponibles todavía, se muestra un estado honesto en su lugar.
     const solicitudDetalle = solicitudesPorId.get(cotizacionSeleccionada.solicitud_id) ?? null;
-    const clienteDetalle = solicitudDetalle ? clientesPorId.get(solicitudDetalle.cliente_id) ?? null : null;
-    const nombreClienteDetalle = clienteDetalle
-      ? clienteDetalle.empresa?.trim()
-        ? clienteDetalle.empresa
-        : clienteDetalle.nombre
-      : nombreClienteAdmin(solicitudDetalle?.cliente_id);
+    const infoClienteDetalle = infoClienteAdmin(solicitudDetalle?.cliente_id);
 
     return (
       <div>
@@ -1075,20 +1524,22 @@ export default function GestionCotizaciones({
             setCotizacionSeleccionada(null);
             setMensajeCambio(null);
           }}
-          className="mb-6 inline-flex items-center font-['Inter'] text-[14px] font-semibold text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
+          className="min-h-11 -mt-2.5 mb-3.5 inline-flex items-center font-['Inter'] text-[14px] font-semibold text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
         >
           <span className="material-symbols-outlined mr-1 text-[18px]">arrow_back</span>
           VOLVER AL LISTADO
         </button>
 
         <div className="bg-surface sharp-border p-6 space-y-5">
-          <div className="flex justify-between items-start border-b border-outline pb-4">
-            <div>
+          <div className="flex flex-wrap justify-between items-start gap-x-4 gap-y-3 border-b border-outline pb-4">
+            <div className="min-w-0 flex-1 basis-52">
               <h3 className="font-label-caps text-label-caps text-primary-container tracking-widest uppercase mb-1">
                 Detalle de cotización
               </h3>
-              <p className="font-headline-md text-headline-md text-on-surface uppercase">{nombreClienteDetalle}</p>
-              <p className="font-code-sm text-code-sm text-on-surface-variant uppercase mt-1">
+              <p className="font-headline-md text-headline-md text-on-surface uppercase wrap-anywhere">{infoClienteDetalle.principal}</p>
+              <p className="font-code-sm text-[11px] text-on-surface-variant mt-0.5">N.º Solicitud: {solicitudDetalle?.codigo ?? '—'}</p>
+              <p className="font-code-sm text-[11px] text-on-surface-variant mt-0.5">N.º Cotización: {cotizacionSeleccionada.codigo ?? '—'}</p>
+              <p className="font-code-sm text-code-sm text-on-surface-variant uppercase mt-1 wrap-anywhere">
                 {solicitudDetalle?.servicio ?? 'Servicio no disponible'}
               </p>
             </div>
@@ -1105,7 +1556,7 @@ export default function GestionCotizaciones({
               <span
                 className={`inline-flex px-3 py-1 font-code-sm text-xs uppercase ${claseBadgeEstadoCotizacion(cotizacionSeleccionada.estado)}`}
               >
-                {cotizacionSeleccionada.estado}
+                {cotizacionSeleccionada.estado.replace(/_/g, ' ')}
               </span>
             </div>
           </div>
@@ -1116,14 +1567,18 @@ export default function GestionCotizaciones({
             <p className="font-label-caps text-[10px] text-primary-container uppercase mb-2">Información general</p>
             {solicitudDetalle ? (
               <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 font-code-sm text-code-sm">
-                <div>
-                  <dt className="text-on-surface-variant uppercase">Cliente</dt>
-                  <dd className="text-on-surface">{nombreClienteDetalle}</dd>
-                </div>
-                <div>
-                  <dt className="text-on-surface-variant uppercase">Servicio</dt>
-                  <dd className="text-on-surface">{solicitudDetalle.servicio}</dd>
-                </div>
+                {infoClienteDetalle.contacto && (
+                  <div>
+                    <dt className="text-on-surface-variant uppercase">Contacto</dt>
+                    <dd className="text-on-surface">{infoClienteDetalle.contacto}</dd>
+                  </div>
+                )}
+                {infoClienteDetalle.telefono && (
+                  <div>
+                    <dt className="text-on-surface-variant uppercase">Teléfono</dt>
+                    <dd className="text-on-surface">{infoClienteDetalle.telefono}</dd>
+                  </div>
+                )}
                 <div className="sm:col-span-2">
                   <dt className="text-on-surface-variant uppercase">Descripción de la solicitud</dt>
                   <dd className="text-on-surface">{solicitudDetalle.descripcion}</dd>
@@ -1146,9 +1601,6 @@ export default function GestionCotizaciones({
                 {estadoApoyo === 'cargando' ? 'Cargando datos de la solicitud…' : 'No se pudo obtener la solicitud relacionada.'}
               </p>
             )}
-            <p className="font-code-sm text-[10px] text-on-surface-variant uppercase break-all mt-3">
-              ID técnico de solicitud: {cotizacionSeleccionada.solicitud_id}
-            </p>
           </div>
 
           {/* INFORMACIÓN COMERCIAL — en BORRADOR se reemplaza por el
@@ -1263,7 +1715,7 @@ export default function GestionCotizaciones({
             </form>
           ) : (
             <>
-              <dl className="grid grid-cols-2 sm:grid-cols-3 gap-4 font-code-sm text-code-sm">
+              <dl className="grid grid-cols-2 sm:grid-cols-3 gap-4 font-code-sm text-code-sm wrap-anywhere">
                 <div>
                   <dt className="text-on-surface-variant uppercase">Subtotal</dt>
                   <dd className="text-on-surface">{cotizacionSeleccionada.valor}</dd>
@@ -1321,12 +1773,15 @@ export default function GestionCotizaciones({
             )}
           </div>
 
-          {/* Enlace público — solo disponible para cotizaciones ENVIADA
-              (misma restricción que ya exige el backend). Ningún envío
-              automático: Comercial copia/comparte el enlace y, si el
-              cliente lo pide, el código, siempre manualmente y fuera del
-              sistema. */}
-          {cotizacionSeleccionada.estado === 'ENVIADA' && (
+          {/* Enlace público — disponible para cotizaciones ENVIADA o ACEPTADA
+              (misma restricción que ya exige el backend; ACEPTADA habilitada
+              por la autorización explícita "Regeneración manual del código
+              para cotizaciones ACEPTADAS" — reutiliza exactamente el mismo
+              botón, sin ningún componente ni pantalla nueva). El correo
+              automático de la Fase 1 ya envía el enlace nuevo al cliente;
+              Comercial sigue compartiendo el código manualmente y fuera del
+              sistema, igual que antes. */}
+          {(cotizacionSeleccionada.estado === 'ENVIADA' || cotizacionSeleccionada.estado === 'ACEPTADA') && (
             <div className="border-t border-outline pt-4 space-y-3">
               <p className="font-label-caps text-[10px] text-primary-container uppercase mb-2">Enlace público</p>
 
@@ -1434,24 +1889,199 @@ export default function GestionCotizaciones({
                   </button>
                 )}
 
+                {/* Historial — nunca oculta intentos anteriores, rechazados
+                    o no vigentes (regla explícita de esta tarea). */}
+                <div className="space-y-2">
+                  <p className="font-code-sm text-[11px] text-on-surface-variant uppercase">Historial de intentos de pago</p>
+                  {cargandoHistorial && (
+                    <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">Cargando historial…</p>
+                  )}
+                  {errorHistorial && (
+                    <p className="font-['Inter'] text-[13px] font-normal text-error uppercase">{errorHistorial}</p>
+                  )}
+                  {!cargandoHistorial && !errorHistorial && historialAnticipo.length === 0 && (
+                    <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">
+                      Todavía no se ha registrado ningún intento de pago.
+                    </p>
+                  )}
+                  {historialAnticipo.map((t) => (
+                    <div key={t.id}>
+                      <FilaHistorialTransferencia transferencia={t} />
+                    </div>
+                  ))}
+                </div>
+
                 {cotizacionSeleccionada.estado_anticipo === 'PENDIENTE' && (
-                  <div className="flex flex-wrap gap-3">
-                    <button
-                      type="button"
-                      disabled={gestionandoAnticipo}
-                      onClick={() => handleGestionarAnticipo('VALIDAR')}
-                      className="inline-flex items-center px-4 py-2 border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors font-['Inter'] text-[14px] font-semibold disabled:opacity-50 cursor-pointer"
+                  <div className="space-y-4">
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        handleRegistrarGestionPago('ANTICIPO');
+                      }}
+                      className="space-y-3 border border-outline p-3"
                     >
-                      VALIDAR ANTICIPO
-                    </button>
-                    <button
-                      type="button"
-                      disabled={gestionandoAnticipo}
-                      onClick={() => handleGestionarAnticipo('RECHAZAR')}
-                      className="inline-flex items-center px-4 py-2 border border-error text-error hover:bg-error hover:text-on-error transition-colors font-['Inter'] text-[14px] font-semibold disabled:opacity-50 cursor-pointer"
-                    >
-                      RECHAZAR ANTICIPO
-                    </button>
+                      <p className="font-code-sm text-[11px] text-primary-container uppercase">Registrar gestión del comprobante</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block font-code-sm text-code-sm text-on-surface-variant uppercase mb-2">
+                            Importe declarado
+                          </label>
+                          <input
+                            type="number"
+                            min="0.01"
+                            step="0.01"
+                            required
+                            value={importeAnticipoGestion}
+                            onChange={(e) => setImporteAnticipoGestion(e.target.value)}
+                            className="w-full bg-background border border-outline text-on-surface px-2 py-2 focus:ring-0 focus:border-primary-container transition-colors font-code-sm text-code-sm outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-code-sm text-code-sm text-on-surface-variant uppercase mb-2">
+                            Banco de origen
+                          </label>
+                          <input
+                            type="text"
+                            value={bancoOrigenAnticipoGestion}
+                            onChange={(e) => setBancoOrigenAnticipoGestion(e.target.value)}
+                            className="w-full bg-background border border-outline text-on-surface px-2 py-2 focus:ring-0 focus:border-primary-container transition-colors font-code-sm text-code-sm outline-none"
+                          />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="block font-code-sm text-code-sm text-on-surface-variant uppercase mb-2">
+                            Referencia bancaria
+                          </label>
+                          <input
+                            type="text"
+                            value={referenciaAnticipoGestion}
+                            onChange={(e) => setReferenciaAnticipoGestion(e.target.value)}
+                            className="w-full bg-background border border-outline text-on-surface px-2 py-2 focus:ring-0 focus:border-primary-container transition-colors font-code-sm text-code-sm outline-none"
+                          />
+                        </div>
+                        <SelectorCuentaReceptora
+                          valor={cuentaReceptoraAnticipoGestion}
+                          onCambio={setCuentaReceptoraAnticipoGestion}
+                          cuentas={cuentasReceptoras}
+                          cargando={cargandoCuentasReceptoras}
+                          error={errorCuentasReceptoras}
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={gestionandoAnticipo}
+                        className="inline-flex items-center px-4 py-2 bg-primary-container text-on-primary-container font-['Inter'] text-[14px] font-semibold hover:bg-primary-fixed-dim transition-colors disabled:opacity-50 cursor-pointer"
+                      >
+                        {gestionandoAnticipo ? 'REGISTRANDO...' : 'REGISTRAR GESTIÓN'}
+                      </button>
+                    </form>
+
+                    <div className="flex flex-wrap gap-3">
+                      <button
+                        type="button"
+                        disabled={gestionandoAnticipo}
+                        onClick={() => setMostrandoRechazoAnticipo((v) => !v)}
+                        className="inline-flex items-center px-4 py-2 border border-error text-error hover:bg-error hover:text-on-error transition-colors font-['Inter'] text-[14px] font-semibold disabled:opacity-50 cursor-pointer"
+                      >
+                        RECHAZAR ANTICIPO
+                      </button>
+                      <button
+                        type="button"
+                        disabled={gestionandoAnticipo}
+                        onClick={() => {
+                          setMostrandoLlamadaAdminAnticipo((v) => !v);
+                          cargarAdminsActivos();
+                        }}
+                        className="inline-flex items-center px-4 py-2 border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors font-['Inter'] text-[14px] font-semibold disabled:opacity-50 cursor-pointer"
+                      >
+                        LLAMADA A ADMIN
+                      </button>
+                    </div>
+
+                    {mostrandoRechazoAnticipo && (
+                      <div className="border border-error p-3 space-y-2">
+                        <label className="block font-code-sm text-code-sm text-on-surface-variant uppercase mb-1">Motivo de rechazo</label>
+                        <select
+                          value={motivoRechazoAnticipo}
+                          onChange={(e) => setMotivoRechazoAnticipo(e.target.value as MotivoRechazoPago)}
+                          className="bg-background border border-outline text-on-surface px-2 py-2 focus:ring-0 focus:border-error transition-colors font-code-sm text-code-sm outline-none cursor-pointer"
+                        >
+                          {MOTIVOS_RECHAZO_PAGO.map((m) => (
+                            <option key={m} value={m}>
+                              {ETIQUETA_MOTIVO_RECHAZO[m]}
+                            </option>
+                          ))}
+                        </select>
+                        {motivoRechazoAnticipo === 'OTRO' && (
+                          <textarea
+                            required
+                            value={detalleRechazoAnticipo}
+                            onChange={(e) => setDetalleRechazoAnticipo(e.target.value)}
+                            placeholder="Explique brevemente el motivo"
+                            className="w-full bg-background border border-outline text-on-surface px-2 py-2 focus:ring-0 focus:border-error transition-colors font-code-sm text-code-sm outline-none"
+                          />
+                        )}
+                        <div className="flex flex-wrap gap-3">
+                          <button
+                            type="button"
+                            disabled={gestionandoAnticipo}
+                            onClick={() => handleRechazarPago('ANTICIPO')}
+                            className="inline-flex items-center px-4 py-2 bg-error text-on-error font-['Inter'] text-[14px] font-semibold disabled:opacity-50 cursor-pointer"
+                          >
+                            {gestionandoAnticipo ? 'ENVIANDO...' : 'CONFIRMAR RECHAZO'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setMostrandoRechazoAnticipo(false)}
+                            className="inline-flex items-center px-4 py-2 border border-outline text-on-surface-variant hover:bg-surface-container-high transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
+                          >
+                            CANCELAR
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {mostrandoLlamadaAdminAnticipo && (
+                      <div className="border border-primary-container p-3 space-y-2">
+                        <label className="block font-code-sm text-code-sm text-on-surface-variant uppercase mb-1">
+                          ADMIN que confirmó telefónicamente
+                        </label>
+                        {cargandoAdmins && (
+                          <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">Cargando administradores…</p>
+                        )}
+                        {errorAdmins && <p className="font-['Inter'] text-[13px] font-normal text-error uppercase">{errorAdmins}</p>}
+                        {!cargandoAdmins && !errorAdmins && (
+                          <select
+                            value={verificadorAnticipo}
+                            onChange={(e) => setVerificadorAnticipo(e.target.value)}
+                            className="bg-background border border-outline text-on-surface px-2 py-2 focus:ring-0 focus:border-primary-container transition-colors font-code-sm text-code-sm outline-none cursor-pointer"
+                          >
+                            <option value="">Seleccione un ADMIN…</option>
+                            {(adminsActivos ?? []).map((a) => (
+                              <option key={a.id} value={a.id}>
+                                {a.nombre}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                        <div className="flex flex-wrap gap-3">
+                          <button
+                            type="button"
+                            disabled={gestionandoAnticipo || !verificadorAnticipo}
+                            onClick={() => handleConfirmarTelefonica('ANTICIPO')}
+                            className="inline-flex items-center px-4 py-2 bg-primary-container text-on-primary-container font-['Inter'] text-[14px] font-semibold disabled:opacity-50 cursor-pointer"
+                          >
+                            {gestionandoAnticipo ? 'ENVIANDO...' : 'CONFIRMAR LLAMADA'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setMostrandoLlamadaAdminAnticipo(false)}
+                            className="inline-flex items-center px-4 py-2 border border-outline text-on-surface-variant hover:bg-surface-container-high transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
+                          >
+                            CANCELAR
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1490,12 +2120,33 @@ export default function GestionCotizaciones({
                 </button>
               )}
 
+              {/* Historial — nunca oculta intentos anteriores, rechazados o
+                  no vigentes (regla explícita de esta tarea). */}
+              <div className="space-y-2">
+                <p className="font-code-sm text-[11px] text-on-surface-variant uppercase">Historial de intentos de pago</p>
+                {cargandoHistorial && (
+                  <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">Cargando historial…</p>
+                )}
+                {errorHistorial && <p className="font-['Inter'] text-[13px] font-normal text-error uppercase">{errorHistorial}</p>}
+                {!cargandoHistorial && !errorHistorial && historialSaldo.length === 0 && (
+                  <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">
+                    Todavía no se ha registrado ningún intento de pago.
+                  </p>
+                )}
+                {historialSaldo.map((t) => (
+                  <div key={t.id}>
+                    <FilaHistorialTransferencia transferencia={t} />
+                  </div>
+                ))}
+              </div>
+
               {cotizacionSeleccionada.estado_saldo === 'PENDIENTE' && (
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {!cotizacionSeleccionada.metodo_saldo && (
                     <div>
                       <label className="block font-code-sm text-code-sm text-on-surface-variant uppercase mb-2">
-                        Método de pago del saldo (si aún no hay comprobante subido por el cliente)
+                        Método de pago del saldo (si aún no hay comprobante subido por el cliente; usado al confirmar
+                        por llamada a ADMIN)
                       </label>
                       <select
                         value={metodoSaldoElegido}
@@ -1507,24 +2158,176 @@ export default function GestionCotizaciones({
                       </select>
                     </div>
                   )}
+
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      handleRegistrarGestionPago('SALDO');
+                    }}
+                    className="space-y-3 border border-outline p-3"
+                  >
+                    <p className="font-code-sm text-[11px] text-primary-container uppercase">Registrar gestión del comprobante</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-code-sm text-code-sm text-on-surface-variant uppercase mb-2">
+                          Importe declarado
+                        </label>
+                        <input
+                          type="number"
+                          min="0.01"
+                          step="0.01"
+                          required
+                          value={importeSaldoGestion}
+                          onChange={(e) => setImporteSaldoGestion(e.target.value)}
+                          className="w-full bg-background border border-outline text-on-surface px-2 py-2 focus:ring-0 focus:border-primary-container transition-colors font-code-sm text-code-sm outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-code-sm text-code-sm text-on-surface-variant uppercase mb-2">
+                          Banco de origen
+                        </label>
+                        <input
+                          type="text"
+                          value={bancoOrigenSaldoGestion}
+                          onChange={(e) => setBancoOrigenSaldoGestion(e.target.value)}
+                          className="w-full bg-background border border-outline text-on-surface px-2 py-2 focus:ring-0 focus:border-primary-container transition-colors font-code-sm text-code-sm outline-none"
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="block font-code-sm text-code-sm text-on-surface-variant uppercase mb-2">
+                          Referencia bancaria
+                        </label>
+                        <input
+                          type="text"
+                          value={referenciaSaldoGestion}
+                          onChange={(e) => setReferenciaSaldoGestion(e.target.value)}
+                          className="w-full bg-background border border-outline text-on-surface px-2 py-2 focus:ring-0 focus:border-primary-container transition-colors font-code-sm text-code-sm outline-none"
+                        />
+                      </div>
+                      <SelectorCuentaReceptora
+                        valor={cuentaReceptoraSaldoGestion}
+                        onCambio={setCuentaReceptoraSaldoGestion}
+                        cuentas={cuentasReceptoras}
+                        cargando={cargandoCuentasReceptoras}
+                        error={errorCuentasReceptoras}
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={gestionandoSaldo}
+                      className="inline-flex items-center px-4 py-2 bg-primary-container text-on-primary-container font-['Inter'] text-[14px] font-semibold hover:bg-primary-fixed-dim transition-colors disabled:opacity-50 cursor-pointer"
+                    >
+                      {gestionandoSaldo ? 'REGISTRANDO...' : 'REGISTRAR GESTIÓN'}
+                    </button>
+                  </form>
+
                   <div className="flex flex-wrap gap-3">
                     <button
                       type="button"
                       disabled={gestionandoSaldo}
-                      onClick={() => handleGestionarSaldo('VALIDAR')}
-                      className="inline-flex items-center px-4 py-2 border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors font-['Inter'] text-[14px] font-semibold disabled:opacity-50 cursor-pointer"
-                    >
-                      VALIDAR SALDO
-                    </button>
-                    <button
-                      type="button"
-                      disabled={gestionandoSaldo}
-                      onClick={() => handleGestionarSaldo('RECHAZAR')}
+                      onClick={() => setMostrandoRechazoSaldo((v) => !v)}
                       className="inline-flex items-center px-4 py-2 border border-error text-error hover:bg-error hover:text-on-error transition-colors font-['Inter'] text-[14px] font-semibold disabled:opacity-50 cursor-pointer"
                     >
                       RECHAZAR SALDO
                     </button>
+                    <button
+                      type="button"
+                      disabled={gestionandoSaldo}
+                      onClick={() => {
+                        setMostrandoLlamadaAdminSaldo((v) => !v);
+                        cargarAdminsActivos();
+                      }}
+                      className="inline-flex items-center px-4 py-2 border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors font-['Inter'] text-[14px] font-semibold disabled:opacity-50 cursor-pointer"
+                    >
+                      LLAMADA A ADMIN
+                    </button>
                   </div>
+
+                  {mostrandoRechazoSaldo && (
+                    <div className="border border-error p-3 space-y-2">
+                      <label className="block font-code-sm text-code-sm text-on-surface-variant uppercase mb-1">Motivo de rechazo</label>
+                      <select
+                        value={motivoRechazoSaldo}
+                        onChange={(e) => setMotivoRechazoSaldo(e.target.value as MotivoRechazoPago)}
+                        className="bg-background border border-outline text-on-surface px-2 py-2 focus:ring-0 focus:border-error transition-colors font-code-sm text-code-sm outline-none cursor-pointer"
+                      >
+                        {MOTIVOS_RECHAZO_PAGO.map((m) => (
+                          <option key={m} value={m}>
+                            {ETIQUETA_MOTIVO_RECHAZO[m]}
+                          </option>
+                        ))}
+                      </select>
+                      {motivoRechazoSaldo === 'OTRO' && (
+                        <textarea
+                          required
+                          value={detalleRechazoSaldo}
+                          onChange={(e) => setDetalleRechazoSaldo(e.target.value)}
+                          placeholder="Explique brevemente el motivo"
+                          className="w-full bg-background border border-outline text-on-surface px-2 py-2 focus:ring-0 focus:border-error transition-colors font-code-sm text-code-sm outline-none"
+                        />
+                      )}
+                      <div className="flex flex-wrap gap-3">
+                        <button
+                          type="button"
+                          disabled={gestionandoSaldo}
+                          onClick={() => handleRechazarPago('SALDO')}
+                          className="inline-flex items-center px-4 py-2 bg-error text-on-error font-['Inter'] text-[14px] font-semibold disabled:opacity-50 cursor-pointer"
+                        >
+                          {gestionandoSaldo ? 'ENVIANDO...' : 'CONFIRMAR RECHAZO'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setMostrandoRechazoSaldo(false)}
+                          className="inline-flex items-center px-4 py-2 border border-outline text-on-surface-variant hover:bg-surface-container-high transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
+                        >
+                          CANCELAR
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {mostrandoLlamadaAdminSaldo && (
+                    <div className="border border-primary-container p-3 space-y-2">
+                      <label className="block font-code-sm text-code-sm text-on-surface-variant uppercase mb-1">
+                        ADMIN que confirmó telefónicamente
+                      </label>
+                      {cargandoAdmins && (
+                        <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">Cargando administradores…</p>
+                      )}
+                      {errorAdmins && <p className="font-['Inter'] text-[13px] font-normal text-error uppercase">{errorAdmins}</p>}
+                      {!cargandoAdmins && !errorAdmins && (
+                        <select
+                          value={verificadorSaldo}
+                          onChange={(e) => setVerificadorSaldo(e.target.value)}
+                          className="bg-background border border-outline text-on-surface px-2 py-2 focus:ring-0 focus:border-primary-container transition-colors font-code-sm text-code-sm outline-none cursor-pointer"
+                        >
+                          <option value="">Seleccione un ADMIN…</option>
+                          {(adminsActivos ?? []).map((a) => (
+                            <option key={a.id} value={a.id}>
+                              {a.nombre}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      <div className="flex flex-wrap gap-3">
+                        <button
+                          type="button"
+                          disabled={gestionandoSaldo || !verificadorSaldo}
+                          onClick={() => handleConfirmarTelefonica('SALDO')}
+                          className="inline-flex items-center px-4 py-2 bg-primary-container text-on-primary-container font-['Inter'] text-[14px] font-semibold disabled:opacity-50 cursor-pointer"
+                        >
+                          {gestionandoSaldo ? 'ENVIANDO...' : 'CONFIRMAR LLAMADA'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setMostrandoLlamadaAdminSaldo(false)}
+                          className="inline-flex items-center px-4 py-2 border border-outline text-on-surface-variant hover:bg-surface-container-high transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
+                        >
+                          CANCELAR
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1561,8 +2364,7 @@ export default function GestionCotizaciones({
     return (
       <div className="space-y-8">
         <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase max-w-2xl">
-          Vista de supervisión: consulte el estado y las condiciones comerciales de las cotizaciones registradas. Esta
-          vista no permite crear, enviar ni modificar cotizaciones — esas acciones son responsabilidad de Comercial.
+          Vista de supervisión: solo consulta. Crear, enviar o modificar cotizaciones es responsabilidad de Comercial.
         </p>
 
         {loadingLista && (
@@ -1576,7 +2378,7 @@ export default function GestionCotizaciones({
         {!loadingLista && !errorLista && cotizaciones && cotizaciones.length > 0 && (
           <>
             {/* KPI */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
               <KpiCotizacion
                 icono="request_quote"
                 valor={kpisAdmin.total}
@@ -1639,7 +2441,7 @@ export default function GestionCotizaciones({
                     type="text"
                     value={busquedaAdmin}
                     onChange={(e) => setBusquedaAdmin(e.target.value)}
-                    placeholder="Buscar por cliente, servicio o descripción…"
+                    placeholder="Buscar por código de solicitud, cliente, servicio o descripción…"
                     className="w-full bg-background border border-outline pl-10 pr-3 py-2.5 text-on-surface text-sm focus:border-primary-container focus:outline-hidden font-body-md"
                   />
                 </div>
@@ -1651,7 +2453,7 @@ export default function GestionCotizaciones({
                   >
                     {ESTADOS_FILTRO_COTIZACION.map((estado) => (
                       <option key={estado} value={estado}>
-                        {estado === 'TODOS' ? 'Estado: Todos' : estado}
+                        {estado === 'TODOS' ? 'Estado: Todos' : estado.replace(/_/g, ' ')}
                       </option>
                     ))}
                   </select>
@@ -1661,7 +2463,7 @@ export default function GestionCotizaciones({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 lg:grid-cols-[180px_180px_1fr_auto] gap-4 items-end">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[180px_180px_1fr_auto] gap-4 items-end">
                 <div>
                   <label className="block font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase mb-1">
                     Fecha desde
@@ -1717,19 +2519,34 @@ export default function GestionCotizaciones({
             </div>
 
             {/* TABLA — desktop */}
-            <div className="hidden md:block overflow-x-auto bg-surface sharp-border">
-              <table className="w-full text-left border-collapse">
+            <div className="hidden xl:block overflow-x-auto bg-surface sharp-border">
+              <table className="table-fixed w-[1586px] text-left border-collapse">
+                <colgroup>
+                  <col className="w-[100px]" />
+                  <col className="w-[150px]" />
+                  <col className="w-[160px]" />
+                  <col className="w-[200px]" />
+                  <col className="w-[180px]" />
+                  <col className="w-[90px]" />
+                  <col className="w-[180px]" />
+                  <col className="w-[190px]" />
+                  <col className="w-[110px]" />
+                  <col className="w-[130px]" />
+                  <col className="w-[96px]" />
+                </colgroup>
                 <thead>
                   <tr className="border-b border-outline">
-                    <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Fecha</th>
-                    <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Cliente</th>
-                    <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Servicio</th>
-                    <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Valor</th>
-                    <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Anticipo</th>
-                    <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Saldo</th>
-                    <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Vigencia</th>
-                    <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Estado</th>
-                    <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase text-right">
+                    <th className="py-3 px-4 align-middle whitespace-nowrap font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Fecha</th>
+                    <th className="py-3 px-4 align-middle whitespace-nowrap font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">N.º Solicitud</th>
+                    <th className="py-3 px-4 align-middle whitespace-nowrap font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">N.º Cotización</th>
+                    <th className="py-3 px-4 align-middle whitespace-nowrap font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Cliente</th>
+                    <th className="py-3 px-4 align-middle whitespace-nowrap font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Servicio</th>
+                    <th className="py-3 px-4 align-middle whitespace-nowrap font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Valor</th>
+                    <th className="py-3 px-4 align-middle whitespace-nowrap font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Anticipo</th>
+                    <th className="py-3 px-4 align-middle whitespace-nowrap font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Saldo</th>
+                    <th className="py-3 px-4 align-middle whitespace-nowrap font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Vigencia</th>
+                    <th className="py-3 px-4 align-middle whitespace-nowrap font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Estado</th>
+                    <th className="py-3 px-4 align-middle whitespace-nowrap font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase text-right">
                       Acción
                     </th>
                   </tr>
@@ -1737,22 +2554,35 @@ export default function GestionCotizaciones({
                 <tbody>
                   {datosPaginaAdmin.length === 0 && (
                     <tr>
-                      <td colSpan={9} className="py-6 px-4 text-center font-code-sm text-code-sm text-on-surface-variant uppercase">
+                      <td colSpan={11} className="py-6 px-4 text-center font-code-sm text-code-sm text-on-surface-variant uppercase">
                         Ningún resultado coincide con estos filtros.
                       </td>
                     </tr>
                   )}
                   {datosPaginaAdmin.map((c) => {
                     const solicitud = solicitudesPorId.get(c.solicitud_id);
+                    const infoClienteFila = infoClienteAdmin(solicitud?.cliente_id);
                     return (
                       <tr key={c.id} className="border-b border-outline hover:bg-surface-container-high transition-colors">
                         <td className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant">
                           {new Date(c.creado_en).toLocaleDateString()}
                         </td>
-                        <td className="py-3 px-4 font-body-md text-body-md text-on-surface">
-                          {nombreClienteAdmin(solicitud?.cliente_id)}
+                        <td className="py-3 px-4 font-code-sm text-code-sm text-on-surface">{solicitud?.codigo ?? '—'}</td>
+                        <td className="py-3 px-4 font-code-sm text-code-sm text-on-surface">{c.codigo ?? '—'}</td>
+                        <td className="py-3 px-4 font-['Inter'] text-[14px] font-normal leading-[20px] text-on-surface">
+                          <div>{infoClienteFila.principal}</div>
+                          {infoClienteFila.contacto && (
+                            <div className="font-code-sm text-[11px] text-on-surface-variant mt-0.5 wrap-anywhere">
+                              Contacto: {infoClienteFila.contacto}
+                            </div>
+                          )}
+                          {infoClienteFila.telefono && (
+                            <div className="font-code-sm text-[11px] text-on-surface-variant mt-0.5 wrap-anywhere">
+                              Teléfono: {infoClienteFila.telefono}
+                            </div>
+                          )}
                         </td>
-                        <td className="py-3 px-4 font-body-md text-body-md text-on-surface">{solicitud?.servicio ?? '—'}</td>
+                        <td className="py-3 px-4 font-['Inter'] text-[14px] font-normal leading-[20px] text-on-surface break-words">{solicitud?.servicio ?? '—'}</td>
                         <td className="py-3 px-4 font-body-md text-body-md text-on-surface">{c.total ?? c.valor}</td>
                         <td className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant">
                           {c.estado_anticipo === 'NO_APLICA' || !c.anticipo_porcentaje
@@ -1767,18 +2597,20 @@ export default function GestionCotizaciones({
                         </td>
                         <td className="py-3 px-4">
                           <span
-                            className={`inline-flex px-2.5 py-1 font-code-sm text-[10px] uppercase ${claseBadgeEstadoCotizacion(c.estado)}`}
+                            className={`inline-flex whitespace-nowrap px-2.5 py-1 font-code-sm text-[11px]! leading-tight uppercase ${claseBadgeEstadoCotizacion(c.estado)}`}
                           >
-                            {c.estado}
+                            {c.estado.replace(/_/g, ' ')}
                           </span>
                         </td>
                         <td className="py-3 px-4 text-right">
                           <button
                             type="button"
                             onClick={() => abrirDetalle(c.id)}
-                            className="inline-flex items-center px-3 py-1 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
+                            aria-label="Ver detalle de cotización"
+                            title="Ver detalle"
+                            className="inline-flex items-center justify-center w-11 h-11 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors cursor-pointer"
                           >
-                            VER
+                            <Eye size={18} aria-hidden="true" />
                           </button>
                         </td>
                       </tr>
@@ -1789,7 +2621,7 @@ export default function GestionCotizaciones({
             </div>
 
             {/* TABLA — mobile (tarjetas) */}
-            <div className="md:hidden space-y-3">
+            <div className="xl:hidden space-y-3">
               {datosPaginaAdmin.length === 0 && (
                 <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase text-center py-6">
                   Ningún resultado coincide con estos filtros.
@@ -1797,23 +2629,35 @@ export default function GestionCotizaciones({
               )}
               {datosPaginaAdmin.map((c) => {
                 const solicitud = solicitudesPorId.get(c.solicitud_id);
+                const infoClienteTarjeta = infoClienteAdmin(solicitud?.cliente_id);
                 return (
                   <div key={c.id} className="bg-surface sharp-border border-l-4 border-l-primary-container p-4 space-y-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="font-body-md text-body-md text-on-surface font-medium">{solicitud?.servicio ?? '—'}</p>
-                        <p className="font-code-sm text-[11px] text-on-surface-variant uppercase mt-0.5">
-                          {nombreClienteAdmin(solicitud?.cliente_id)}
+                    <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+                      <div className="min-w-0 flex-1 basis-40">
+                        <p className="font-body-md text-body-md text-on-surface font-medium wrap-anywhere">{solicitud?.servicio ?? '—'}</p>
+                        <p className="font-code-sm text-[11px] text-on-surface-variant uppercase mt-0.5 wrap-anywhere">
+                          {infoClienteTarjeta.principal}
                         </p>
+                        {lineaContacto(infoClienteTarjeta) && (
+                          <p className="font-code-sm text-[11px] text-on-surface-variant mt-0.5 wrap-anywhere">{lineaContacto(infoClienteTarjeta)}</p>
+                        )}
                       </div>
                       <span
-                        className={`inline-flex shrink-0 px-2.5 py-1 font-code-sm text-[10px] uppercase ${claseBadgeEstadoCotizacion(c.estado)}`}
+                        className={`inline-flex shrink-0 whitespace-nowrap px-2.5 py-1 font-code-sm text-[11px]! leading-tight uppercase ${claseBadgeEstadoCotizacion(c.estado)}`}
                       >
-                        {c.estado}
+                        {c.estado.replace(/_/g, ' ')}
                       </span>
                     </div>
 
-                    <dl className="grid grid-cols-2 gap-2 font-code-sm text-[11px]">
+                    <dl className="grid grid-cols-2 gap-2 font-code-sm text-[11px] wrap-anywhere">
+                      <div>
+                        <dt className="text-on-surface-variant uppercase">N.º Solicitud</dt>
+                        <dd className="text-on-surface">{solicitud?.codigo ?? '—'}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-on-surface-variant uppercase">N.º Cotización</dt>
+                        <dd className="text-on-surface">{c.codigo ?? '—'}</dd>
+                      </div>
                       <div>
                         <dt className="text-on-surface-variant uppercase">Valor</dt>
                         <dd className="text-on-surface">{c.total ?? c.valor}</dd>
@@ -1846,9 +2690,11 @@ export default function GestionCotizaciones({
                       <button
                         type="button"
                         onClick={() => abrirDetalle(c.id)}
-                        className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
+                        aria-label="Ver detalle de cotización"
+                        title="Ver detalle"
+                        className="flex-1 inline-flex items-center justify-center min-h-11 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors cursor-pointer"
                       >
-                        VER
+                        <Eye size={18} aria-hidden="true" />
                       </button>
                     </div>
                   </div>
@@ -1858,7 +2704,7 @@ export default function GestionCotizaciones({
 
             {/* PAGINACIÓN */}
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-surface sharp-border p-4">
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-3 gap-y-2">
                 <span className="font-['Inter'] text-[13px] font-normal text-on-surface-variant">
                   Mostrando {ordenadasAdmin.length === 0 ? 0 : (paginaEfectivaAdmin - 1) * registrosPorPaginaAdmin + 1}–
                   {Math.min(paginaEfectivaAdmin * registrosPorPaginaAdmin, ordenadasAdmin.length)} de {ordenadasAdmin.length}{' '}
@@ -1946,7 +2792,7 @@ export default function GestionCotizaciones({
       {!loadingLista && !errorLista && (
         <>
           {/* KPI */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
             <KpiCotizacion
               icono="request_quote"
               valor={kpisAdmin.total}
@@ -2007,7 +2853,7 @@ export default function GestionCotizaciones({
             <button
               type="button"
               onClick={() => setMostrandoFormularioCrear((v) => !v)}
-              className="w-full flex items-center justify-between cursor-pointer"
+              className="w-full min-h-11 -my-2.5 flex items-center justify-between cursor-pointer"
             >
               <h3 className="font-label-caps text-label-caps text-primary-container tracking-widest uppercase">
                 + NUEVA COTIZACIÓN
@@ -2041,9 +2887,17 @@ export default function GestionCotizaciones({
                           Solicitud seleccionada
                         </p>
                         <p className="font-body-md text-sm text-on-surface">
-                          {nombreClienteAdmin(solicitudSeleccionadaNueva.cliente_id)} —{' '}
+                          {infoClienteAdmin(solicitudSeleccionadaNueva.cliente_id).principal} —{' '}
                           {solicitudSeleccionadaNueva.servicio}
                         </p>
+                        <p className="font-code-sm text-[11px] text-on-surface-variant mt-0.5">
+                          N.º Solicitud: {solicitudSeleccionadaNueva.codigo ?? '—'}
+                        </p>
+                        {lineaContacto(infoClienteAdmin(solicitudSeleccionadaNueva.cliente_id)) && (
+                          <p className="font-code-sm text-[11px] text-on-surface-variant mt-0.5">
+                            {lineaContacto(infoClienteAdmin(solicitudSeleccionadaNueva.cliente_id))}
+                          </p>
+                        )}
                         <p className="font-code-sm text-[11px] text-on-surface-variant mt-0.5">
                           {solicitudSeleccionadaNueva.descripcion}
                         </p>
@@ -2087,7 +2941,9 @@ export default function GestionCotizaciones({
                           </p>
                         )}
                         {estadoApoyo === 'disponible' &&
-                          solicitudesElegibles.slice(0, 20).map((s) => (
+                          solicitudesElegibles.slice(0, 20).map((s) => {
+                            const infoClienteCandidato = infoClienteAdmin(s.cliente_id);
+                            return (
                             <button
                               key={s.id}
                               type="button"
@@ -2095,13 +2951,20 @@ export default function GestionCotizaciones({
                               className="w-full text-left p-3 hover:bg-surface-container-high transition-colors cursor-pointer"
                             >
                               <p className="font-body-md text-sm text-on-surface">
-                                {nombreClienteAdmin(s.cliente_id)} — {s.servicio}
+                                {infoClienteCandidato.principal} — {s.servicio}
                               </p>
+                              <p className="font-code-sm text-[11px] text-on-surface-variant mt-0.5">
+                                N.º Solicitud: {s.codigo ?? '—'}
+                              </p>
+                              {lineaContacto(infoClienteCandidato) && (
+                                <p className="font-code-sm text-[11px] text-on-surface-variant mt-0.5">{lineaContacto(infoClienteCandidato)}</p>
+                              )}
                               <p className="font-code-sm text-[11px] text-on-surface-variant mt-0.5 line-clamp-1">
                                 {s.descripcion}
                               </p>
                             </button>
-                          ))}
+                            );
+                          })}
                       </div>
                       {/* Respaldo técnico: si por algún motivo no hay datos de
                           apoyo disponibles, se permite igual pegar el UUID
@@ -2231,7 +3094,7 @@ export default function GestionCotizaciones({
                       type="text"
                       value={busquedaAdmin}
                       onChange={(e) => setBusquedaAdmin(e.target.value)}
-                      placeholder="Buscar por cliente, servicio, descripción o ID…"
+                      placeholder="Buscar por código de solicitud, cliente, servicio o descripción…"
                       className="w-full bg-background border border-outline pl-10 pr-3 py-2.5 text-on-surface text-sm focus:border-primary-container focus:outline-hidden font-body-md"
                     />
                   </div>
@@ -2243,7 +3106,7 @@ export default function GestionCotizaciones({
                     >
                       {ESTADOS_FILTRO_COTIZACION.map((estado) => (
                         <option key={estado} value={estado}>
-                          {estado === 'TODOS' ? 'Estado: Todos' : estado}
+                          {estado === 'TODOS' ? 'Estado: Todos' : estado.replace(/_/g, ' ')}
                         </option>
                       ))}
                     </select>
@@ -2253,7 +3116,7 @@ export default function GestionCotizaciones({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 lg:grid-cols-[180px_180px_1fr_auto] gap-4 items-end">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[180px_180px_1fr_auto] gap-4 items-end">
                   <div>
                     <label className="block font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase mb-1">
                       Fecha desde
@@ -2309,19 +3172,34 @@ export default function GestionCotizaciones({
               </div>
 
               {/* TABLA — desktop */}
-              <div className="hidden md:block overflow-x-auto bg-surface sharp-border">
-                <table className="w-full text-left border-collapse">
+              <div className="hidden xl:block overflow-x-auto bg-surface sharp-border">
+                <table className="table-fixed w-[1586px] text-left border-collapse">
+                  <colgroup>
+                    <col className="w-[100px]" />
+                    <col className="w-[150px]" />
+                    <col className="w-[160px]" />
+                    <col className="w-[200px]" />
+                    <col className="w-[180px]" />
+                    <col className="w-[90px]" />
+                    <col className="w-[180px]" />
+                    <col className="w-[190px]" />
+                    <col className="w-[110px]" />
+                    <col className="w-[130px]" />
+                    <col className="w-[96px]" />
+                  </colgroup>
                   <thead>
                     <tr className="border-b border-outline">
-                      <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Fecha</th>
-                      <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Cliente</th>
-                      <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Servicio</th>
-                      <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Valor</th>
-                      <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Anticipo</th>
-                      <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Saldo</th>
-                      <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Vigencia</th>
-                      <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Estado</th>
-                      <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase text-right">
+                      <th className="py-3 px-4 align-middle whitespace-nowrap font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Fecha</th>
+                      <th className="py-3 px-4 align-middle whitespace-nowrap font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">N.º Solicitud</th>
+                      <th className="py-3 px-4 align-middle whitespace-nowrap font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">N.º Cotización</th>
+                      <th className="py-3 px-4 align-middle whitespace-nowrap font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Cliente</th>
+                      <th className="py-3 px-4 align-middle whitespace-nowrap font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Servicio</th>
+                      <th className="py-3 px-4 align-middle whitespace-nowrap font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Valor</th>
+                      <th className="py-3 px-4 align-middle whitespace-nowrap font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Anticipo</th>
+                      <th className="py-3 px-4 align-middle whitespace-nowrap font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Saldo</th>
+                      <th className="py-3 px-4 align-middle whitespace-nowrap font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Vigencia</th>
+                      <th className="py-3 px-4 align-middle whitespace-nowrap font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Estado</th>
+                      <th className="py-3 px-4 align-middle whitespace-nowrap font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase text-right">
                         Acción
                       </th>
                     </tr>
@@ -2329,22 +3207,35 @@ export default function GestionCotizaciones({
                   <tbody>
                     {datosPaginaAdmin.length === 0 && (
                       <tr>
-                        <td colSpan={9} className="py-6 px-4 text-center font-code-sm text-code-sm text-on-surface-variant uppercase">
+                        <td colSpan={11} className="py-6 px-4 text-center font-code-sm text-code-sm text-on-surface-variant uppercase">
                           Ningún resultado coincide con estos filtros.
                         </td>
                       </tr>
                     )}
                     {datosPaginaAdmin.map((c) => {
                       const solicitud = solicitudesPorId.get(c.solicitud_id);
+                      const infoClienteFila = infoClienteAdmin(solicitud?.cliente_id);
                       return (
                         <tr key={c.id} className="border-b border-outline hover:bg-surface-container-high transition-colors">
                           <td className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant">
                             {new Date(c.creado_en).toLocaleDateString()}
                           </td>
-                          <td className="py-3 px-4 font-body-md text-body-md text-on-surface">
-                            {nombreClienteAdmin(solicitud?.cliente_id)}
+                          <td className="py-3 px-4 font-code-sm text-code-sm text-on-surface">{solicitud?.codigo ?? '—'}</td>
+                          <td className="py-3 px-4 font-code-sm text-code-sm text-on-surface">{c.codigo ?? '—'}</td>
+                          <td className="py-3 px-4 font-['Inter'] text-[14px] font-normal leading-[20px] text-on-surface">
+                            <div>{infoClienteFila.principal}</div>
+                            {infoClienteFila.contacto && (
+                              <div className="font-code-sm text-[11px] text-on-surface-variant mt-0.5 wrap-anywhere">
+                                Contacto: {infoClienteFila.contacto}
+                              </div>
+                            )}
+                            {infoClienteFila.telefono && (
+                              <div className="font-code-sm text-[11px] text-on-surface-variant mt-0.5 wrap-anywhere">
+                                Teléfono: {infoClienteFila.telefono}
+                              </div>
+                            )}
                           </td>
-                          <td className="py-3 px-4 font-body-md text-body-md text-on-surface">{solicitud?.servicio ?? '—'}</td>
+                          <td className="py-3 px-4 font-['Inter'] text-[14px] font-normal leading-[20px] text-on-surface break-words">{solicitud?.servicio ?? '—'}</td>
                           <td className="py-3 px-4 font-body-md text-body-md text-on-surface">{c.total ?? c.valor}</td>
                           <td className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant">
                             {c.estado_anticipo === 'NO_APLICA' || !c.anticipo_porcentaje
@@ -2359,18 +3250,20 @@ export default function GestionCotizaciones({
                           </td>
                           <td className="py-3 px-4">
                             <span
-                              className={`inline-flex px-2.5 py-1 font-code-sm text-[10px] uppercase ${claseBadgeEstadoCotizacion(c.estado)}`}
+                              className={`inline-flex whitespace-nowrap px-2.5 py-1 font-code-sm text-[11px]! leading-tight uppercase ${claseBadgeEstadoCotizacion(c.estado)}`}
                             >
-                              {c.estado}
+                              {c.estado.replace(/_/g, ' ')}
                             </span>
                           </td>
                           <td className="py-3 px-4 text-right">
                             <button
                               type="button"
                               onClick={() => abrirDetalle(c.id)}
-                              className="inline-flex items-center px-3 py-1 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
+                              aria-label="Ver detalle de cotización"
+                              title="Ver detalle"
+                              className="inline-flex items-center justify-center w-11 h-11 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors cursor-pointer"
                             >
-                              VER DETALLE
+                              <Eye size={18} aria-hidden="true" />
                             </button>
                           </td>
                         </tr>
@@ -2381,7 +3274,7 @@ export default function GestionCotizaciones({
               </div>
 
               {/* TABLA — mobile (tarjetas) */}
-              <div className="md:hidden space-y-3">
+              <div className="xl:hidden space-y-3">
                 {datosPaginaAdmin.length === 0 && (
                   <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase text-center py-6">
                     Ningún resultado coincide con estos filtros.
@@ -2389,23 +3282,35 @@ export default function GestionCotizaciones({
                 )}
                 {datosPaginaAdmin.map((c) => {
                   const solicitud = solicitudesPorId.get(c.solicitud_id);
+                  const infoClienteTarjeta = infoClienteAdmin(solicitud?.cliente_id);
                   return (
                     <div key={c.id} className="bg-surface sharp-border border-l-4 border-l-primary-container p-4 space-y-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <p className="font-body-md text-body-md text-on-surface font-medium">{solicitud?.servicio ?? '—'}</p>
-                          <p className="font-code-sm text-[11px] text-on-surface-variant uppercase mt-0.5">
-                            {nombreClienteAdmin(solicitud?.cliente_id)}
+                      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+                        <div className="min-w-0 flex-1 basis-40">
+                          <p className="font-body-md text-body-md text-on-surface font-medium wrap-anywhere">{solicitud?.servicio ?? '—'}</p>
+                          <p className="font-code-sm text-[11px] text-on-surface-variant uppercase mt-0.5 wrap-anywhere">
+                            {infoClienteTarjeta.principal}
                           </p>
+                          {lineaContacto(infoClienteTarjeta) && (
+                            <p className="font-code-sm text-[11px] text-on-surface-variant mt-0.5 wrap-anywhere">{lineaContacto(infoClienteTarjeta)}</p>
+                          )}
                         </div>
                         <span
-                          className={`inline-flex shrink-0 px-2.5 py-1 font-code-sm text-[10px] uppercase ${claseBadgeEstadoCotizacion(c.estado)}`}
+                          className={`inline-flex shrink-0 whitespace-nowrap px-2.5 py-1 font-code-sm text-[11px]! leading-tight uppercase ${claseBadgeEstadoCotizacion(c.estado)}`}
                         >
-                          {c.estado}
+                          {c.estado.replace(/_/g, ' ')}
                         </span>
                       </div>
 
-                      <dl className="grid grid-cols-2 gap-2 font-code-sm text-[11px]">
+                      <dl className="grid grid-cols-2 gap-2 font-code-sm text-[11px] wrap-anywhere">
+                        <div>
+                          <dt className="text-on-surface-variant uppercase">N.º Solicitud</dt>
+                          <dd className="text-on-surface">{solicitud?.codigo ?? '—'}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-on-surface-variant uppercase">N.º Cotización</dt>
+                          <dd className="text-on-surface">{c.codigo ?? '—'}</dd>
+                        </div>
                         <div>
                           <dt className="text-on-surface-variant uppercase">Valor</dt>
                           <dd className="text-on-surface">{c.total ?? c.valor}</dd>
@@ -2438,9 +3343,11 @@ export default function GestionCotizaciones({
                         <button
                           type="button"
                           onClick={() => abrirDetalle(c.id)}
-                          className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
+                          aria-label="Ver detalle de cotización"
+                          title="Ver detalle"
+                          className="flex-1 inline-flex items-center justify-center min-h-11 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors cursor-pointer"
                         >
-                          VER DETALLE
+                          <Eye size={18} aria-hidden="true" />
                         </button>
                       </div>
                     </div>
@@ -2450,7 +3357,7 @@ export default function GestionCotizaciones({
 
               {/* PAGINACIÓN */}
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-surface sharp-border p-4">
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-3 gap-y-2">
                   <span className="font-['Inter'] text-[13px] font-normal text-on-surface-variant">
                     Mostrando {ordenadasAdmin.length === 0 ? 0 : (paginaEfectivaAdmin - 1) * registrosPorPaginaAdmin + 1}–
                     {Math.min(paginaEfectivaAdmin * registrosPorPaginaAdmin, ordenadasAdmin.length)} de{' '}
