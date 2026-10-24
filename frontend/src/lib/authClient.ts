@@ -121,3 +121,39 @@ export async function fetchAutenticado(
 
   return response;
 }
+
+// Fase 2C — cambio de contraseña del usuario autenticado. Un 401 significa sesión inválida (lo
+// lanza fetchAutenticado como SesionInvalidaError); una contraseña actual incorrecta llega como
+// 400, así que NO cierra la sesión. Devuelve la sesión con el token NUEVO: el anterior deja de
+// ser válido en el servidor.
+export class CambioPasswordError extends Error {
+  constructor(
+    message: string,
+    readonly detalles: string[] = []
+  ) {
+    super(message);
+  }
+}
+
+export async function cambiarPasswordApi(
+  token: string,
+  datos: { passwordActual: string; passwordNueva: string; confirmacion: string }
+): Promise<Sesion> {
+  const response = await fetchAutenticado('/api/auth/password', token, {
+    method: 'PATCH',
+    body: JSON.stringify(datos),
+  });
+
+  const data = (await response.json().catch(() => null)) as
+    | { token?: string; usuario?: Usuario; message?: string; detalles?: string[] }
+    | null;
+
+  if (!response.ok || !data?.token || !data.usuario) {
+    throw new CambioPasswordError(
+      data?.message || 'No se pudo cambiar la contraseña. Inténtalo de nuevo.',
+      Array.isArray(data?.detalles) ? data.detalles : []
+    );
+  }
+
+  return { token: data.token, usuario: data.usuario };
+}

@@ -11,13 +11,13 @@ import {
   generarEnlaceCotizacion,
   validarEnlaceCotizacion,
   verificarCodigoCotizacion,
+  solicitarRecuperacionCodigo,
+  verificarRecuperacionCodigo,
   aceptarCotizacionPublica,
   rechazarCotizacionPublica,
   registrarComprobantePublico,
-  gestionarAnticipo,
   obtenerNombreComprobante,
   registrarComprobanteSaldoPublico,
-  gestionarSaldo,
   obtenerNombreComprobanteSaldo,
   reabrirSaldo,
   SolicitudNoEncontradaError,
@@ -46,6 +46,22 @@ import {
   CotizacionNoEditableError,
 } from '../services/cotizaciones.service.js';
 import { uploadComprobante, generarNombreComprobante, COMPROBANTES_DIR, COMPROBANTE_MAX_BYTES } from '../config/uploadsComprobantes.js';
+import { enviarEnlaceCotizacion } from '../services/email.service.js';
+import { listarCuentasReceptorasActivas } from '../services/cuentasBancarias.service.js';
+import {
+  registrarGestionPago,
+  rechazarPago,
+  confirmarAcreditacionDirecta,
+  registrarConfirmacionTelefonica,
+  obtenerHistorial,
+  CotizacionNoAceptadaError,
+  ImporteInvalidoError,
+  CuentaBancariaInvalidaError,
+  MotivoRechazoInvalidoError,
+  PagoNoRechazableError,
+  PagoNoConfirmableError,
+  VerificadorInvalidoError,
+} from '../services/transferenciasPago.service.js';
 
 function extraerCodigoValido(body: Record<string, unknown>): string | null {
   const codigo = body.codigo;
@@ -281,21 +297,42 @@ export async function cambiarEstadoController(req: Request, res: Response): Prom
   }
 }
 
-// Endpoint interno (ADMIN/COMERCIAL): genera el enlace seguro que el
-// comercial comparte manualmente con el cliente (WhatsApp/email, fuera del
-// sistema — no se envía nada automáticamente). Devuelve solo el token: la
-// URL completa la construye el frontend con su propio origen.
+// Endpoint interno (ADMIN/COMERCIAL): genera el enlace seguro. El código
+// de 6 dígitos sigue siendo exclusivamente para que el comercial lo
+// comparta manualmente (WhatsApp/otro canal, fuera del sistema — nunca por
+// correo, ver email.service.ts::EnlaceCotizacionInput).
+//
+// Fase 1 (autorización explícita — "Implementación Fase 1: envío
+// automático de cotizaciones por correo"): justo después de que el enlace
+// ya se generó con éxito, se envía automáticamente por correo al cliente
+// (sin el código). Un fallo de envío NUNCA revierte ni invalida el enlace
+// ya generado — este bloque corre después de que `generarEnlaceCotizacion`
+// ya resolvió; `emailEnviado` informa al comercial el resultado real
+// ('sent'|'failed'|'skipped') para que sepa si debe avisar al cliente por
+// otra vía. `enviarEnlaceCotizacion` nunca lanza (ver su documentación).
 export async function generarEnlaceController(req: Request, res: Response): Promise<void> {
   try {
-    const { token, codigo } = await generarEnlaceCotizacion(req.params.id);
-    res.status(201).json({ token, codigo });
+    const { token, codigo, destinatario } = await generarEnlaceCotizacion(req.params.id);
+
+    let emailEnviado: 'sent' | 'failed' | 'skipped' = 'skipped';
+    if (destinatario) {
+      const envio = await enviarEnlaceCotizacion({
+        destinatarioEmail: destinatario.email,
+        destinatarioNombre: destinatario.nombre,
+        solicitudCodigo: destinatario.solicitudCodigo,
+        token,
+      });
+      emailEnviado = envio.estado;
+    }
+
+    res.status(201).json({ token, codigo, emailEnviado });
   } catch (error) {
     if (error instanceof CotizacionNoEncontradaError) {
       res.status(404).json({ message: 'Cotización no encontrada.' });
       return;
     }
     if (error instanceof CotizacionNoDisponibleError) {
-      res.status(409).json({ message: 'Solo se puede generar un enlace para una cotización en estado ENVIADA.' });
+      res.status(409).json({ message: 'Solo se puede generar o regenerar un enlace para una cotización en estado ENVIADA o ACEPTADA.' });
       return;
     }
     throw error;
@@ -352,6 +389,60 @@ export async function verificarCodigoController(req: Request, res: Response): Pr
       return;
     }
     if (error instanceof CotizacionNoEncontradaError || error instanceof SolicitudNoEncontradaError) {
+      res.status(404).json({ message: 'Cotización no encontrada.' });
+      return;
+    }
+    throw error;
+  }
+}
+
+// Endpoint público (sin requireAuth) — "Implementación Fase 1: Recuperación
+// segura del código de cotización" (autorización explícita). Paso A:
+// envía un código temporal de verificación al correo YA REGISTRADO de la
+// cotización que identifica el propio token — nunca acepta un correo
+// alternativo en el cuerpo de la petición. La respuesta pública es
+// siempre uno de 3 valores genéricos ('enviado'/'no_disponible'/
+// 'bloqueado'), sin revelar si hay o no un correo asociado ni cuál es.
+export async function solicitarRecuperacionCodigoController(req: Request, res: Response): Promise<void> {
+  try {
+    const estado = await solicitarRecuperacionCodigo(req.params.token);
+    res.status(200).json({ estado });
+  } catch (error) {
+    if (error instanceof EnlaceInvalidoError) {
+      res.status(401).json({ message: 'Enlace inválido o expirado.' });
+      return;
+    }
+    if (error instanceof CotizacionNoEncontradaError) {
+      res.status(404).json({ message: 'Cotización no encontrada.' });
+      return;
+    }
+    throw error;
+  }
+}
+
+// Endpoint público (sin requireAuth) — Paso B + Paso C del mismo bloque:
+// verifica el código temporal (OTP) y, solo si coincide y el correo pudo
+// enviarse, regenera el código de acceso real. El OTP nunca se registra
+// en logs ni se incluye en ninguna respuesta — mismo criterio que el
+// código de acceso real.
+export async function verificarRecuperacionCodigoController(req: Request, res: Response): Promise<void> {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const otp = body.otp;
+
+  if (typeof otp !== 'string' || !/^\d{6}$/.test(otp)) {
+    res.status(400).json({ message: 'otp es requerido y debe tener 6 dígitos.' });
+    return;
+  }
+
+  try {
+    const estado = await verificarRecuperacionCodigo(req.params.token, otp);
+    res.status(200).json({ estado });
+  } catch (error) {
+    if (error instanceof EnlaceInvalidoError) {
+      res.status(401).json({ message: 'Enlace inválido o expirado.' });
+      return;
+    }
+    if (error instanceof CotizacionNoEncontradaError) {
       res.status(404).json({ message: 'Cotización no encontrada.' });
       return;
     }
@@ -526,29 +617,147 @@ async function procesarComprobante(req: Request, res: Response, err: unknown): P
 // una cotización ACEPTADA. `req.user.sub` (JWT interno, nunca el token
 // público) es quien queda registrado como `anticipo_confirmado_por` —
 // un cliente no tiene ninguna vía de alcanzar esta ruta.
+const ACCIONES_PAGO = ['VALIDAR', 'RECHAZAR', 'GESTIONAR', 'CONFIRMAR_TELEFONICA'] as const;
+type AccionPago = (typeof ACCIONES_PAGO)[number];
+
+function manejarErrorTransferencia(error: unknown, res: Response): boolean {
+  if (error instanceof CotizacionNoEncontradaError) {
+    res.status(404).json({ message: 'Cotización no encontrada.' });
+    return true;
+  }
+  if (error instanceof CotizacionNoAceptadaError) {
+    res.status(409).json({ message: 'La cotización debe estar ACEPTADA para gestionar un pago.' });
+    return true;
+  }
+  if (error instanceof ImporteInvalidoError) {
+    res.status(400).json({ message: 'importeDeclarado debe ser un número mayor que cero.' });
+    return true;
+  }
+  if (error instanceof CuentaBancariaInvalidaError) {
+    res.status(400).json({ message: 'cuentaBancariaId no corresponde a ninguna cuenta bancaria existente y activa.' });
+    return true;
+  }
+  if (error instanceof MotivoRechazoInvalidoError) {
+    res.status(400).json({ message: error.message });
+    return true;
+  }
+  if (error instanceof PagoNoRechazableError || error instanceof PagoNoConfirmableError) {
+    res.status(409).json({
+      message: 'El pago de esta cotización no está en un estado que permita esta acción (debe estar ACEPTADA con el pago PENDIENTE).',
+    });
+    return true;
+  }
+  if (error instanceof VerificadorInvalidoError) {
+    res.status(400).json({ message: error.message });
+    return true;
+  }
+  if (error instanceof MetodoSaldoRequeridoError) {
+    res.status(400).json({ message: 'metodo es requerido cuando el saldo todavía no tiene un método de pago definido.' });
+    return true;
+  }
+  if (error instanceof MetodoSaldoInvalidoError) {
+    res.status(400).json({ message: 'metodo inválido o distinto al ya definido para esta cotización.' });
+    return true;
+  }
+  if (error instanceof ComprobanteSaldoRequeridoError) {
+    res.status(409).json({ message: 'El pago por TRANSFERENCIA requiere un comprobante subido antes de validar.' });
+    return true;
+  }
+  return false;
+}
+
 export async function gestionarAnticipoController(req: Request, res: Response): Promise<void> {
   const body = (req.body ?? {}) as Record<string, unknown>;
   const accion = body.accion;
 
-  if (accion !== 'VALIDAR' && accion !== 'RECHAZAR') {
-    res.status(400).json({ message: 'accion es requerida y debe ser VALIDAR o RECHAZAR.' });
+  if (typeof accion !== 'string' || !ACCIONES_PAGO.includes(accion as AccionPago)) {
+    res.status(400).json({ message: `accion es requerida y debe ser una de: ${ACCIONES_PAGO.join(', ')}.` });
     return;
   }
 
-  const confirmadoPor = req.user?.sub;
-  if (!confirmadoPor) {
+  const usuarioId = req.user?.sub;
+  const rol = req.user?.rol;
+  if (!usuarioId || !rol) {
     res.status(401).json({ message: 'No autenticado.' });
     return;
   }
 
+  // PC-2026-01, Etapa 4: separación de permisos — rechazo documental
+  // exclusivo de COMERCIAL, confirmación de acreditación directa exclusiva
+  // de ADMIN y registro de confirmación telefónica exclusivo de COMERCIAL.
+  // GESTIONAR (registrar/revisar comprobante) sigue abierto a ambos, igual
+  // que el acceso de hoy a este endpoint.
+  if (accion === 'RECHAZAR' && rol !== 'COMERCIAL') {
+    res.status(403).json({ message: 'Solo COMERCIAL puede rechazar un comprobante.' });
+    return;
+  }
+  if (accion === 'VALIDAR' && rol !== 'ADMIN') {
+    res.status(403).json({ message: 'Solo ADMIN puede confirmar directamente la acreditación del pago.' });
+    return;
+  }
+  if (accion === 'CONFIRMAR_TELEFONICA' && rol !== 'COMERCIAL') {
+    res.status(403).json({ message: 'Solo COMERCIAL puede registrar una confirmación telefónica.' });
+    return;
+  }
+
   try {
-    const cotizacion = await gestionarAnticipo(req.params.id, accion, confirmadoPor);
-    res.status(200).json({ cotizacion });
-  } catch (error) {
-    if (error instanceof CotizacionNoEncontradaError) {
-      res.status(404).json({ message: 'Cotización no encontrada.' });
+    if (accion === 'VALIDAR' || accion === 'RECHAZAR') {
+      // Mantiene exactamente el contrato de respuesta ya existente —
+      // `{ cotizacion }` — para no romper al frontend actual.
+      if (accion === 'VALIDAR') {
+        await confirmarAcreditacionDirecta({ cotizacionId: req.params.id, tipoPago: 'ANTICIPO', adminId: usuarioId });
+      } else {
+        const motivoRechazo = body.motivoRechazo;
+        const motivoRechazoDetalle = body.motivoRechazoDetalle;
+        if (typeof motivoRechazo !== 'string') {
+          res.status(400).json({ message: 'motivoRechazo es requerido para rechazar.' });
+          return;
+        }
+        await rechazarPago({
+          cotizacionId: req.params.id,
+          tipoPago: 'ANTICIPO',
+          motivoRechazo,
+          motivoRechazoDetalle: typeof motivoRechazoDetalle === 'string' ? motivoRechazoDetalle : null,
+          rechazadoPor: usuarioId,
+        });
+      }
+      const cotizacion = await obtenerCotizacion(req.params.id);
+      res.status(200).json({ cotizacion });
       return;
     }
+
+    if (accion === 'GESTIONAR') {
+      const importeDeclarado = Number(body.importeDeclarado);
+      const transferencia = await registrarGestionPago({
+        cotizacionId: req.params.id,
+        tipoPago: 'ANTICIPO',
+        importeDeclarado,
+        bancoOrigen: typeof body.bancoOrigen === 'string' ? body.bancoOrigen : null,
+        referenciaBancaria: typeof body.referenciaBancaria === 'string' ? body.referenciaBancaria : null,
+        cuentaBancariaId: typeof body.cuentaBancariaId === 'string' ? body.cuentaBancariaId : null,
+        gestionadoPor: usuarioId,
+      });
+      const cotizacion = await obtenerCotizacion(req.params.id);
+      res.status(200).json({ cotizacion, transferencia });
+      return;
+    }
+
+    // CONFIRMAR_TELEFONICA
+    const verificadorId = body.verificadorId;
+    if (typeof verificadorId !== 'string') {
+      res.status(400).json({ message: 'verificadorId es requerido.' });
+      return;
+    }
+    const transferencia = await registrarConfirmacionTelefonica({
+      cotizacionId: req.params.id,
+      tipoPago: 'ANTICIPO',
+      verificadorId,
+      registradoPor: usuarioId,
+    });
+    const cotizacion = await obtenerCotizacion(req.params.id);
+    res.status(200).json({ cotizacion, transferencia });
+  } catch (error) {
+    if (manejarErrorTransferencia(error, res)) return;
     if (error instanceof AnticipoNoGestionableError) {
       res.status(409).json({
         message: 'El anticipo de esta cotización no está en un estado que permita esta acción (debe estar ACEPTADA con anticipo PENDIENTE).',
@@ -657,8 +866,8 @@ export async function gestionarSaldoController(req: Request, res: Response): Pro
   const accion = body.accion;
   const metodo = body.metodo;
 
-  if (accion !== 'VALIDAR' && accion !== 'RECHAZAR') {
-    res.status(400).json({ message: 'accion es requerida y debe ser VALIDAR o RECHAZAR.' });
+  if (typeof accion !== 'string' || !ACCIONES_PAGO.includes(accion as AccionPago)) {
+    res.status(400).json({ message: `accion es requerida y debe ser una de: ${ACCIONES_PAGO.join(', ')}.` });
     return;
   }
   if (metodo !== undefined && metodo !== 'TRANSFERENCIA' && metodo !== 'EFECTIVO') {
@@ -666,36 +875,92 @@ export async function gestionarSaldoController(req: Request, res: Response): Pro
     return;
   }
 
-  const confirmadoPor = req.user?.sub;
-  if (!confirmadoPor) {
+  const usuarioId = req.user?.sub;
+  const rol = req.user?.rol;
+  if (!usuarioId || !rol) {
     res.status(401).json({ message: 'No autenticado.' });
     return;
   }
 
+  if (accion === 'RECHAZAR' && rol !== 'COMERCIAL') {
+    res.status(403).json({ message: 'Solo COMERCIAL puede rechazar un comprobante.' });
+    return;
+  }
+  if (accion === 'VALIDAR' && rol !== 'ADMIN') {
+    res.status(403).json({ message: 'Solo ADMIN puede confirmar directamente la acreditación del pago.' });
+    return;
+  }
+  if (accion === 'CONFIRMAR_TELEFONICA' && rol !== 'COMERCIAL') {
+    res.status(403).json({ message: 'Solo COMERCIAL puede registrar una confirmación telefónica.' });
+    return;
+  }
+
   try {
-    const cotizacion = await gestionarSaldo(req.params.id, accion, confirmadoPor, metodo as string | undefined);
-    res.status(200).json({ cotizacion });
-  } catch (error) {
-    if (error instanceof CotizacionNoEncontradaError) {
-      res.status(404).json({ message: 'Cotización no encontrada.' });
+    if (accion === 'VALIDAR' || accion === 'RECHAZAR') {
+      if (accion === 'VALIDAR') {
+        await confirmarAcreditacionDirecta({
+          cotizacionId: req.params.id,
+          tipoPago: 'SALDO',
+          adminId: usuarioId,
+          metodoSaldo: metodo as string | undefined,
+        });
+      } else {
+        const motivoRechazo = body.motivoRechazo;
+        const motivoRechazoDetalle = body.motivoRechazoDetalle;
+        if (typeof motivoRechazo !== 'string') {
+          res.status(400).json({ message: 'motivoRechazo es requerido para rechazar.' });
+          return;
+        }
+        await rechazarPago({
+          cotizacionId: req.params.id,
+          tipoPago: 'SALDO',
+          motivoRechazo,
+          motivoRechazoDetalle: typeof motivoRechazoDetalle === 'string' ? motivoRechazoDetalle : null,
+          rechazadoPor: usuarioId,
+        });
+      }
+      const cotizacion = await obtenerCotizacion(req.params.id);
+      res.status(200).json({ cotizacion });
       return;
     }
+
+    if (accion === 'GESTIONAR') {
+      const importeDeclarado = Number(body.importeDeclarado);
+      const transferencia = await registrarGestionPago({
+        cotizacionId: req.params.id,
+        tipoPago: 'SALDO',
+        importeDeclarado,
+        bancoOrigen: typeof body.bancoOrigen === 'string' ? body.bancoOrigen : null,
+        referenciaBancaria: typeof body.referenciaBancaria === 'string' ? body.referenciaBancaria : null,
+        cuentaBancariaId: typeof body.cuentaBancariaId === 'string' ? body.cuentaBancariaId : null,
+        gestionadoPor: usuarioId,
+      });
+      const cotizacion = await obtenerCotizacion(req.params.id);
+      res.status(200).json({ cotizacion, transferencia });
+      return;
+    }
+
+    // CONFIRMAR_TELEFONICA
+    const verificadorId = body.verificadorId;
+    if (typeof verificadorId !== 'string') {
+      res.status(400).json({ message: 'verificadorId es requerido.' });
+      return;
+    }
+    const transferencia = await registrarConfirmacionTelefonica({
+      cotizacionId: req.params.id,
+      tipoPago: 'SALDO',
+      verificadorId,
+      registradoPor: usuarioId,
+      metodoSaldo: metodo as string | undefined,
+    });
+    const cotizacion = await obtenerCotizacion(req.params.id);
+    res.status(200).json({ cotizacion, transferencia });
+  } catch (error) {
+    if (manejarErrorTransferencia(error, res)) return;
     if (error instanceof SaldoNoGestionableError) {
       res.status(409).json({
         message: 'El saldo de esta cotización no está en un estado que permita esta acción (debe estar ACEPTADA con saldo PENDIENTE).',
       });
-      return;
-    }
-    if (error instanceof MetodoSaldoRequeridoError) {
-      res.status(400).json({ message: 'metodo es requerido cuando el saldo todavía no tiene un método de pago definido.' });
-      return;
-    }
-    if (error instanceof MetodoSaldoInvalidoError) {
-      res.status(400).json({ message: 'metodo inválido o distinto al ya definido para esta cotización.' });
-      return;
-    }
-    if (error instanceof ComprobanteSaldoRequeridoError) {
-      res.status(409).json({ message: 'El pago por TRANSFERENCIA requiere un comprobante subido antes de validar.' });
       return;
     }
     throw error;
@@ -738,4 +1003,31 @@ export async function descargarComprobanteSaldoController(req: Request, res: Res
       res.status(404).json({ message: 'El archivo del comprobante no se encontró.' });
     }
   });
+}
+
+// PC-2026-01, Etapa 4: historial completo de intentos de pago (ambos
+// tipos, vigentes y no vigentes) de una cotización — nunca filtra nada,
+// conserva los intentos anteriores tal como pide la propuesta.
+export async function historialTransferenciasController(req: Request, res: Response): Promise<void> {
+  try {
+    const transferencias = await obtenerHistorial(req.params.id);
+    res.status(200).json({ transferencias });
+  } catch (error) {
+    if (error instanceof CotizacionNoEncontradaError) {
+      res.status(404).json({ message: 'Cotización no encontrada.' });
+      return;
+    }
+    throw error;
+  }
+}
+
+// PC-2026-01: cuentas bancarias activas que el personal puede elegir como
+// cuenta receptora al gestionar un pago (anticipo o saldo). Lectura únicamente.
+// Acceso: ADMIN y COMERCIAL, heredado del middleware de router de
+// cotizaciones.routes.ts (OPERATIVO nunca alcanza este router); no se amplían
+// los permisos del router administrativo de cuentas (exclusivo de ADMIN). Solo
+// id, banco, tipo y número — ver listarCuentasReceptorasActivas().
+export async function listarCuentasReceptorasController(_req: Request, res: Response): Promise<void> {
+  const cuentas = await listarCuentasReceptorasActivas();
+  res.status(200).json({ cuentas });
 }

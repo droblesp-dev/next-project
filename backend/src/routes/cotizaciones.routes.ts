@@ -10,6 +10,8 @@ import {
   generarEnlaceController,
   obtenerPublicaController,
   verificarCodigoController,
+  solicitarRecuperacionCodigoController,
+  verificarRecuperacionCodigoController,
   aceptarController,
   rechazarController,
   subirComprobanteController,
@@ -19,6 +21,8 @@ import {
   gestionarSaldoController,
   descargarComprobanteSaldoController,
   reabrirSaldoController,
+  historialTransferenciasController,
+  listarCuentasReceptorasController,
 } from '../controllers/cotizaciones.controller.js';
 
 function asyncRoute(handler: (req: Request, res: Response) => Promise<void>): RequestHandler {
@@ -35,6 +39,14 @@ export const cotizacionesRouter = Router();
 // exclusivamente mediante el token firmado — nunca acepta un UUID directo.
 cotizacionesRouter.get('/publica/:token', asyncRoute(obtenerPublicaController));
 cotizacionesRouter.post('/publica/:token/verificar', asyncRoute(verificarCodigoController));
+// "Implementación Fase 1: Recuperación segura del código de cotización"
+// (autorización explícita): el cliente conserva el enlace (token), pero
+// perdió el código de 6 dígitos. Paso A (solicitar OTP) y Paso B+C
+// (verificar OTP + regenerar código) — ambos públicos, token en la ruta,
+// nunca aceptan un correo alternativo ni requieren el código de acceso
+// que precisamente se perdió.
+cotizacionesRouter.post('/publica/:token/recuperar-codigo/solicitar', asyncRoute(solicitarRecuperacionCodigoController));
+cotizacionesRouter.post('/publica/:token/recuperar-codigo/verificar', asyncRoute(verificarRecuperacionCodigoController));
 // Fase D.5: el cliente decide desde aquí — ambos exigen token + código
 // (nunca alcanza con el JWT solo, ver aceptarCotizacionPublica/
 // rechazarCotizacionPublica). PATCH porque cambian el estado de un
@@ -59,6 +71,11 @@ cotizacionesRouter.use(requireAuth, requireRole('ADMIN', 'COMERCIAL'));
 cotizacionesRouter.param('id', validarFormatoUuid('Cotización no encontrada.'));
 
 cotizacionesRouter.get('/', asyncRoute(listarController));
+// PC-2026-01: cuentas receptoras activas para elegir al gestionar un pago. Debe
+// registrarse ANTES de GET /:id (si no, 'cuentas-receptoras' se interpretaría como
+// un :id y el guard de formato UUID respondería 404). Mismos roles del router
+// (ADMIN/COMERCIAL); solo lectura.
+cotizacionesRouter.get('/cuentas-receptoras', asyncRoute(listarCuentasReceptorasController));
 cotizacionesRouter.post('/', asyncRoute(crearController));
 cotizacionesRouter.get('/:id', asyncRoute(obtenerController));
 // Edición de condiciones comerciales — EXCLUSIVA de BORRADOR (autorización
@@ -83,3 +100,9 @@ cotizacionesRouter.get('/:id/comprobante-saldo', asyncRoute(descargarComprobante
 // saldo RECHAZADO — no se sobrecarga PATCH /:id/saldo con una tercera
 // "accion".
 cotizacionesRouter.patch('/:id/saldo/reabrir', asyncRoute(reabrirSaldoController));
+// PC-2026-01, Etapa 4: historial de transferencias_pago (ambos tipos,
+// vigentes y no vigentes) — mismas exclusividades (ADMIN/COMERCIAL) que el
+// resto de este router; la separación de permisos ADMIN/COMERCIAL dentro
+// de cada acción de /:id/anticipo y /:id/saldo (VALIDAR/RECHAZAR/
+// CONFIRMAR_TELEFONICA) se verifica dentro del controller, no aquí.
+cotizacionesRouter.get('/:id/transferencias', asyncRoute(historialTransferenciasController));

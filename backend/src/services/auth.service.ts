@@ -23,11 +23,23 @@ const DUMMY_HASH = '$2a$12$HtdOriBIV2tdo7n/j8UouOfLIPALxdlflzU0cbRvsG.P5e5IkjazK
 export interface JwtPayload {
   sub: string;
   rol: string;
+  // Versión de sesión (V18). Los tokens emitidos antes de V18 no la traen: se interpretan como 0.
+  sv?: number;
 }
 
 export interface LoginResult {
   token: string;
   usuario: UsuarioPublico;
+}
+
+// Único punto donde se firma un JWT de sesión (login y cambio de contraseña).
+export function emitirToken(usuarioId: string, rol: string, sessionVersion: number): string {
+  const payload: JwtPayload = { sub: usuarioId, rol, sv: sessionVersion };
+  const signOptions: jwt.SignOptions = {
+    algorithm: 'HS256',
+    expiresIn: env.jwtExpiresIn as jwt.SignOptions['expiresIn'],
+  };
+  return jwt.sign(payload, env.jwtSecret, signOptions);
 }
 
 export async function login(email: string, password: string): Promise<LoginResult | null> {
@@ -44,11 +56,7 @@ export async function login(email: string, password: string): Promise<LoginResul
     return null;
   }
 
-  const payload: JwtPayload = { sub: usuario.id, rol: usuario.rol };
-  const signOptions: jwt.SignOptions = {
-    expiresIn: env.jwtExpiresIn as jwt.SignOptions['expiresIn'],
-  };
-  const token = jwt.sign(payload, env.jwtSecret, signOptions);
+  const token = emitirToken(usuario.id, usuario.rol, usuario.session_version);
 
   return {
     token,
@@ -63,7 +71,7 @@ export async function login(email: string, password: string): Promise<LoginResul
 }
 
 export function verifyToken(token: string): JwtPayload {
-  return jwt.verify(token, env.jwtSecret) as JwtPayload;
+  return jwt.verify(token, env.jwtSecret, { algorithms: ['HS256'] }) as JwtPayload;
 }
 
 export async function getUsuarioActual(id: string): Promise<UsuarioPublico | null> {

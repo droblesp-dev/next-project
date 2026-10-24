@@ -98,6 +98,23 @@ const NOMBRE_CONTEXTO: Record<ContextoNexia, string> = {
   NO_ESTOY_SEGURO: 'el visitante indicó que no está seguro / necesita orientación',
 };
 
+// NEXIA-UX-06 (autorización explícita — "Implementación controlada de
+// preguntas de orientación técnica"): pregunta orientativa adicional por
+// contexto, usada tanto como sugerencia para Gemini (construirPrompt, nunca
+// exigida de forma literal) como en el respaldo determinístico
+// (generarSugerenciaDeterministica). NO_ESTOY_SEGURO queda deliberadamente
+// fuera de este mapa — su plantilla se conserva sin cambios por instrucción
+// explícita del alcance autorizado. Ninguna de estas preguntas afirma que el
+// servicio ya seleccionado es correcto o incorrecto: solo ayuda al propio
+// visitante a describir mejor su necesidad dentro del servicio elegido.
+const PREGUNTA_ORIENTATIVA_CONTEXTO: Partial<Record<ContextoNexia, string>> = {
+  TORNO: '¿La pieza ya existe y está dañada, o necesitas fabricar una nueva?',
+  FRESADO: '¿La pieza ya existe y está dañada, o necesitas fabricar una nueva?',
+  FABRICACION: '¿Tienes un plano, croquis o una pieza similar que podamos usar como referencia?',
+  REPARACION_RECUPERACION:
+    '¿Qué parte específica de la pieza está dañada y qué parte permanece en buen estado?',
+};
+
 // Nunca inventa: la regla central del prompt es "organiza lo que el usuario
 // ya escribió; si falta algo relevante, pregúntalo, no lo asumas" — ninguna
 // especificación técnica (material/dimensión/tolerancia/norma/proceso) ni
@@ -109,6 +126,7 @@ const NOMBRE_CONTEXTO: Record<ContextoNexia, string> = {
 // una palabra de otro contexto (regla #1/#2 del pedido, antes solo aplicada
 // al respaldo determinístico).
 function construirPrompt(promptUsuario: string, contexto: ContextoNexia): string {
+  const preguntaOrientativa = PREGUNTA_ORIENTATIVA_CONTEXTO[contexto];
   return [
     'Eres un asistente de redacción para el formulario público de cotización de NEXTPROJECT, un centro de',
     'mecanizado industrial. Ayudas a un visitante SIN conocimientos técnicos a expresar mejor, en español',
@@ -132,6 +150,13 @@ function construirPrompt(promptUsuario: string, contexto: ContextoNexia): string
     '- Reorganiza literalmente lo que el usuario ya escribió en frases más claras, y agrega como máximo 2 o 3',
     '  preguntas simples y no técnicas que lo ayuden a dar más contexto útil (ej.: "¿Tienes una muestra o',
     '  fotografía de la pieza?").',
+    ...(preguntaOrientativa
+      ? [
+          '- Pregunta orientativa sugerida para este servicio (reformúlala con tus propias palabras, nunca la',
+          '  copies de forma literal, e inclúyela solo si es realmente relevante para lo que el usuario escribió;',
+          `  nunca la uses para afirmar que el servicio elegido es correcto o incorrecto): "${preguntaOrientativa}"`,
+        ]
+      : []),
     '- Nunca actúes como si la solicitud ya estuviera enviada, cotizada o aceptada — el visitante decidirá si',
     '  usa este texto o no; no es una respuesta oficial de la empresa.',
     '',
@@ -298,6 +323,7 @@ function generarSugerenciaDeterministica(promptUsuario: string, contexto: Contex
     // No debe diagnosticar qué operación específica debe realizarse (regla del pedido).
     case 'TORNO':
       return plantillaConEco('Puedes describirlo así:', promptUsuario, [
+        '¿La pieza ya existe y está dañada, o necesitas fabricar una nueva?',
         '¿Qué tipo de pieza necesitas (eje, buje, tornillo, etc.) y para qué la vas a usar?',
         '¿Tienes una pieza de muestra, fotografía o plano de referencia?',
         '¿Conoces alguna medida o característica de la pieza (diámetro, longitud, rosca)?',
@@ -306,6 +332,7 @@ function generarSugerenciaDeterministica(promptUsuario: string, contexto: Contex
     // No debe determinar técnicamente el proceso requerido.
     case 'FRESADO':
       return plantillaConEco('Puedes describirlo así:', promptUsuario, [
+        '¿La pieza ya existe y está dañada, o necesitas fabricar una nueva?',
         '¿Qué pieza y qué zona de ella necesita el trabajo?',
         '¿Tienes una pieza de muestra, fotografía o plano de referencia?',
         '¿Conoces alguna medida o característica de la pieza?',
@@ -314,14 +341,14 @@ function generarSugerenciaDeterministica(promptUsuario: string, contexto: Contex
     case 'FABRICACION':
       return plantillaConEco('Puedes describirlo así:', promptUsuario, [
         '¿Qué pieza necesitas fabricar y en qué equipo o máquina se va a usar?',
-        '¿Tienes una pieza de muestra, fotografía o plano de referencia?',
+        '¿Tienes un plano, croquis, fotografía o una pieza similar que podamos usar como referencia?',
         '¿Conoces alguna medida o característica de la pieza?',
       ]);
 
     // No debe asumir la causa de la falla ni decidir técnicamente el método de recuperación.
     case 'REPARACION_RECUPERACION':
       return plantillaConEco('Puedes describir tu necesidad así:', promptUsuario, [
-        '¿Qué problema o daño presenta la pieza?',
+        '¿Qué parte específica de la pieza está dañada y qué parte permanece en buen estado?',
         '¿En qué equipo o máquina se utiliza?',
         '¿Tienes una fotografía o pieza de muestra?',
       ]);

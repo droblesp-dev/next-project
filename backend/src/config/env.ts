@@ -1,5 +1,14 @@
 import "dotenv/config";
 
+function parseTrustProxy(valor: string | undefined): boolean | number | string | undefined {
+  const v = (valor ?? "").trim();
+  if (!v) return undefined;
+  if (v.toLowerCase() === "true") return true;
+  if (v.toLowerCase() === "false") return false;
+  if (/^\d+$/.test(v)) return Number(v);
+  return v;
+}
+
 export const env = {
   port: Number(process.env.PORT) || 3000,
   corsOrigins: (
@@ -8,6 +17,9 @@ export const env = {
     .split(",")
     .map((origen) => origen.trim())
     .filter((origen) => origen.length > 0),
+  // TRUST_PROXY: número de saltos de proxy ("1"), "true"/"false" o una lista de IP/subredes
+  // de Express. Sin definir: undefined (no se toca la configuración por defecto de Express).
+  trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
   db: {
     host: process.env.DB_HOST,
     port: Number(process.env.DB_PORT) || 5432,
