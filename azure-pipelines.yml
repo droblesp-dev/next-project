@@ -15,13 +15,16 @@ trigger:
 
 # Cada ambiente tiene su propio pool de agentes: main -> produccion, resto -> desarrollo.
 pool:
-  ${{ if eq(variables['Build.SourceBranch'], 'refs/heads/main') }}:
-    name: "Zyntra Agent Pool"
-  ${{ else }}:
-    name: "Zyntra Agent Pool Develop"
+  name: ${{ variables.agentPool }}
 
 variables:
   - group: next-project-secrets
+  - ${{ if eq(variables['Build.SourceBranch'], 'refs/heads/main') }}:
+    - name: agentPool
+      value: "Zyntra Agent Pool"
+  - ${{ else }}:
+    - name: agentPool
+      value: "Zyntra Agent Pool Develop"
   - name: harborProject
     value: "zyntra"
   - name: backendImageName
