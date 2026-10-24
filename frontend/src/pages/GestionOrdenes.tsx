@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { Eye } from 'lucide-react';
 import { fetchAutenticado, SesionInvalidaError, type Usuario } from '../lib/authClient';
 import type { Solicitud } from './BandejaSolicitudes';
 
@@ -106,6 +107,27 @@ function fechaEnRangoOrden(fechaIso: string, desde: string, hasta: string): bool
   return true;
 }
 
+// `ordenes.fecha_entrega` es DATE (fecha de calendario, sin hora ni zona
+// horaria real — V0__esquema_base.sql) — el driver `pg` la entrega como un
+// string ISO con hora de medianoche local y sufijo "Z" (ej.
+// "2026-10-06T05:00:00.000Z" para la fecha calendario 2026-10-06 en un
+// servidor en UTC-5; mismo mecanismo ya documentado en
+// DetalleSolicitud.tsx::formatearFechaSolo). Convertirla con `new Date(...)`
+// y formatearla en el navegador arriesga mostrar el día anterior o
+// siguiente si el huso horario del navegador no coincide con el del
+// servidor — por eso se lee directamente el fragmento YYYY-MM-DD de la
+// cadena, sin construir ningún objeto Date ni hacer ninguna conversión de
+// huso horario. Devuelve null ante un valor ausente o no reconocible, para
+// que cada vista use su propio texto de ausencia ya existente ('Sin
+// definir' en el panel de detalle, '—' en tabla/tarjeta).
+function formatearFechaEntrega(valor: string | null): string | null {
+  if (!valor) return null;
+  const coincidencia = valor.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!coincidencia) return null;
+  const [, anio, mes, dia] = coincidencia;
+  return `${dia}/${mes}/${anio}`;
+}
+
 function KpiOrden({
   icono,
   valor,
@@ -126,7 +148,9 @@ function KpiOrden({
       </span>
       <div className="min-w-0">
         <p className="font-headline-md text-headline-md font-black text-on-surface leading-none">{valor}</p>
-        <p className="font-label-caps text-[10px] text-on-surface-variant uppercase mt-1 break-words">{etiqueta}</p>
+        <p className="font-['JetBrains_Mono'] text-[10px] font-bold tracking-[0.02em] leading-[1.2] text-on-surface-variant uppercase mt-1 break-words">
+          {etiqueta}
+        </p>
       </div>
     </div>
   );
@@ -1321,7 +1345,7 @@ export default function GestionOrdenes({
               </div>
               <div>
                 <dt className="text-on-surface-variant uppercase">Fecha de entrega</dt>
-                <dd className="text-on-surface">{ordenSeleccionada.fecha_entrega ?? 'Sin definir'}</dd>
+                <dd className="text-on-surface">{formatearFechaEntrega(ordenSeleccionada.fecha_entrega) ?? 'Sin definir'}</dd>
               </div>
               <div>
                 <dt className="text-on-surface-variant uppercase">Finalizada</dt>
@@ -1544,7 +1568,7 @@ export default function GestionOrdenes({
               </div>
               <div>
                 <dt className="text-on-surface-variant uppercase">Fecha de entrega</dt>
-                <dd className="text-on-surface">{ordenSeleccionada.fecha_entrega ?? 'Sin definir'}</dd>
+                <dd className="text-on-surface">{formatearFechaEntrega(ordenSeleccionada.fecha_entrega) ?? 'Sin definir'}</dd>
               </div>
               <div>
                 <dt className="text-on-surface-variant uppercase">Fecha de finalización</dt>
@@ -1937,8 +1961,7 @@ export default function GestionOrdenes({
     return (
       <div className="space-y-8">
         <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase max-w-2xl">
-          Vista de supervisión: consulte el estado, el progreso y la información de las órdenes registradas. Esta
-          vista no permite crear, ejecutar ni cerrar órdenes — esas acciones son responsabilidad de Comercial y
+          Vista de supervisión: solo consulta. Crear, ejecutar o cerrar órdenes es responsabilidad de Comercial y
           Operativo.
         </p>
 
@@ -2122,9 +2145,9 @@ export default function GestionOrdenes({
                     const { cliente, servicio } = datosClienteServicio(o.cotizacion_id);
                     return (
                       <tr key={o.id} className="border-b border-outline hover:bg-surface-container-high transition-colors">
-                        <td className="py-3 px-4 font-body-md text-body-md text-on-surface">{o.codigo}</td>
-                        <td className="py-3 px-4 font-body-md text-body-md text-on-surface">{cliente}</td>
-                        <td className="py-3 px-4 font-body-md text-body-md text-on-surface">{servicio}</td>
+                        <td className="py-3 px-4 font-code-sm text-code-sm text-on-surface">{o.codigo}</td>
+                        <td className="py-3 px-4 font-['Inter'] text-[14px] font-normal leading-[20px] text-on-surface">{cliente}</td>
+                        <td className="py-3 px-4 font-['Inter'] text-[14px] font-normal leading-[20px] text-on-surface break-words">{servicio}</td>
                         <td className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant">
                           {nombreResponsableAdmin(o.responsable_id)}
                         </td>
@@ -2150,9 +2173,11 @@ export default function GestionOrdenes({
                           <button
                             type="button"
                             onClick={() => abrirDetalle(o.id)}
-                            className="inline-flex items-center px-3 py-1 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
+                            aria-label="Ver detalle de la orden"
+                            title="Ver detalle"
+                            className="inline-flex items-center justify-center w-11 h-11 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors cursor-pointer"
                           >
-                            VER
+                            <Eye size={18} aria-hidden="true" />
                           </button>
                         </td>
                       </tr>
@@ -2209,9 +2234,11 @@ export default function GestionOrdenes({
                       <button
                         type="button"
                         onClick={() => abrirDetalle(o.id)}
-                        className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
+                        aria-label="Ver detalle de la orden"
+                        title="Ver detalle"
+                        className="flex-1 inline-flex items-center justify-center min-h-11 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors cursor-pointer"
                       >
-                        VER
+                        <Eye size={18} aria-hidden="true" />
                       </button>
                     </div>
                   </div>
@@ -2500,7 +2527,7 @@ export default function GestionOrdenes({
                                 onClick={() => handleSeleccionarCotizacionNueva(c.id)}
                                 className="w-full text-left p-3 hover:bg-surface-container-high transition-colors cursor-pointer"
                               >
-                                <p className="font-body-md text-sm text-on-surface">
+                                <p className="font-['Inter'] text-[14px] font-normal leading-[20px] text-on-surface">
                                   {datosClienteServicio(c.id).cliente} — {datosClienteServicio(c.id).servicio}
                                 </p>
                                 <p className="font-code-sm text-[11px] text-on-surface-variant mt-0.5 line-clamp-1">
@@ -2678,9 +2705,9 @@ export default function GestionOrdenes({
                       const { cliente, servicio } = datosClienteServicio(o.cotizacion_id);
                       return (
                         <tr key={o.id} className="border-b border-outline hover:bg-surface-container-high transition-colors">
-                          <td className="py-3 px-4 font-body-md text-body-md text-on-surface">{o.codigo}</td>
-                          <td className="py-3 px-4 font-body-md text-body-md text-on-surface">{cliente}</td>
-                          <td className="py-3 px-4 font-body-md text-body-md text-on-surface">{servicio}</td>
+                          <td className="py-3 px-4 font-code-sm text-code-sm text-on-surface">{o.codigo}</td>
+                          <td className="py-3 px-4 font-['Inter'] text-[14px] font-normal leading-[20px] text-on-surface">{cliente}</td>
+                          <td className="py-3 px-4 font-['Inter'] text-[14px] font-normal leading-[20px] text-on-surface break-words">{servicio}</td>
                           <td className="py-3 px-4">
                             <span
                               className={`inline-flex whitespace-nowrap px-2.5 py-1 font-code-sm text-[11px]! leading-tight uppercase ${claseBadgeEstadoOrden(o.estado)}`}
@@ -2697,7 +2724,7 @@ export default function GestionOrdenes({
                             </div>
                           </td>
                           <td className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant">
-                            {o.fecha_entrega ?? '—'}
+                            {formatearFechaEntrega(o.fecha_entrega) ?? '—'}
                           </td>
                           <td className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant">
                             {new Date(o.creado_en).toLocaleDateString()}
@@ -2706,9 +2733,11 @@ export default function GestionOrdenes({
                             <button
                               type="button"
                               onClick={() => abrirDetalle(o.id)}
-                              className="inline-flex items-center px-3 py-1 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
+                              aria-label="Ver detalle de la orden"
+                              title="Ver detalle"
+                              className="inline-flex items-center justify-center w-11 h-11 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors cursor-pointer"
                             >
-                              VER DETALLE
+                              <Eye size={18} aria-hidden="true" />
                             </button>
                           </td>
                         </tr>
@@ -2753,7 +2782,7 @@ export default function GestionOrdenes({
                       <dl className="grid grid-cols-2 gap-2 font-code-sm text-[11px] wrap-anywhere">
                         <div>
                           <dt className="text-on-surface-variant uppercase">Fecha de entrega</dt>
-                          <dd className="text-on-surface">{o.fecha_entrega ?? '—'}</dd>
+                          <dd className="text-on-surface">{formatearFechaEntrega(o.fecha_entrega) ?? '—'}</dd>
                         </div>
                         <div>
                           <dt className="text-on-surface-variant uppercase">Creada</dt>
@@ -2765,9 +2794,11 @@ export default function GestionOrdenes({
                         <button
                           type="button"
                           onClick={() => abrirDetalle(o.id)}
-                          className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
+                          aria-label="Ver detalle de la orden"
+                          title="Ver detalle"
+                          className="flex-1 inline-flex items-center justify-center min-h-11 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors cursor-pointer"
                         >
-                          VER DETALLE
+                          <Eye size={18} aria-hidden="true" />
                         </button>
                       </div>
                     </div>

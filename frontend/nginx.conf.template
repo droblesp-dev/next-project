@@ -12,6 +12,18 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
+    # Logos de bancos: único directorio de uploads público (los comprobantes y
+    # evidencias solo se sirven por /api con autenticación). Solo lectura.
+    location /uploads/logos-bancos/ {
+        limit_except GET HEAD { deny all; }
+        proxy_pass http://${BACKEND_HOST}:${BACKEND_PORT}/uploads/logos-bancos/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        add_header X-Content-Type-Options nosniff always;
+    }
+
     location / {
         try_files $uri $uri/ /index.html;
     }

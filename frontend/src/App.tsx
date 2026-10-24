@@ -6,7 +6,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import AsistenteComercial from './pages/AsistenteComercial';
 import { API_BASE } from './lib/authClient';
-import { NEXT_PROJECT_NAME, construirEnlaceWhatsApp } from './lib/config';
+import {
+  NEXT_PROJECT_NAME,
+  NEXT_PROJECT_UBICACION_TEXTO,
+  construirEnlaceWhatsApp,
+  construirMapaUbicacion,
+} from './lib/config';
 import piezasMecanizadasImg from './assets/images/piezas_mecanizadas_1788228769715.jpg';
 import tornoGalleryImg from './assets/images/torno_industrial_gallery_1788229002934.jpg';
 import fabricacionGalleryImg from './assets/images/fabricacion_gallery_1788229017518.jpg';
@@ -1370,9 +1375,8 @@ export default function App({ onAcceso }: AppProps) {
                       <p
                         id="telefono-ayuda"
                         aria-live="polite"
-                        className={`font-['Inter'] text-[13px] font-normal mt-1 pl-2 flex items-center gap-1 ${
-                          telefonoEsInvalido ? 'text-error' : telefonoMostrarValido ? 'text-primary-container' : 'text-on-surface-variant'
-                        }`}
+                        className={`font-['Inter'] text-[13px] font-normal mt-1 pl-2 flex items-center gap-1 ${telefonoEsInvalido ? 'text-error' : telefonoMostrarValido ? 'text-primary-container' : 'text-on-surface-variant'
+                          }`}
                       >
                         {telefonoMostrarValido && (
                           <span className="material-symbols-outlined text-[12px]" aria-hidden="true">check_circle</span>
@@ -1407,9 +1411,8 @@ export default function App({ onAcceso }: AppProps) {
                       <p
                         id="email-ayuda"
                         aria-live="polite"
-                        className={`font-['Inter'] text-[13px] font-normal mt-1 pl-2 flex items-center gap-1 ${
-                          emailEsInvalido ? 'text-error' : emailMostrarValido ? 'text-primary-container' : 'text-on-surface-variant'
-                        }`}
+                        className={`font-['Inter'] text-[13px] font-normal mt-1 pl-2 flex items-center gap-1 ${emailEsInvalido ? 'text-error' : emailMostrarValido ? 'text-primary-container' : 'text-on-surface-variant'
+                          }`}
                       >
                         {emailMostrarValido && (
                           <span className="material-symbols-outlined text-[12px]" aria-hidden="true">check_circle</span>
@@ -1671,36 +1674,42 @@ export default function App({ onAcceso }: AppProps) {
                 <div>
                   <h4 className="font-['Inter'] text-[13px] font-semibold text-on-surface uppercase mb-1">CORREO ELECTRÓNICO</h4>
                   <a
-                    href="mailto:nextproject.mecanizado@gmail.com"
+                    href="mailto:next.project84@gmail.com"
                     className="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors"
                   >
-                    nextproject.mecanizado@gmail.com
+                    next.project84@gmail.com
                   </a>
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="bg-background sharp-border h-64 flex flex-col items-center justify-center p-8 relative overflow-hidden group text-center">
-            <div className="absolute inset-0 bg-surface-container-high opacity-50 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCI+PGNpcmNsZSBjeD0iMSIgY3k9IjEiIHI9IjEiIGZpbGw9IiMzMzMiLz48L3N2Zz4=')]"></div>
-            <span className="material-symbols-outlined text-primary-container text-5xl mb-3 relative z-10 group-hover:scale-110 transition-transform">
-              location_on
-            </span>
-            <h4 className="font-headline-md text-headline-md text-on-surface uppercase mb-2 relative z-10 font-bold">
-              MAPA DE UBICACIÓN
-            </h4>
-            <p className="font-body-md text-body-md text-on-surface-variant mb-6 relative z-10">
-              Shushufindi, Sucumbíos, Ecuador
-            </p>
-            <a
-              className="relative z-10 inline-flex items-center justify-center px-6 py-3 border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
-              href="https://www.google.com/maps/search/?api=1&query=Shushufindi+Sucumbios+Ecuador"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              VER EN GOOGLE MAPS
-              <span className="material-symbols-outlined ml-2 text-[18px]">open_in_new</span>
-            </a>
+          {/* Mapa de ubicación: mapa de Google Maps incrustado (carga diferida, sin clave de API) con una
+              franja inferior con la ubicación y el enlace para abrirlo en Google Maps. */}
+          <div className="bg-background sharp-border flex flex-col h-72 sm:h-80 overflow-hidden">
+            <iframe
+              title={`Mapa de ubicación de NextProject: ${NEXT_PROJECT_UBICACION_TEXTO}`}
+              src={construirMapaUbicacion().embed}
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+              allowFullScreen
+              className="w-full flex-1 min-h-0 border-0"
+            />
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 border-t border-outline bg-background">
+              <p className="flex items-center gap-2 min-w-0 font-body-md text-body-md text-on-surface-variant">
+                <span className="material-symbols-outlined text-primary-container text-[20px] shrink-0">location_on</span>
+                <span className="truncate">{NEXT_PROJECT_UBICACION_TEXTO}</span>
+              </p>
+              <a
+                className="inline-flex items-center justify-center px-4 py-2 border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors font-['Inter'] text-[13px] font-semibold cursor-pointer whitespace-nowrap"
+                href={construirMapaUbicacion().enlace}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                VER EN GOOGLE MAPS
+                <span className="material-symbols-outlined ml-2 text-[16px]">open_in_new</span>
+              </a>
+            </div>
           </div>
         </div>
       </section>
@@ -1758,9 +1767,8 @@ export default function App({ onAcceso }: AppProps) {
       {modalType && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
           <div
-            className={`bg-surface sharp-border border-t-4 border-t-primary-container max-w-2xl w-full ${
-              modalType === 'asistente_comercial' ? 'px-6 sm:px-10 md:px-14 py-6 md:py-8' : 'p-6 md:p-8'
-            } max-h-[85vh] overflow-y-auto`}
+            className={`bg-surface sharp-border border-t-4 border-t-primary-container max-w-2xl w-full ${modalType === 'asistente_comercial' ? 'px-6 sm:px-10 md:px-14 py-6 md:py-8' : 'p-6 md:p-8'
+              } max-h-[85vh] overflow-y-auto`}
           >
             <div className="flex justify-between items-center pb-4 border-b border-outline mb-6">
               <h3 className="font-headline-md text-headline-md uppercase text-on-surface flex items-center gap-2 flex-wrap">

@@ -3,6 +3,7 @@ import { requireAuth, requireRole } from '../middleware/auth.middleware.js';
 import { validarFormatoUuid } from '../middleware/uuidParam.middleware.js';
 import {
   listarController,
+  listarAdminsActivosController,
   crearController,
   cambiarActivoController,
   cambiarRolController,
@@ -19,6 +20,13 @@ function asyncRoute(
 }
 
 export const usuariosRouter = Router();
+
+// PC-2026-01 (continuación — Frontend Secciones C/D): registrada ANTES del
+// bloque requireRole('ADMIN') de abajo, con su propio requireRole más
+// amplio — COMERCIAL necesita identificar al ADMIN verificador en «Llamada
+// a ADMIN» (CONFIRMAR_TELEFONICA) y no tiene acceso al resto de este
+// router. Nunca expone email ni el listado completo de usuarios.
+usuariosRouter.get('/admins-activos', requireAuth, requireRole('ADMIN', 'COMERCIAL'), asyncRoute(listarAdminsActivosController));
 
 usuariosRouter.use(requireAuth, requireRole('ADMIN'));
 

@@ -6,6 +6,7 @@ import { pool } from '../config/db.js';
 // comportamiento real en lugar de asumir un tipo numérico en TypeScript.
 export interface Cotizacion {
   id: string;
+  codigo: string | null;
   solicitud_id: string;
   valor: string;
   estado: string;
@@ -55,7 +56,12 @@ type Executor = Pool | PoolClient;
 // el booleano calculado `saldo_comprobante_recibido`. `saldo_pendiente`
 // sigue siendo exclusivamente el monto fijo calculado en crearCotizacion();
 // ninguna función de este archivo permite escribirlo.
-const COLUMNAS = `id, solicitud_id, valor, estado, descripcion, creado_por, creado_en, actualizado_en, fecha_vigencia, aceptada_en, rechazada_en, subtotal, iva_porcentaje, iva_valor, total, anticipo_porcentaje, anticipo_valor, saldo_pendiente, metodo_anticipo, estado_anticipo, anticipo_confirmado_en, anticipo_confirmado_por, (comprobante_anticipo IS NOT NULL) AS comprobante_recibido, metodo_saldo, estado_saldo, saldo_confirmado_en, saldo_confirmado_por, (comprobante_saldo IS NOT NULL) AS saldo_comprobante_recibido`;
+// `codigo` (V12 — numeración comercial independiente COT-XXXXXX): lo asigna
+// un trigger de PostgreSQL en el INSERT, igual que solicitudes.codigo (V10)
+// — nunca se escribe desde la aplicación, solo se lee vía COLUMNAS, que ya
+// propaga el cambio a listAll/findById/create (RETURNING) y a cada UPDATE
+// condicional de este archivo sin tocarlos individualmente.
+const COLUMNAS = `id, codigo, solicitud_id, valor, estado, descripcion, creado_por, creado_en, actualizado_en, fecha_vigencia, aceptada_en, rechazada_en, subtotal, iva_porcentaje, iva_valor, total, anticipo_porcentaje, anticipo_valor, saldo_pendiente, metodo_anticipo, estado_anticipo, anticipo_confirmado_en, anticipo_confirmado_por, (comprobante_anticipo IS NOT NULL) AS comprobante_recibido, metodo_saldo, estado_saldo, saldo_confirmado_en, saldo_confirmado_por, (comprobante_saldo IS NOT NULL) AS saldo_comprobante_recibido`;
 
 export async function listAll(): Promise<Cotizacion[]> {
   const result = await pool.query<Cotizacion>(
@@ -68,6 +74,64 @@ export async function findById(id: string): Promise<Cotizacion | null> {
   const result = await pool.query<Cotizacion>(
     `SELECT ${COLUMNAS} FROM cotizaciones WHERE id = $1`,
     [id]
+  );
+  return result.rows[0] ?? null;
+}
+
+// PC-2026-01, Etapa 4: bloquea (FOR UPDATE) la fila de la cotización dentro
+// de la transacción del `client` recibido — mismo patrón ya usado en
+// ordenEvidencia.repository.ts::findEstadoParaActualizar, para serializar
+// intentos concurrentes de gestionar/confirmar el mismo pago. Solo expone
+// los campos que la integración de transferencias_pago necesita decidir,
+// no el objeto completo.
+export interface CotizacionLockTransferencia {
+  estado: string;
+  estado_anticipo: string | null;
+  estado_saldo: string;
+  anticipo_valor: string | null;
+  saldo_pendiente: string | null;
+  comprobante_anticipo: string | null;
+  comprobante_saldo: string | null;
+  metodo_saldo: string | null;
+}
+
+export async function lockParaTransferencia(
+  id: string,
+  client: PoolClient
+): Promise<CotizacionLockTransferencia | null> {
+  const result = await client.query<CotizacionLockTransferencia>(
+    `SELECT estado, estado_anticipo, estado_saldo, anticipo_valor, saldo_pendiente, comprobante_anticipo, comprobante_saldo, metodo_saldo
+     FROM cotizaciones WHERE id = $1 FOR UPDATE`,
+    [id]
+  );
+  return result.rows[0] ?? null;
+}
+
+// Fase 1 (autorización explícita — "Implementación Fase 1: envío
+// automático de cotizaciones por correo"): única consulta de solo lectura
+// para resolver el correo real del cliente de una cotización, mediante la
+// relación ya existente cotizaciones.solicitud_id -> solicitudes.cliente_id
+// -> clientes.email — ningún JOIN ni relación nueva, solo lectura de FK ya
+// aprobadas. `solicitud_codigo` viaja junto porque ya es el identificador
+// legible que el cliente reconoce (se le entregó en el correo de
+// confirmación de su solicitud, Fase SOLICITUD-RECUPERACION-01B) — sirve
+// para que el correo de esta fase pueda referenciar la misma solicitud sin
+// inventar un identificador nuevo. Nunca se expone aquí nada del código de
+// acceso ni de su hash.
+export interface ContactoParaCorreo {
+  clienteNombre: string;
+  clienteEmail: string;
+  solicitudCodigo: string | null;
+}
+
+export async function obtenerContactoParaCorreo(cotizacionId: string): Promise<ContactoParaCorreo | null> {
+  const result = await pool.query<ContactoParaCorreo>(
+    `SELECT cl.nombre AS "clienteNombre", cl.email AS "clienteEmail", s.codigo AS "solicitudCodigo"
+     FROM cotizaciones c
+     JOIN solicitudes s ON s.id = c.solicitud_id
+     JOIN clientes cl ON cl.id = s.cliente_id
+     WHERE c.id = $1`,
+    [cotizacionId]
   );
   return result.rows[0] ?? null;
 }
@@ -221,8 +285,14 @@ export async function updateCondiciones(
 // cotización de la misma solicitud ya está ACEPTADA, `ux_cotizaciones_una_
 // aceptada` rechaza el UPDATE con una violación de unicidad — el service
 // la traduce a YaExisteAceptadaError, igual que en cambiarEstadoCotizacion.
-export async function marcarAceptada(id: string): Promise<Cotizacion | null> {
-  const result = await pool.query<Cotizacion>(
+// C2.2 (autorización explícita — alternativa B de la auditoría C2.1):
+// acepta un `Executor` opcional (por defecto `pool`, igual que el resto de
+// este archivo) para poder ejecutarse dentro de la misma transacción que
+// convierte el lead vinculado — ver cotizaciones.service.ts::
+// aceptarCotizacionPublica(). Ningún llamador existente que no pase
+// `executor` cambia de comportamiento.
+export async function marcarAceptada(id: string, executor: Executor = pool): Promise<Cotizacion | null> {
+  const result = await executor.query<Cotizacion>(
     `UPDATE cotizaciones
      SET estado = 'ACEPTADA', aceptada_en = CURRENT_TIMESTAMP, actualizado_en = CURRENT_TIMESTAMP
      WHERE id = $1 AND estado = 'ENVIADA'
@@ -297,9 +367,10 @@ export async function obtenerNombreComprobante(id: string): Promise<string | nul
 export async function actualizarEstadoAnticipo(
   id: string,
   nuevoEstadoAnticipo: string,
-  confirmadoPor: string
+  confirmadoPor: string,
+  executor: Executor = pool
 ): Promise<Cotizacion | null> {
-  const result = await pool.query<Cotizacion>(
+  const result = await executor.query<Cotizacion>(
     `UPDATE cotizaciones
      SET estado_anticipo = $2, anticipo_confirmado_en = CURRENT_TIMESTAMP, anticipo_confirmado_por = $3, actualizado_en = CURRENT_TIMESTAMP
      WHERE id = $1 AND estado = 'ACEPTADA' AND estado_anticipo = 'PENDIENTE'
@@ -347,9 +418,10 @@ export async function obtenerNombreComprobanteSaldo(id: string): Promise<string 
 export async function validarSaldo(
   id: string,
   confirmadoPor: string,
-  metodoSaldo: string
+  metodoSaldo: string,
+  executor: Executor = pool
 ): Promise<Cotizacion | null> {
-  const result = await pool.query<Cotizacion>(
+  const result = await executor.query<Cotizacion>(
     `UPDATE cotizaciones
      SET estado_saldo = 'VALIDADO', metodo_saldo = $3, saldo_confirmado_en = CURRENT_TIMESTAMP, saldo_confirmado_por = $2, actualizado_en = CURRENT_TIMESTAMP
      WHERE id = $1 AND estado = 'ACEPTADA' AND estado_saldo = 'PENDIENTE'
@@ -359,8 +431,12 @@ export async function validarSaldo(
   return result.rows[0] ?? null;
 }
 
-export async function rechazarSaldo(id: string, confirmadoPor: string): Promise<Cotizacion | null> {
-  const result = await pool.query<Cotizacion>(
+export async function rechazarSaldo(
+  id: string,
+  confirmadoPor: string,
+  executor: Executor = pool
+): Promise<Cotizacion | null> {
+  const result = await executor.query<Cotizacion>(
     `UPDATE cotizaciones
      SET estado_saldo = 'RECHAZADO', saldo_confirmado_en = CURRENT_TIMESTAMP, saldo_confirmado_por = $2, actualizado_en = CURRENT_TIMESTAMP
      WHERE id = $1 AND estado = 'ACEPTADA' AND estado_saldo = 'PENDIENTE'

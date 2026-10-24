@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Usuario } from '../lib/authClient';
+import type { Sesion, Usuario } from '../lib/authClient';
 import BandejaSolicitudes from './BandejaSolicitudes';
 import DetalleSolicitud from './DetalleSolicitud';
 import GestionUsuarios from './GestionUsuarios';
@@ -8,13 +8,19 @@ import GestionOrdenes from './GestionOrdenes';
 import GestionLeads from './GestionLeads';
 import GestionAlertas from './GestionAlertas';
 import GestionDashboard from './GestionDashboard';
+import GestionCuentasBancarias from './GestionCuentasBancarias';
+import MenuUsuario from './MenuUsuario';
 
 interface AreaPrivadaProps {
   usuario: Usuario;
   token: string;
   onLogout: () => void;
   onSesionInvalida: () => void;
+  onSesionRenovada: (sesion: Sesion) => void;
 }
+
+// Interruptor de la campanita de notificaciones del encabezado: apagado hasta que se implemente el módulo.
+const MOSTRAR_CAMPANA_NOTIFICACIONES = false;
 
 const ROLES_CON_BANDEJA = ['ADMIN', 'COMERCIAL'];
 const ROLES_CON_ORDENES = ['ADMIN', 'OPERATIVO'];
@@ -30,9 +36,9 @@ const ROLES_CON_ALERTAS = ['ADMIN', 'OPERATIVO', 'COMERCIAL'];
 // COTIZACIONES y LEADS, que OPERATIVO no debe ver.
 const ROLES_CON_LECTURA_SOLICITUDES = ['ADMIN', 'COMERCIAL', 'OPERATIVO'];
 
-type Seccion = 'solicitudes' | 'cotizaciones' | 'ordenes' | 'leads' | 'alertas' | 'usuarios' | 'dashboard';
+type Seccion = 'solicitudes' | 'cotizaciones' | 'ordenes' | 'leads' | 'alertas' | 'usuarios' | 'dashboard' | 'cuentas-bancarias';
 
-export default function AreaPrivada({ usuario, token, onLogout, onSesionInvalida }: AreaPrivadaProps) {
+export default function AreaPrivada({ usuario, token, onLogout, onSesionInvalida, onSesionRenovada }: AreaPrivadaProps) {
   const tieneBandeja = ROLES_CON_BANDEJA.includes(usuario.rol);
   const tieneOrdenes = ROLES_CON_ORDENES.includes(usuario.rol);
   const puedeVerOrdenes = ROLES_CON_LECTURA_ORDENES.includes(usuario.rol);
@@ -113,28 +119,41 @@ export default function AreaPrivada({ usuario, token, onLogout, onSesionInvalida
     <div className="bg-background text-on-surface font-body-md antialiased min-h-screen">
       <header className="bg-background border-b border-surface-container-highest sticky top-0 z-50">
         <div className="flex justify-between items-center w-full px-margin-mobile md:px-margin-desktop py-4 max-w-container-max mx-auto">
-          <a className="font-['Montserrat'] text-[24px] lg:text-[32px] font-black text-on-surface uppercase tracking-tighter flex items-center">
-            <span>NEXT</span>
-            <span className="text-primary-container">PROJECT</span>
-            <span className="ml-3 font-label-caps text-label-caps text-on-surface-variant tracking-widest hidden sm:inline">
+          <a className="font-['Montserrat'] text-[24px] lg:text-[32px] font-black text-on-surface uppercase tracking-tighter flex flex-col items-start">
+            <span className="flex items-center leading-none">
+              <span>NEXT</span>
+              <span className="text-primary-container">PROJECT</span>
+            </span>
+            <span className="mt-1 font-label-caps text-label-caps text-on-surface-variant tracking-widest hidden sm:block">
               ÁREA PRIVADA
             </span>
           </a>
 
           <div className="flex items-center gap-4">
-            <div className="text-right hidden sm:block">
-              <p className="font-body-md text-body-md text-on-surface leading-tight">{usuario.nombre}</p>
-              <p className="font-code-sm text-code-sm text-primary-container uppercase leading-tight">{usuario.rol}</p>
-            </div>
-            <button
-              type="button"
-              onClick={onLogout}
-              aria-label="Cerrar sesión"
-              className="inline-flex items-center justify-center px-4 py-2 border border-outline text-on-surface hover:bg-surface-container-high transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
-            >
-              <span className="material-symbols-outlined sm:mr-2 text-[18px]">logout</span>
-              <span className="hidden sm:inline">CERRAR SESIÓN</span>
-            </button>
+            {/* Notificaciones — OCULTA por ahora (queda para una fase posterior): para volver a mostrarla
+                basta poner MOSTRAR_CAMPANA_NOTIFICACIONES en true. Es solo un botón deshabilitado, sin
+                contador ni lógica; no hay ningún endpoint, tabla ni dato detrás. */}
+            {MOSTRAR_CAMPANA_NOTIFICACIONES && (tieneBandeja || tieneOrdenes) && (
+              <button
+                type="button"
+                disabled
+                title="Notificaciones — próximamente"
+                aria-label="Notificaciones (próximamente)"
+                className="inline-flex items-center justify-center w-10 h-10 border border-outline text-on-surface-variant opacity-50 cursor-not-allowed"
+              >
+                <span className="material-symbols-outlined text-[20px]">notifications</span>
+              </button>
+            )}
+            {/* Menú de usuario: avatar con iniciales; nombre, rol, correo, «Mi perfil»,
+                «Cambiar contraseña» y «Cerrar sesión» (el mismo
+                `onLogout` de siempre) viven dentro del menú desplegable. */}
+            <MenuUsuario
+              usuario={usuario}
+              token={token}
+              onLogout={onLogout}
+              onSesionInvalida={onSesionInvalida}
+              onSesionRenovada={onSesionRenovada}
+            />
           </div>
         </div>
       </header>
@@ -160,6 +179,8 @@ export default function AreaPrivada({ usuario, token, onLogout, onSesionInvalida
                   ? 'DASHBOARD'
                   : seccion === 'usuarios'
                   ? 'GESTIÓN DE USUARIOS'
+                  : seccion === 'cuentas-bancarias'
+                  ? 'CUENTAS BANCARIAS'
                   : seccion === 'cotizaciones'
                     ? 'GESTIÓN DE COTIZACIONES'
                     : seccion === 'ordenes'
@@ -266,28 +287,27 @@ export default function AreaPrivada({ usuario, token, onLogout, onSesionInvalida
                   USUARIOS
                 </button>
               )}
-
-              {/* Notificaciones — entrada visual global preparada para uso
-                  futuro (autorización explícita: solo placeholder de
-                  navegación). Sin sección, sin contador, sin datos
-                  simulados — no se agrega ningún endpoint/tabla/lógica.
-                  Oculto bajo `sm` (auditoría responsive): al estar deshabilitado
-                  solo ocupaba una fila extra de navegación en móvil. */}
-              <button
-                type="button"
-                disabled
-                title="Próximamente"
-                className="hidden sm:inline-flex items-center gap-2 px-4 py-2 font-['Inter'] text-[14px] font-semibold border border-outline text-on-surface-variant opacity-50 cursor-not-allowed"
-              >
-                <span className="material-symbols-outlined text-[16px]">notifications</span>
-                NOTIFICACIONES
-              </button>
+              {esAdmin && (
+                <button
+                  type="button"
+                  onClick={() => setSeccion('cuentas-bancarias')}
+                  className={`inline-flex items-center px-4 py-2 font-['Inter'] text-[14px] font-semibold transition-colors cursor-pointer ${
+                    seccion === 'cuentas-bancarias'
+                      ? 'bg-primary-container text-on-primary-container'
+                      : 'border border-outline text-on-surface hover:bg-surface-container-high'
+                  }`}
+                >
+                  CUENTAS BANCARIAS
+                </button>
+              )}
             </div>
 
             {seccion === 'dashboard' && esAdmin ? (
               <GestionDashboard token={token} onSesionInvalida={onSesionInvalida} />
             ) : seccion === 'usuarios' && esAdmin ? (
               <GestionUsuarios token={token} onSesionInvalida={onSesionInvalida} />
+            ) : seccion === 'cuentas-bancarias' && esAdmin ? (
+              <GestionCuentasBancarias token={token} onSesionInvalida={onSesionInvalida} />
             ) : seccion === 'ordenes' && puedeVerOrdenes ? (
               <GestionOrdenes
                 token={token}

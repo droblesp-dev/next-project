@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Eye } from 'lucide-react';
 import { fetchAutenticado, SesionInvalidaError } from '../lib/authClient';
 import type { Solicitud } from './BandejaSolicitudes';
 
@@ -488,9 +489,11 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
               <button
                 type="button"
                 onClick={() => onVerOrden(alertaSeleccionada.orden_id)}
-                className="mt-4 inline-flex items-center px-4 py-2 border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
+                aria-label="Ver orden relacionada"
+                title="Ver orden"
+                className="mt-4 inline-flex items-center justify-center w-11 h-11 border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors cursor-pointer"
               >
-                VER ORDEN
+                <Eye size={18} aria-hidden="true" />
               </button>
             )}
           </div>
@@ -506,8 +509,7 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
     return (
       <div className="space-y-8">
         <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase max-w-2xl">
-          Vista de supervisión: consulte las alertas generadas por el sistema y su contexto. Esta vista no permite
-          atenderlas — esa acción es responsabilidad de Operativo.
+          Vista de supervisión: solo consulta. Atender las alertas es responsabilidad de Operativo.
         </p>
 
         {loading && <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">CARGANDO ALERTAS...</p>}
@@ -693,11 +695,11 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
                     const { orden, cliente, servicio } = datosOrdenAlerta(a.orden_id);
                     return (
                       <tr key={a.id} className="border-b border-outline hover:bg-surface-container-high transition-colors">
-                        <td className="py-3 px-4 font-body-md text-body-md text-on-surface">{a.tipo}</td>
+                        <td className="py-3 px-4 font-['Inter'] text-[14px] font-normal leading-[20px] text-on-surface">{a.tipo}</td>
                         <td className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant">{a.condicion}</td>
-                        <td className="py-3 px-4 font-body-md text-body-md text-on-surface">{orden?.codigo ?? '—'}</td>
-                        <td className="py-3 px-4 font-body-md text-body-md text-on-surface">{cliente}</td>
-                        <td className="py-3 px-4 font-body-md text-body-md text-on-surface">{servicio}</td>
+                        <td className="py-3 px-4 font-code-sm text-code-sm text-on-surface">{orden?.codigo ?? '—'}</td>
+                        <td className="py-3 px-4 font-['Inter'] text-[14px] font-normal leading-[20px] text-on-surface">{cliente}</td>
+                        <td className="py-3 px-4 font-['Inter'] text-[14px] font-normal leading-[20px] text-on-surface break-words">{servicio}</td>
                         <td className="py-3 px-4">
                           <span className={`inline-flex whitespace-nowrap px-2.5 py-1 font-code-sm text-[11px]! leading-tight uppercase ${claseBadgeEstadoAlerta(a.estado)}`}>
                             {a.estado.replace(/_/g, ' ')}
@@ -710,9 +712,11 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
                           <button
                             type="button"
                             onClick={() => setAlertaSeleccionada(a)}
-                            className="inline-flex items-center px-3 py-1 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
+                            aria-label="Ver detalle de la alerta"
+                            title="Ver detalle"
+                            className="inline-flex items-center justify-center w-11 h-11 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors cursor-pointer"
                           >
-                            VER
+                            <Eye size={18} aria-hidden="true" />
                           </button>
                         </td>
                       </tr>
@@ -762,9 +766,11 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
                       <button
                         type="button"
                         onClick={() => setAlertaSeleccionada(a)}
-                        className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
+                        aria-label="Ver detalle de la alerta"
+                        title="Ver detalle"
+                        className="flex-1 inline-flex items-center justify-center min-h-11 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container hover:border-primary-container transition-colors cursor-pointer"
                       >
-                        VER
+                        <Eye size={18} aria-hidden="true" />
                       </button>
                     </div>
                   </div>
@@ -877,9 +883,11 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
                 <button
                   type="button"
                   onClick={() => onVerOrden(a.orden_id)}
-                  className="px-4 py-2 border border-outline text-on-surface hover:bg-surface-container-high transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
+                  aria-label="Ver orden relacionada"
+                  title="Ver orden"
+                  className="inline-flex items-center justify-center w-11 h-11 border border-outline text-on-surface hover:bg-surface-container-high transition-colors cursor-pointer"
                 >
-                  VER ORDEN
+                  <Eye size={18} aria-hidden="true" />
                 </button>
                 {puedeAtender && a.estado === 'PENDIENTE' && (
                   <button

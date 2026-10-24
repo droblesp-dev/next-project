@@ -373,7 +373,7 @@ export default function GestionUsuarios({ token, onSesionInvalida }: GestionUsua
             <button
               type="button"
               onClick={() => setMostrarFormularioCrear((v) => !v)}
-              className="w-full flex items-center justify-between font-['Inter'] text-[14px] font-semibold text-primary-container tracking-widest uppercase cursor-pointer"
+              className="w-full min-h-11 flex items-center justify-between font-['Inter'] text-[14px] font-semibold text-primary-container tracking-widest uppercase cursor-pointer"
             >
               <span className="flex items-center gap-2">
                 <span className="material-symbols-outlined text-[18px]">
@@ -552,8 +552,8 @@ export default function GestionUsuarios({ token, onSesionInvalida }: GestionUsua
                 )}
                 {datosPagina.map((u) => (
                   <tr key={u.id} className="border-b border-outline hover:bg-surface-container-high transition-colors">
-                    <td className="py-3 px-4 font-body-md text-body-md text-on-surface">{u.nombre}</td>
-                    <td className="py-3 px-4 font-body-md text-body-md text-on-surface">{u.email}</td>
+                    <td className="py-3 px-4 font-['Inter'] text-[14px] font-normal leading-[20px] text-on-surface">{u.nombre}</td>
+                    <td className="py-3 px-4 font-['Inter'] text-[14px] font-normal leading-[20px] text-on-surface">{u.email}</td>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
                         <span className={`inline-flex px-2 py-0.5 font-code-sm text-[10px] uppercase ${claseBadgeRol(u.rol)}`}>

@@ -5,7 +5,11 @@ import { pool } from '../config/db.js';
 import { env } from '../config/env.js';
 import * as cotizacionesRepo from '../repositories/cotizaciones.repository.js';
 import * as solicitudesRepo from '../repositories/solicitudes.repository.js';
+import { listarCuentasActivasPublico } from './cuentasBancarias.service.js';
+import type { CuentaBancariaPublica } from '../repositories/cuentasBancarias.repository.js';
 import { crearOrdenAutomatica } from './ordenAutomatica.service.js';
+import { convertirLeadPorAceptacion } from './leads.service.js';
+import { enviarCodigoTemporalCotizacion, enviarCodigoAccesoRegenerado } from './email.service.js';
 import type { Cotizacion } from '../repositories/cotizaciones.repository.js';
 
 export class SolicitudNoEncontradaError extends Error {}
@@ -417,23 +421,41 @@ function limpiarIntentos(cotizacionId: string): void {
 export interface EnlaceGenerado {
   token: string;
   codigo: string;
+  // Fase 1 (autorización explícita — "Implementación Fase 1: envío
+  // automático de cotizaciones por correo"): datos mínimos para que el
+  // controller decida si puede enviar el correo con el enlace — nunca el
+  // código de 6 dígitos, que esta fase excluye deliberadamente de
+  // cualquier correo. `null` si no se pudo resolver un correo real del
+  // cliente (relación inexistente o email vacío) — nunca se inventa ni se
+  // asume un valor.
+  destinatario: { nombre: string; email: string; solicitudCodigo: string | null } | null;
 }
 
-// Solo tiene sentido generar un enlace mientras la cotización está
-// ENVIADA: es el único estado desde el cual el cliente podrá aceptar o
-// rechazar (Fase C). Generar un enlace sobre un estado terminal no tendría
-// ninguna acción posible del lado del cliente. Cada llamada genera un
-// código NUEVO y sobrescribe el hash anterior — invalida en la práctica
+// Generar un enlace tiene sentido en ENVIADA (único estado desde el cual
+// el cliente podrá aceptar o rechazar, Fase C) y, desde la autorización
+// explícita "Regeneración manual del código para cotizaciones ACEPTADAS",
+// también en ACEPTADA — no hay ninguna regla documentada que lo prohíba
+// (el comentario original solo reflejaba el alcance de la Fase C, nunca
+// una restricción deliberada); Q1/la Fase de recuperación ya establecieron
+// que una cotización ACEPTADA sigue teniendo acciones reales del cliente
+// (subir comprobante de anticipo/saldo), así que sí tiene sentido poder
+// regenerar su código ahí también. RECHAZADA/VENCIDA/CANCELADA/BORRADOR
+// siguen bloqueadas exactamente igual que antes — ninguna de esas sí es
+// terminal sin ninguna acción pendiente. Cada llamada genera un código
+// NUEVO y sobrescribe el hash anterior — invalida en la práctica
 // cualquier código previamente entregado, sin necesidad de una columna de
 // versión (decisión explícita). También limpia el contador de intentos:
-// un enlace nuevo empieza con el contador en cero.
+// un enlace nuevo empieza con el contador en cero. Nunca toca `estado`,
+// `valor`, anticipo/saldo, comprobantes ni crea ninguna orden — solo
+// `acceso_codigo_hash` y el JWT (mismo código ya existente, sin tocar esa
+// parte).
 export async function generarEnlaceCotizacion(id: string): Promise<EnlaceGenerado> {
   await cotizacionesRepo.marcarVencidasSiCorresponde();
   const cotizacion = await cotizacionesRepo.findById(id);
   if (!cotizacion) {
     throw new CotizacionNoEncontradaError();
   }
-  if (cotizacion.estado !== 'ENVIADA') {
+  if (cotizacion.estado !== 'ENVIADA' && cotizacion.estado !== 'ACEPTADA') {
     throw new CotizacionNoDisponibleError();
   }
 
@@ -443,9 +465,23 @@ export async function generarEnlaceCotizacion(id: string): Promise<EnlaceGenerad
   limpiarIntentos(id);
 
   const payload: EnlacePayload = { cotizacionId: id, purpose: ENLACE_PURPOSE };
-  const token = jwt.sign(payload, env.cotizacionLinkSecret, { expiresIn: ENLACE_EXPIRA_EN });
+  const token = jwt.sign(payload, env.cotizacionLinkSecret, { algorithm: 'HS256', expiresIn: ENLACE_EXPIRA_EN });
 
-  return { token, codigo };
+  // Fase 1 (autorización explícita): resuelve el correo real del cliente
+  // mediante la relación cotizaciones.solicitud_id -> solicitudes.cliente_id
+  // -> clientes.email (único JOIN de solo lectura, sin inventar ninguna
+  // relación nueva). Si no hay fila (no debería ocurrir bajo las FK
+  // existentes, pero no se asume) o el email queda vacío tras recortar
+  // espacios, `destinatario` es `null` — el llamador decide no enviar
+  // nada, nunca se envía a una dirección vacía.
+  const contacto = await cotizacionesRepo.obtenerContactoParaCorreo(id);
+  const emailContacto = contacto?.clienteEmail.trim();
+  const destinatario =
+    contacto && emailContacto
+      ? { nombre: contacto.clienteNombre, email: emailContacto, solicitudCodigo: contacto.solicitudCodigo }
+      : null;
+
+  return { token, codigo, destinatario };
 }
 
 export interface CotizacionPublica {
@@ -467,6 +503,12 @@ export interface CotizacionPublica {
   estado_saldo: string;
   saldo_comprobante_recibido: boolean;
   datos_bancarios: DatosBancarios | null;
+  // PC-2026-01, Etapa 4: lista aditiva — convive con `datos_bancarios`
+  // (variables BANCO_*, todavía no retiradas) sin romper el contrato
+  // existente; el frontend público no la consume todavía (eso pertenece a
+  // una etapa de frontend independiente, fuera del alcance de esta tarea).
+  // Solo cuentas activas, solo campos públicos (ver cuentasBancarias.repository.ts).
+  cuentas_bancarias_activas: CuentaBancariaPublica[];
   solicitud: {
     servicio: string;
     descripcion: string;
@@ -500,7 +542,7 @@ function obtenerDatosBancariosSiConfigurados(): DatosBancarios | null {
 function verificarToken(token: string): string {
   let payload: EnlacePayload;
   try {
-    const decoded = jwt.verify(token, env.cotizacionLinkSecret);
+    const decoded = jwt.verify(token, env.cotizacionLinkSecret, { algorithms: ['HS256'] });
     if (typeof decoded !== 'object' || decoded === null) {
       throw new Error('Payload inválido.');
     }
@@ -553,6 +595,10 @@ async function construirCotizacionPublica(cotizacionId: string): Promise<Cotizac
       cotizacion.metodo_anticipo === 'TRANSFERENCIA' || cotizacion.metodo_saldo === 'TRANSFERENCIA'
         ? obtenerDatosBancariosSiConfigurados()
         : null,
+    cuentas_bancarias_activas:
+      cotizacion.metodo_anticipo === 'TRANSFERENCIA' || cotizacion.metodo_saldo === 'TRANSFERENCIA'
+        ? await listarCuentasActivasPublico()
+        : [],
     solicitud: {
       servicio: solicitud.servicio,
       descripcion: solicitud.descripcion,
@@ -648,30 +694,85 @@ export async function verificarCodigoCotizacion(token: string, codigo: string): 
 // restricción de una sola ACEPTADA por solicitud la sigue garantizando
 // `ux_cotizaciones_una_aceptada` — una violación se traduce en
 // YaExisteAceptadaError, igual que en el flujo interno.
+//
+// C2.2 (autorización explícita — alternativa B de la auditoría C2.1):
+// registrar la aceptación y convertir el lead vinculado ocurren dentro de
+// la MISMA transacción PostgreSQL — se confirman juntas (COMMIT) o se
+// revierten juntas (ROLLBACK). Mismo patrón ya usado en el proyecto para
+// transacciones explícitas (solicitudes.service.ts::crearSolicitud,
+// cotizaciones.service.ts::cambiarAEnviadaConSolicitud): `pool.connect()`
+// dedicado, BEGIN/COMMIT/ROLLBACK explícitos, `client.release()` siempre en
+// `finally`.
+//
+// La validación de acceso (token + código + estado ENVIADA vigente) ocurre
+// ANTES de abrir la transacción — "enviar una cotización, abrir un enlace o
+// completar una solicitud no equivale a aceptarla": solo a partir de aquí
+// hay una aceptación que de verdad se intentará registrar.
+//
+// La creación de la orden automática (y, dentro de ella, la ficha técnica
+// vía Gemini) se mantiene DELIBERADAMENTE fuera de esta transacción y se
+// invoca solo después del COMMIT — ver auditoría C2.1: incluirla exigiría
+// propagar este mismo `client` a través de crearOrden()/
+// resolverOperativoPorDefecto() (usado también por la creación manual de
+// órdenes, que no debe quedar forzada a ninguna transacción externa) y,
+// además, generarFicha() se dispara sin esperar y lee la orden por su
+// cuenta (otra conexión) — si la orden todavía no estuviera confirmada por
+// un COMMIT, esa lectura no la encontraría. crearOrdenAutomatica() sigue
+// sin lanzar nunca (sin cambios): la aceptación ya quedó confirmada por el
+// COMMIT anterior y no debe revertirse por este efecto secundario.
 export async function aceptarCotizacionPublica(token: string, codigo: string): Promise<CotizacionPublica> {
   const cotizacion = await validarAccesoConCodigo(token, codigo);
   if (cotizacion.estado !== 'ENVIADA') {
     throw new AccionNoPermitidaError();
   }
 
+  const client = await pool.connect();
+  let actualizada: Cotizacion | null = null;
   try {
-    const actualizada = await cotizacionesRepo.marcarAceptada(cotizacion.id);
-    if (!actualizada) {
-      throw new AccionNoPermitidaError();
+    await client.query('BEGIN');
+
+    actualizada = await cotizacionesRepo.marcarAceptada(cotizacion.id, client);
+    if (actualizada) {
+      await convertirLeadPorAceptacion(actualizada.solicitud_id, client);
     }
-    // Bloque 1.1: sin anticipo, la orden se crea al aceptar. Con anticipo
-    // PENDIENTE se espera a que ADMIN/COMERCIAL lo valide (gestionarAnticipo).
-    // crearOrdenAutomatica nunca lanza: la aceptación ya está confirmada.
-    if (actualizada.estado_anticipo === 'NO_APLICA') {
-      await crearOrdenAutomatica(actualizada.id, 'ACEPTACION');
-    }
-    return construirCotizacionPublica(actualizada.id);
+
+    await client.query('COMMIT');
   } catch (error) {
+    // C2.4 (autorización explícita, hallazgo de la revisión C2.3): el
+    // ROLLBACK se protege con su propio try/catch — si la conexión ya está
+    // rota (p. ej. por el mismo motivo que causó `error`), un ROLLBACK que
+    // también falla ya NO sobrescribe ni oculta el error original. Solo se
+    // registra el fallo secundario del ROLLBACK (mensaje de la excepción,
+    // nunca parámetros de consulta ni datos de la cotización/el cliente) —
+    // el error que de verdad se propaga sigue siendo `error`, con la misma
+    // traducción de isUniqueViolation() que ya existía.
+    try {
+      await client.query('ROLLBACK');
+    } catch (rollbackError) {
+      console.error(
+        '[cotizaciones] ROLLBACK falló al revertir aceptarCotizacionPublica (se conserva el error original):',
+        rollbackError instanceof Error ? rollbackError.message : 'error desconocido'
+      );
+    }
     if (isUniqueViolation(error)) {
       throw new YaExisteAceptadaError();
     }
     throw error;
+  } finally {
+    client.release();
   }
+
+  if (!actualizada) {
+    throw new AccionNoPermitidaError();
+  }
+
+  // Bloque 1.1: sin anticipo, la orden se crea al aceptar. Con anticipo
+  // PENDIENTE se espera a que ADMIN/COMERCIAL lo valide (gestionarAnticipo).
+  // crearOrdenAutomatica nunca lanza: la aceptación ya está confirmada.
+  if (actualizada.estado_anticipo === 'NO_APLICA') {
+    await crearOrdenAutomatica(actualizada.id, 'ACEPTACION');
+  }
+  return construirCotizacionPublica(actualizada.id);
 }
 
 // Fase D.5: mismas exigencias que aceptar (token + código, estado ENVIADA
@@ -876,4 +977,228 @@ function isUniqueViolation(error: unknown): boolean {
     'code' in error &&
     (error as { code?: string }).code === '23505'
   );
+}
+
+// =======================================================================
+// Recuperación del código de acceso — "Implementación Fase 1: Recuperación
+// segura del código de cotización" (autorización explícita). Exclusiva del
+// escenario "el cliente conserva el enlace público, pero perdió el código
+// de acceso de 6 dígitos" — NUNCA cambia ni emite un token nuevo, NUNCA
+// toca el escenario de "perdió ambos" (Escenario B de la Fase 3A, fuera de
+// alcance aquí).
+//
+// Contadores/bloqueo en memoria del propio proceso, completamente
+// INDEPENDIENTES de `intentosPorCotizacion` (que protege el código de
+// acceso REAL en el flujo de acceso normal, arriba en este mismo archivo)
+// — nunca se comparten ni se debilitan entre sí.
+//
+// LIMITACIÓN DOCUMENTADA, igual que `intentosPorCotizacion`: este estado
+// vive solo en memoria del proceso backend — un reinicio lo pierde por
+// completo (todos los contadores, bloqueos y códigos temporales
+// pendientes). No se presenta como persistente entre reinicios. No existe
+// hoy ningún mecanismo automático para levantar un bloqueo una vez
+// activado — queda, deliberadamente, fuera del alcance de esta fase
+// construir ese mecanismo de desbloqueo comercial (ver informe de cierre).
+// =======================================================================
+
+const OTP_VIGENCIA_MS = 10 * 60 * 1000;
+const OTP_MAX_FALLOS = 3;
+const OTP_MAX_SOLICITUDES = 5;
+const OTP_VENTANA_SOLICITUDES_MS = 60 * 60 * 1000;
+
+interface EstadoRecuperacionCotizacion {
+  otpHash: string | null;
+  otpExpiraEn: number | null;
+  fallosVerificacion: number;
+  // Marcas de tiempo (epoch ms) de cada solicitud de OTP dentro de la
+  // ventana móvil de 60 minutos — se recorta en cada solicitud nueva.
+  solicitudesRecientes: number[];
+  bloqueado: boolean;
+  // Serializa verificaciones concurrentes de la MISMA cotización: evita
+  // que dos peticiones simultáneas con el mismo OTP correcto disparen dos
+  // regeneraciones inconsistentes (ver verificarRecuperacionCodigo).
+  procesandoVerificacion: boolean;
+}
+
+const recuperacionPorCotizacion = new Map<string, EstadoRecuperacionCotizacion>();
+
+function obtenerEstadoRecuperacion(cotizacionId: string): EstadoRecuperacionCotizacion {
+  let estado = recuperacionPorCotizacion.get(cotizacionId);
+  if (!estado) {
+    estado = {
+      otpHash: null,
+      otpExpiraEn: null,
+      fallosVerificacion: 0,
+      solicitudesRecientes: [],
+      bloqueado: false,
+      procesandoVerificacion: false,
+    };
+    recuperacionPorCotizacion.set(cotizacionId, estado);
+  }
+  return estado;
+}
+
+export type EstadoSolicitudOtp = 'enviado' | 'no_disponible' | 'bloqueado';
+
+// Paso A. El token ya identifica, firmado y verificado, una cotización
+// real — por eso esta función nunca necesita (ni acepta) un correo
+// alternativo: siempre resuelve el correo YA REGISTRADO mediante
+// obtenerContactoParaCorreo() (misma función de la Fase 1 de correo
+// automático, sin cambios). La respuesta pública nunca distingue "no hay
+// correo registrado" de "Brevo falló" — ambas colapsan en 'no_disponible',
+// para no revelar nada sobre la relación cliente/cotización.
+export async function solicitarRecuperacionCodigo(token: string): Promise<EstadoSolicitudOtp> {
+  const cotizacionId = verificarToken(token);
+  await cotizacionesRepo.marcarVencidasSiCorresponde();
+  const cotizacion = await cotizacionesRepo.findById(cotizacionId);
+  if (!cotizacion) {
+    throw new CotizacionNoEncontradaError();
+  }
+  if (cotizacion.estado === 'VENCIDA') {
+    throw new EnlaceInvalidoError();
+  }
+
+  const estado = obtenerEstadoRecuperacion(cotizacionId);
+  if (estado.bloqueado) {
+    return 'bloqueado';
+  }
+
+  const ahora = Date.now();
+  estado.solicitudesRecientes = estado.solicitudesRecientes.filter(
+    (marca) => ahora - marca < OTP_VENTANA_SOLICITUDES_MS
+  );
+  // "Cinco solicitudes permitidas, la sexta bloquea": la ventana ya
+  // contiene como máximo 5 marcas válidas en este punto; si ya hay 5, ESTA
+  // solicitud (la sexta) es la que activa el bloqueo, sin emitir OTP.
+  if (estado.solicitudesRecientes.length >= OTP_MAX_SOLICITUDES) {
+    estado.bloqueado = true;
+    return 'bloqueado';
+  }
+  estado.solicitudesRecientes.push(ahora);
+
+  const contacto = await cotizacionesRepo.obtenerContactoParaCorreo(cotizacionId);
+  const email = contacto?.clienteEmail.trim();
+  if (!contacto || !email) {
+    return 'no_disponible';
+  }
+
+  const otp = crypto.randomInt(100000, 1000000).toString();
+
+  // Orden deliberado (autorización explícita, "revisar cuidadosamente el
+  // orden de las operaciones"): se intenta ENVIAR primero; el nuevo OTP
+  // solo se persiste en memoria (invalidando el anterior, si había uno
+  // todavía vigente) cuando el envío confirma éxito. Si falla, un OTP
+  // previo todavía no vencido sigue siendo utilizable — el cliente nunca
+  // queda sin ningún código funcional por una segunda solicitud fallida.
+  const envio = await enviarCodigoTemporalCotizacion({
+    destinatarioEmail: email,
+    destinatarioNombre: contacto.clienteNombre,
+    solicitudCodigo: contacto.solicitudCodigo,
+    otp,
+  });
+
+  if (envio.estado !== 'sent') {
+    return 'no_disponible';
+  }
+
+  estado.otpHash = await bcrypt.hash(otp, CODIGO_SALT_ROUNDS);
+  estado.otpExpiraEn = ahora + OTP_VIGENCIA_MS;
+  return 'enviado';
+}
+
+export type EstadoVerificacionOtp = 'regenerado' | 'incorrecto' | 'vencido' | 'bloqueado' | 'no_disponible';
+
+// Paso B + Paso C, en una sola operación (tal como exige "solo después de
+// verificar correctamente el correo se podrá regenerar el código real" —
+// no hay ningún estado intermedio público entre "verificado" y
+// "regenerado"). El código de acceso REAL anterior nunca se toca hasta
+// que: (1) el OTP coincide, Y (2) el nuevo código pudo enviarse con éxito.
+// Si cualquiera de las dos falla, el código de acceso real anterior sigue
+// intacto y funcionando.
+export async function verificarRecuperacionCodigo(token: string, otp: string): Promise<EstadoVerificacionOtp> {
+  const cotizacionId = verificarToken(token);
+  await cotizacionesRepo.marcarVencidasSiCorresponde();
+  const cotizacion = await cotizacionesRepo.findById(cotizacionId);
+  if (!cotizacion) {
+    throw new CotizacionNoEncontradaError();
+  }
+  if (cotizacion.estado === 'VENCIDA') {
+    throw new EnlaceInvalidoError();
+  }
+
+  const estado = obtenerEstadoRecuperacion(cotizacionId);
+  if (estado.bloqueado) {
+    return 'bloqueado';
+  }
+  if (estado.procesandoVerificacion) {
+    return 'no_disponible';
+  }
+
+  const ahora = Date.now();
+  if (!estado.otpHash || estado.otpExpiraEn === null || estado.otpExpiraEn <= ahora) {
+    // Vencido o nunca solicitado: NUNCA cuenta como intento incorrecto
+    // (requisito explícito — "un código vencido no consume un intento
+    // incorrecto").
+    return 'vencido';
+  }
+
+  estado.procesandoVerificacion = true;
+  try {
+    const coincide = await bcrypt.compare(otp, estado.otpHash);
+    if (!coincide) {
+      estado.fallosVerificacion += 1;
+      if (estado.fallosVerificacion >= OTP_MAX_FALLOS) {
+        // El fallo que CRUZA el umbral se anuncia como 'bloqueado', no
+        // como 'incorrecto' — el cliente debe saber de inmediato que ya no
+        // quedan más intentos, en vez de parecer que puede seguir
+        // probando (consistente con el mismo criterio ya usado en
+        // solicitarRecuperacionCodigo para la sexta solicitud).
+        estado.bloqueado = true;
+        return 'bloqueado';
+      }
+      return 'incorrecto';
+    }
+
+    const contacto = await cotizacionesRepo.obtenerContactoParaCorreo(cotizacionId);
+    const email = contacto?.clienteEmail.trim();
+    if (!contacto || !email) {
+      // Verificación correcta, pero sin correo real al que enviar el
+      // código nuevo: el OTP sigue vigente (no se consume) para permitir
+      // un reintento si la situación se resuelve antes de que expire.
+      return 'no_disponible';
+    }
+
+    const nuevoCodigo = crypto.randomInt(100000, 1000000).toString();
+    const envio = await enviarCodigoAccesoRegenerado({
+      destinatarioEmail: email,
+      destinatarioNombre: contacto.clienteNombre,
+      solicitudCodigo: contacto.solicitudCodigo,
+      codigo: nuevoCodigo,
+    });
+
+    if (envio.estado !== 'sent') {
+      // Mismo criterio que arriba: el OTP (ya verificado correcto) no se
+      // consume — el cliente puede reintentar con el MISMO OTP, sin gastar
+      // otra de sus solicitudes, y el código de acceso anterior sigue
+      // intacto y funcionando.
+      return 'no_disponible';
+    }
+
+    await cotizacionesRepo.guardarCodigoAcceso(cotizacionId, await bcrypt.hash(nuevoCodigo, CODIGO_SALT_ROUNDS));
+    // El código de acceso real cambió: limpia también el contador de
+    // intentos del ACCESO NORMAL (mismo criterio que ya aplica
+    // generarEnlaceCotizacion al generar un código nuevo) — un código
+    // nuevo siempre empieza con ese contador en cero.
+    limpiarIntentos(cotizacionId);
+
+    // Éxito completo de la recuperación: el OTP queda consumido y los
+    // fallos de esta sesión de recuperación se reinician.
+    estado.otpHash = null;
+    estado.otpExpiraEn = null;
+    estado.fallosVerificacion = 0;
+
+    return 'regenerado';
+  } finally {
+    estado.procesandoVerificacion = false;
+  }
 }

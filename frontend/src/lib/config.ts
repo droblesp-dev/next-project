@@ -21,3 +21,24 @@ export function construirEnlaceWhatsApp(mensaje?: string): string {
   const base = `https://wa.me/${NEXT_PROJECT_WHATSAPP}`;
   return mensaje ? `${base}?text=${encodeURIComponent(mensaje)}` : base;
 }
+
+// Ubicación que se muestra en la sección de contacto y en el mapa incrustado. Hoy solo se conoce la
+// ciudad (no hay una dirección exacta publicada), así que el mapa apunta al centro de Shushufindi.
+// Para un marcador preciso basta definir VITE_NEXT_PROJECT_UBICACION_CONSULTA con la dirección
+// completa o con el nombre del negocio tal como aparece en Google Maps; nunca se inventan coordenadas.
+export const NEXT_PROJECT_UBICACION_TEXTO =
+  import.meta.env.VITE_NEXT_PROJECT_UBICACION_TEXTO ?? 'Shushufindi, Sucumbíos, Ecuador';
+export const NEXT_PROJECT_UBICACION_CONSULTA =
+  import.meta.env.VITE_NEXT_PROJECT_UBICACION_CONSULTA ?? 'Shushufindi, Sucumbios, Ecuador';
+
+// Dirección del mapa incrustado (sin clave de API) y del enlace «Ver en Google Maps».
+export function construirMapaUbicacion(consulta: string = NEXT_PROJECT_UBICACION_CONSULTA): {
+  embed: string;
+  enlace: string;
+} {
+  const q = encodeURIComponent(consulta);
+  return {
+    embed: `https://www.google.com/maps?q=${q}&output=embed`,
+    enlace: `https://www.google.com/maps/search/?api=1&query=${q}`,
+  };
+}

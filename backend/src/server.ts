@@ -1,6 +1,10 @@
 import express, { type ErrorRequestHandler } from 'express';
+import helmet from 'helmet';
+import { registrarEventoSeguridad } from './services/securityLog.js';
 import { env } from './config/env.js';
 import { checkDatabaseConnection } from './config/db.js';
+import swaggerUi from 'swagger-ui-express';
+import { openApiSpec } from './config/openapi.js';
 import { authRouter } from './routes/auth.routes.js';
 import { usuariosRouter } from './routes/usuarios.routes.js';
 import { clientesRouter } from './routes/clientes.routes.js';
@@ -12,8 +16,24 @@ import { leadsRouter } from './routes/leads.routes.js';
 import { alertasRouter } from './routes/alertas.routes.js';
 import { dashboardRouter } from './routes/dashboard.routes.js';
 import { asistenteFormularioRouter } from './routes/asistenteFormulario.routes.js';
+import { cuentasBancariasRouter } from './routes/cuentasBancarias.routes.js';
+import { LOGOS_BANCOS_DIR } from './config/uploadsLogosBancos.js';
 
 const app = express();
+
+// Detrás de un proxy/balanceador req.ip sería la IP del proxy y los límites por IP
+// (login, NexIA) compartirían un único contador. TRUST_PROXY (.env) lo declara
+// explícitamente; sin definir se conserva el comportamiento anterior (sin proxy).
+if (env.trustProxy !== undefined) {
+  app.set('trust proxy', env.trustProxy);
+}
+
+// Cabeceras de seguridad (OWASP A05). La API solo sirve JSON y los logos de bancos, así que
+// el CSP por defecto de helmet aplica sin cambios; se excluye /api-docs (Swagger UI, solo
+// fuera de producción) porque necesita scripts en línea. Los logos se cargan desde el
+// origen del frontend, por eso CORP queda en 'cross-origin'.
+const helmetApi = helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } });
+app.use((req, res, next) => (req.path.startsWith('/api-docs') ? next() : helmetApi(req, res, next)));
 
 // CORS mínimo, sin dependencias nuevas: orígenes permitidos configurados en
 // CORS_ORIGINS (.env), no hardcodeados. Sin '*'. No afecta la lógica de
@@ -48,6 +68,11 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
+// Documentación Swagger de los endpoints documentados; no se expone en producción.
+if (process.env.NODE_ENV !== 'production') {
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(openApiSpec as unknown as Record<string, unknown>));
+}
+
 app.use('/api/auth', authRouter);
 app.use('/api/usuarios', usuariosRouter);
 app.use('/api/clientes', clientesRouter);
@@ -59,6 +84,17 @@ app.use('/api/leads', leadsRouter);
 app.use('/api/alertas', alertasRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/asistente-formulario', asistenteFormularioRouter);
+app.use('/api/cuentas-bancarias', cuentasBancariasRouter);
+
+// PC-2026-01 (Fase D — logos de bancos): único directorio servido como
+// estático público en todo el backend — justificado porque un logo de
+// banco debe ser visible en la vista pública del cliente (Fase F), no solo
+// en el área privada. `express.static` nunca permite salir de
+// LOGOS_BANCOS_DIR (sanitiza la ruta), y cada archivo se guarda con un
+// nombre generado por el servidor (UUID), nunca el nombre original del
+// cliente — ver uploadsLogosBancos.ts. No expone ningún otro directorio
+// (comprobantes/evidencias siguen exclusivamente detrás de requireAuth).
+app.use('/uploads/logos-bancos', express.static(LOGOS_BANCOS_DIR));
 
 const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   // CORRECCIÓN FASE 4 (hallazgo #1, manifestación B): un cuerpo JSON sintácticamente inválido, o
@@ -78,6 +114,14 @@ const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
 };
 
 app.use(errorHandler);
+
+// Express 4 no captura promesas rechazadas de handlers async: por defecto Node 20 termina el
+// proceso (DoS). Se registra y el servicio sigue atendiendo; cada ruta ya usa asyncRoute.
+process.on('unhandledRejection', (motivo) => {
+  registrarEventoSeguridad('PROMESA_NO_CAPTURADA', {
+    detalle: motivo instanceof Error ? motivo.message : String(motivo),
+  });
+});
 
 const server = app.listen(env.port, () => {
   console.log(`NextProject backend escuchando en el puerto ${env.port}`);
