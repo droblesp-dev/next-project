@@ -1,6 +1,6 @@
-import { GoogleGenAI, Type } from '@google/genai';
 import { pool } from '../config/db.js';
-import { env } from '../config/env.js';
+import { asegurarProveedorConfigurado, obtenerProveedorIa, redactarSecretosIa } from './ia/index.js';
+import type { EsquemaJson } from './ia/index.js';
 import * as analisisIaRepo from '../repositories/analisisIa.repository.js';
 import * as solicitudesRepo from '../repositories/solicitudes.repository.js';
 import type { AnalisisIa } from '../repositories/analisisIa.repository.js';
@@ -19,22 +19,22 @@ const PRIORIDADES_VALIDAS = ['ALTA', 'MEDIA', 'BAJA'];
 // los reintentos automáticos del SDK (por defecto hasta 5) para no generar
 // una segunda llamada — y por tanto un segundo consumo de cuota — sin
 // autorización explícita de cada intento.
-const GEMINI_TIMEOUT_MS = 100000;
+const IA_TIMEOUT_MS = 100000;
 
-// Esquema de salida estructurada exigido al proveedor (capacidad nativa del
-// SDK: responseMimeType + responseSchema). No se envía ningún dato personal
-// del cliente — solicitudesRepo.findById() nunca hace JOIN con `clientes`.
-const ESQUEMA_RESPUESTA = {
-  type: Type.OBJECT,
+// Esquema de salida estructurada exigido al proveedor (cada proveedor lo
+// adapta a su API). No se envía ningún dato personal del cliente —
+// solicitudesRepo.findById() nunca hace JOIN con `clientes`.
+const ESQUEMA_RESPUESTA: EsquemaJson = {
+  type: 'object',
   properties: {
-    resumen: { type: Type.STRING },
-    prioridad_sugerida: { type: Type.STRING, enum: ['ALTA', 'MEDIA', 'BAJA'] },
+    resumen: { type: 'string' },
+    prioridad_sugerida: { type: 'string', enum: ['ALTA', 'MEDIA', 'BAJA'] },
     informacion_estructurada: {
-      type: Type.OBJECT,
+      type: 'object',
       properties: {
-        material_estimado: { type: Type.STRING },
-        proceso_estimado: { type: Type.STRING },
-        informacion_faltante: { type: Type.ARRAY, items: { type: Type.STRING } },
+        material_estimado: { type: 'string' },
+        proceso_estimado: { type: 'string' },
+        informacion_faltante: { type: 'array', items: { type: 'string' } },
       },
     },
   },
@@ -68,33 +68,23 @@ export async function generarAnalisis(solicitudId: string): Promise<AnalisisIa> 
   try {
     await analisisIaRepo.marcarProcesando(analisis.id);
 
-    if (!env.geminiApiKey) {
-      throw new Error('GEMINI_API_KEY no está configurada.');
-    }
+    const ia = obtenerProveedorIa();
+    asegurarProveedorConfigurado(ia);
 
-    const ai = new GoogleGenAI({ apiKey: env.geminiApiKey });
-
-    const response = await ai.models.generateContent({
-      model: env.geminiModel,
-      contents: construirPrompt(solicitud),
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: ESQUEMA_RESPUESTA,
-        httpOptions: {
-          timeout: GEMINI_TIMEOUT_MS,
-          retryOptions: { attempts: 1 },
-        },
-      },
+    const response = await ia.generar({
+      prompt: construirPrompt(solicitud),
+      esquemaJson: ESQUEMA_RESPUESTA,
+      timeoutMs: IA_TIMEOUT_MS,
     });
 
-    const parsed = parsearRespuesta(response.text);
+    const parsed = parsearRespuesta(response.texto);
 
     const actualizado = await analisisIaRepo.marcarCompletado(analisis.id, {
       resultado: parsed.resumen,
       prioridadSugerida: parsed.prioridad_sugerida,
       informacionEstructurada: parsed.informacion_estructurada,
-      modeloIa: env.geminiModel,
-      versionIa: response.modelVersion ?? null,
+      modeloIa: ia.modelo,
+      versionIa: response.versionModelo ?? null,
     });
 
     return actualizado ?? analisis;
@@ -185,9 +175,5 @@ function parsearRespuesta(texto: string | undefined): RespuestaAnalisis {
 // del SDK llegara a incluir el valor de la clave, se redacta antes de
 // guardarlo en `resultado`.
 function sanitizarMensajeError(mensaje: string): string {
-  let limpio = mensaje;
-  if (env.geminiApiKey) {
-    limpio = limpio.split(env.geminiApiKey).join('[REDACTED]');
-  }
-  return limpio.slice(0, 500);
+  return redactarSecretosIa(mensaje).slice(0, 500);
 }

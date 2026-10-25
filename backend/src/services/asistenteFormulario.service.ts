@@ -1,5 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
-import { env } from '../config/env.js';
+import { asegurarProveedorConfigurado, obtenerProveedorIa, redactarSecretosIa } from './ia/index.js';
 import { consumirInvocacionNexiaPublica, LimiteNexiaError } from './nexiaRateLimit.service.js';
 
 // FORMULARIO-01 (autorización explícita del usuario, tras plantear la
@@ -42,7 +41,7 @@ class SinApiKeyError extends Error {}
 class RespuestaVaciaError extends Error {}
 
 const PROMPT_MAX_CARACTERES = 1000;
-const GEMINI_TIMEOUT_MS = 20_000;
+const IA_TIMEOUT_MS = 20_000;
 
 // FORMULARIO-01.1 (autorización explícita — "NEXIA HÍBRIDO"): NexIA público
 // tiene 2 modos. MODO_IA cuando Gemini responde con contenido real. MODO_ESTANDAR
@@ -237,9 +236,8 @@ async function consultarAsistente(promptUsuario: string, contexto: ContextoNexia
     // siquiera puede alcanzar la red no debe gastar cupo (si lo gastara,
     // una mala configuración temporal de la API key podría retrasar la
     // recuperación de MODO IA sin ninguna razón real).
-    if (!env.geminiApiKey) {
-      throw new SinApiKeyError('GEMINI_API_KEY no está configurada.');
-    }
+    const ia = obtenerProveedorIa();
+    asegurarProveedorConfigurado(ia, SinApiKeyError);
 
     // A partir de aquí SÍ se va a intentar la llamada real — recién ahora se
     // consulta el límite. Si no hay cupo, cae directo al catch de abajo
@@ -247,19 +245,12 @@ async function consultarAsistente(promptUsuario: string, contexto: ContextoNexia
     // llamar a la red.
     consumirInvocacionNexiaPublica(ip);
 
-    const ai = new GoogleGenAI({ apiKey: env.geminiApiKey });
-    const response = await ai.models.generateContent({
-      model: env.geminiModel,
-      contents: construirPrompt(promptUsuario, contexto),
-      config: {
-        httpOptions: {
-          timeout: GEMINI_TIMEOUT_MS,
-          retryOptions: { attempts: 1 },
-        },
-      },
+    const response = await ia.generar({
+      prompt: construirPrompt(promptUsuario, contexto),
+      timeoutMs: IA_TIMEOUT_MS,
     });
 
-    const texto = response.text?.trim();
+    const texto = response.texto?.trim();
     if (!texto) {
       throw new RespuestaVaciaError('El proveedor de IA no devolvió contenido.');
     }
@@ -380,9 +371,5 @@ function generarSugerenciaDeterministica(promptUsuario: string, contexto: Contex
 }
 
 function sanitizarMensajeError(mensaje: string): string {
-  let limpio = mensaje;
-  if (env.geminiApiKey) {
-    limpio = limpio.split(env.geminiApiKey).join('[REDACTED]');
-  }
-  return limpio.slice(0, 500);
+  return redactarSecretosIa(mensaje).slice(0, 500);
 }

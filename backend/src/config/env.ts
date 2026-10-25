@@ -37,6 +37,9 @@ export const env = {
   ).trim(),
   geminiApiKey: process.env.GEMINI_API_KEY ?? "",
   geminiModel: process.env.GEMINI_MODEL ?? "gemini-3.6-flash",
+  openRouterApiKey: process.env.OPENROUTER_API_KEY ?? "",
+  openRouterModel:
+    process.env.OPENROUTER_MODEL ?? "cohere/north-mini-code:free",
   brevoApiKey: (process.env.BREVO_API_KEY ?? "").trim(),
   nextProjectEmail: (process.env.NEXT_PROJECT_EMAIL ?? "").trim(),
   brevoSandbox:

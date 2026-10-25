@@ -1,5 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
-import { env } from '../config/env.js';
+import { asegurarProveedorConfigurado, obtenerProveedorIa, redactarSecretosIa } from './ia/index.js';
 import * as mensajesRepo from '../repositories/solicitudMensajes.repository.js';
 import * as solicitudesRepo from '../repositories/solicitudes.repository.js';
 import * as ordenesRepo from '../repositories/ordenes.repository.js';
@@ -32,7 +31,7 @@ export interface UsuarioChat {
 // Mismo timeout/estrategia de reintentos ya usados y probados en
 // analisisIa.service.ts — sin reintentos automáticos (evita un segundo
 // consumo de cuota sin autorización de cada intento).
-const GEMINI_TIMEOUT_MS = 100000;
+const IA_TIMEOUT_MS = 100000;
 
 // Contexto acotado para NexIA: nunca se envía el historial completo de la
 // conversación, solo los últimos N mensajes (decisión explícita del
@@ -166,7 +165,7 @@ async function generarRespuestaNexia(
   solicitudId: string,
   pregunta: string
 ): Promise<SolicitudMensaje> {
-  const textoRespuesta = await consultarGemini(solicitud, solicitudId, pregunta);
+  const textoRespuesta = await consultarIa(solicitud, solicitudId, pregunta);
   return mensajesRepo.crear({
     solicitudId,
     autorId: null,
@@ -180,27 +179,19 @@ async function generarRespuestaNexia(
 // timeout, respuesta vacía) nunca se propague como un error 500 al
 // usuario — en su lugar, NexIA "responde" con un aviso, manteniendo el
 // chat coherente.
-async function consultarGemini(solicitud: Solicitud, solicitudId: string, pregunta: string): Promise<string> {
+async function consultarIa(solicitud: Solicitud, solicitudId: string, pregunta: string): Promise<string> {
   try {
-    if (!env.geminiApiKey) {
-      throw new Error('GEMINI_API_KEY no está configurada.');
-    }
+    const ia = obtenerProveedorIa();
+    asegurarProveedorConfigurado(ia);
 
     const recientes = await mensajesRepo.obtenerRecientes(solicitudId, LIMITE_MENSAJES_CONTEXTO);
-    const ai = new GoogleGenAI({ apiKey: env.geminiApiKey });
 
-    const response = await ai.models.generateContent({
-      model: env.geminiModel,
-      contents: construirPrompt(solicitud, recientes, pregunta),
-      config: {
-        httpOptions: {
-          timeout: GEMINI_TIMEOUT_MS,
-          retryOptions: { attempts: 1 },
-        },
-      },
+    const response = await ia.generar({
+      prompt: construirPrompt(solicitud, recientes, pregunta),
+      timeoutMs: IA_TIMEOUT_MS,
     });
 
-    const texto = response.text?.trim();
+    const texto = response.texto?.trim();
     if (!texto) {
       throw new Error('El proveedor de IA no devolvió contenido.');
     }
@@ -241,9 +232,5 @@ function construirPrompt(solicitud: Solicitud, recientes: SolicitudMensaje[], pr
 // Nunca debe persistirse la API key en un log (mismo criterio ya aplicado
 // en analisisIa.service.ts).
 function sanitizarMensajeError(mensaje: string): string {
-  let limpio = mensaje;
-  if (env.geminiApiKey) {
-    limpio = limpio.split(env.geminiApiKey).join('[REDACTED]');
-  }
-  return limpio.slice(0, 500);
+  return redactarSecretosIa(mensaje).slice(0, 500);
 }

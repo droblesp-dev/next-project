@@ -1,5 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
-import { env } from '../config/env.js';
+import { asegurarProveedorConfigurado, obtenerProveedorIa, redactarSecretosIa } from './ia/index.js';
 import * as fichaRepo from '../repositories/fichaTecnica.repository.js';
 import * as ordenesRepo from '../repositories/ordenes.repository.js';
 import * as cotizacionesRepo from '../repositories/cotizaciones.repository.js';
@@ -18,7 +17,7 @@ export class FichaYaExisteError extends Error {}
 export class GeneracionFallidaError extends Error {}
 
 // Mismo timeout/estrategia ya usada en analisisIa.service.ts y en el chat.
-const GEMINI_TIMEOUT_MS = 100000;
+const IA_TIMEOUT_MS = 100000;
 const LIMITE_MENSAJES_CONTEXTO = 20;
 
 export async function obtenerFicha(ordenId: string): Promise<FichaTecnica | null> {
@@ -64,7 +63,7 @@ export async function generarFicha(ordenId: string): Promise<FichaTecnica> {
   const analisisPrevios = await analisisIaRepo.listAll(solicitud.id);
   const ultimoAnalisisCompletado = analisisPrevios.find((a) => a.estado === 'COMPLETADO') ?? null;
 
-  const { contenido, tieneInconsistencia } = await consultarGemini(
+  const { contenido, tieneInconsistencia } = await consultarIa(
     solicitud,
     cotizacion,
     mensajesRecientes,
@@ -87,31 +86,22 @@ export async function generarFicha(ordenId: string): Promise<FichaTecnica> {
   return ficha;
 }
 
-async function consultarGemini(
+async function consultarIa(
   solicitud: Solicitud,
   cotizacion: Cotizacion,
   mensajesRecientes: SolicitudMensaje[],
   ultimoAnalisis: AnalisisIa | null
 ): Promise<{ contenido: string; tieneInconsistencia: boolean }> {
-  if (!env.geminiApiKey) {
-    throw new GeneracionFallidaError('GEMINI_API_KEY no está configurada.');
-  }
+  const ia = obtenerProveedorIa();
+  asegurarProveedorConfigurado(ia, GeneracionFallidaError);
 
   try {
-    const ai = new GoogleGenAI({ apiKey: env.geminiApiKey });
-
-    const response = await ai.models.generateContent({
-      model: env.geminiModel,
-      contents: construirPrompt(solicitud, cotizacion, mensajesRecientes, ultimoAnalisis),
-      config: {
-        httpOptions: {
-          timeout: GEMINI_TIMEOUT_MS,
-          retryOptions: { attempts: 1 },
-        },
-      },
+    const response = await ia.generar({
+      prompt: construirPrompt(solicitud, cotizacion, mensajesRecientes, ultimoAnalisis),
+      timeoutMs: IA_TIMEOUT_MS,
     });
 
-    const texto = response.text?.trim();
+    const texto = response.texto?.trim();
     if (!texto) {
       throw new Error('El proveedor de IA no devolvió contenido.');
     }
@@ -208,9 +198,5 @@ function construirPrompt(
 }
 
 function sanitizarMensajeError(mensaje: string): string {
-  let limpio = mensaje;
-  if (env.geminiApiKey) {
-    limpio = limpio.split(env.geminiApiKey).join('[REDACTED]');
-  }
-  return limpio.slice(0, 500);
+  return redactarSecretosIa(mensaje).slice(0, 500);
 }
