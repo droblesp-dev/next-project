@@ -244,6 +244,18 @@ export default function CambiarPasswordModal({
                 deshabilitado={enviando}
               />
 
+              <CampoPassword
+                id="password-confirmacion"
+                etiqueta="Confirmar nueva contraseña"
+                valor={confirmacion}
+                onCambio={setConfirmacion}
+                autoComplete="new-password"
+                deshabilitado={enviando}
+              />
+              {confirmacion.length > 0 && !coincide && (
+                <p className="font-['Inter'] text-[12px] text-error">La confirmación no coincide con la nueva contraseña.</p>
+              )}
+
               <IndicadorFortalezaPassword nivel={hayNueva ? evaluacion.nivel : null} />
 
               <ul className="space-y-1.5">
@@ -272,18 +284,6 @@ export default function CambiarPasswordModal({
                 <p className="font-['Inter'] text-[12px] text-error" role="alert">
                   {MENSAJES_PROBLEMA.MAX_BYTES}
                 </p>
-              )}
-
-              <CampoPassword
-                id="password-confirmacion"
-                etiqueta="Confirmar nueva contraseña"
-                valor={confirmacion}
-                onCambio={setConfirmacion}
-                autoComplete="new-password"
-                deshabilitado={enviando}
-              />
-              {confirmacion.length > 0 && !coincide && (
-                <p className="font-['Inter'] text-[12px] text-error">La confirmación no coincide con la nueva contraseña.</p>
               )}
 
               {error && (

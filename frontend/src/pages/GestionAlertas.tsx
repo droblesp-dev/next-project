@@ -879,7 +879,17 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
                   {new Date(a.creado_en).toLocaleString()}
                 </p>
               </div>
-              <div className="flex flex-wrap sm:flex-col gap-2 sm:items-end sm:shrink-0">
+              <div className="flex flex-wrap sm:flex-nowrap items-center sm:self-center gap-2 sm:shrink-0">
+                {puedeAtender && a.estado === 'PENDIENTE' && (
+                  <button
+                    type="button"
+                    disabled={procesando === a.id}
+                    onClick={() => handleAtender(a.id)}
+                    className="inline-flex items-center justify-center h-11 px-4 border border-outline text-on-surface hover:bg-surface-container-high transition-colors font-['Inter'] text-[14px] font-semibold disabled:opacity-50 cursor-pointer"
+                  >
+                    ATENDER
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => onVerOrden(a.orden_id)}
@@ -889,16 +899,6 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
                 >
                   <Eye size={18} aria-hidden="true" />
                 </button>
-                {puedeAtender && a.estado === 'PENDIENTE' && (
-                  <button
-                    type="button"
-                    disabled={procesando === a.id}
-                    onClick={() => handleAtender(a.id)}
-                    className="px-4 py-2 border border-outline text-on-surface hover:bg-surface-container-high transition-colors font-['Inter'] text-[14px] font-semibold disabled:opacity-50 cursor-pointer"
-                  >
-                    ATENDER
-                  </button>
-                )}
               </div>
             </div>
           ))}
