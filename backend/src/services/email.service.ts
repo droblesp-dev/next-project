@@ -120,7 +120,7 @@ function construirContenidoCorreoCotizacion(
   // Autorización explícita ("A. Incluir WhatsApp en el correo de cotización
   // disponible"): mismo mensaje genérico ya usado en los correos de
   // recuperación — nunca el código de acceso ni ningún token.
-  const enlaceWhatsApp = construirEnlaceWhatsApp(MENSAJE_WHATSAPP_AYUDA_COTIZACION);
+  const enlaceWhatsApp = construirEnlaceWhatsApp(construirMensajeWhatsAppAyudaCotizacion(input.solicitudCodigo));
 
   const texto = [
     `Hola ${input.destinatarioNombre}.`,
@@ -253,14 +253,19 @@ export interface CodigoTemporalCotizacionInput {
 // se reutiliza `construirEnlaceWhatsApp()` (mismo número oficial ya
 // configurado, sin inventar ninguno) con un mensaje predefinido genérico,
 // que nunca incluye el OTP, el código de acceso ni ningún token.
-const MENSAJE_WHATSAPP_AYUDA_COTIZACION = 'Hola, necesito ayuda con el acceso a mi cotización.';
+// El número de solicitud (SOL-XXXXXX) sí se incluye, para que el asesor ubique la cotización sin
+// preguntarlo; es un identificador legible, no un secreto.
+function construirMensajeWhatsAppAyudaCotizacion(solicitudCodigo: string | null): string {
+  const base = 'Hola, necesito ayuda con el acceso a mi cotización';
+  return solicitudCodigo ? `${base} de la solicitud ${solicitudCodigo}.` : `${base}.`;
+}
 
 function construirContenidoCorreoOtp(
   input: CodigoTemporalCotizacionInput
 ): { asunto: string; html: string; texto: string } {
   const referencia = input.solicitudCodigo ? ` — Solicitud ${input.solicitudCodigo}` : '';
   const asunto = `${env.nextProjectName} — Código temporal de verificación${referencia}`;
-  const enlaceWhatsApp = construirEnlaceWhatsApp(MENSAJE_WHATSAPP_AYUDA_COTIZACION);
+  const enlaceWhatsApp = construirEnlaceWhatsApp(construirMensajeWhatsAppAyudaCotizacion(input.solicitudCodigo));
 
   const texto = [
     `Hola ${input.destinatarioNombre}.`,
@@ -374,7 +379,7 @@ function construirContenidoCorreoCodigoRegenerado(
 ): { asunto: string; html: string; texto: string } {
   const referencia = input.solicitudCodigo ? ` — Solicitud ${input.solicitudCodigo}` : '';
   const asunto = `${env.nextProjectName} — Tu nuevo código de acceso${referencia}`;
-  const enlaceWhatsApp = construirEnlaceWhatsApp(MENSAJE_WHATSAPP_AYUDA_COTIZACION);
+  const enlaceWhatsApp = construirEnlaceWhatsApp(construirMensajeWhatsAppAyudaCotizacion(input.solicitudCodigo));
 
   const texto = [
     `Hola ${input.destinatarioNombre}.`,
