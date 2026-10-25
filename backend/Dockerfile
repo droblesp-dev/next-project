@@ -33,5 +33,11 @@ RUN mkdir -p uploads/comprobantes uploads/evidencias uploads/logos-bancos
 # (-v nextproject-uploads:/app/uploads) Docker conserva ademas las subcarpetas de arriba.
 VOLUME ["/app/uploads"]
 
+# Logos de bancos versionados en el repositorio (backend/uploads/logos-bancos). El volumen
+# montado en /app/uploads oculta cualquier cosa copiada ahi durante el build, por eso se
+# guardan en /app/seed y el contenedor los copia al volumen al arrancar (cp -n: nunca pisa
+# un archivo existente). Asi los logos referenciados en BD existen en cualquier entorno.
+COPY uploads/logos-bancos ./seed/logos-bancos
+
 EXPOSE 3000
-CMD ["node", "dist/server.js"]
+CMD ["sh", "-c", "mkdir -p uploads/logos-bancos && cp -n seed/logos-bancos/* uploads/logos-bancos/ ; exec node dist/server.js"]

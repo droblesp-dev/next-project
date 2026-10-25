@@ -24,9 +24,11 @@ secrets.json
 credentials.json
 service-account*.json
 
-# Archivos subidos por usuarios (comprobantes, evidencias)
-backend/uploads/
-**/uploads/
+# Archivos subidos por usuarios (comprobantes, evidencias). Los logos de bancos son
+# públicos y se versionan: el despliegue los siembra en el volumen de producción.
+**/uploads/*
+!backend/uploads/
+!backend/uploads/logos-bancos/
 
 # Herramientas locales
 .agent/

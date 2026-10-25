@@ -110,7 +110,7 @@ Los archivos de referencia son [`backend/.env.example`](./backend/.env.example) 
 | Servidor | `PORT`, `NODE_ENV`, `CORS_ORIGINS`, `TRUST_PROXY` |
 | PostgreSQL | `DB_SSL` |
 | Sesión | `JWT_EXPIRES_IN` |
-| IA | `GEMINI_API_KEY`, `GEMINI_MODEL` |
+| IA | `GEMINI_API_KEY`, `GEMINI_MODEL`, `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` |
 | Correo | `BREVO_API_KEY`, `NEXT_PROJECT_EMAIL`, `BREVO_SANDBOX`, `NEXT_PROJECT_NAME`, `NEXT_PROJECT_WHATSAPP` |
 | Negocio | `OPERATIVO_POR_DEFECTO_EMAIL`, `BANCO_*` (datos bancarios heredados) |
 | Seeders | `SEED_ADMIN_PASSWORD`, `SEED_COMERCIAL_PASSWORD`, `SEED_OPERATIVO_PASSWORD`, `SEED_*_EMAIL` (solo el seeder del pipeline) |
@@ -143,7 +143,7 @@ El pipeline [`azure-pipelines.yml`](./azure-pipelines.yml) se dispara con cambio
 - El backend recibe `TRUST_PROXY=1` porque va detrás de ese nginx; así el límite de intentos usa la IP real del visitante.
 
 **Configuración que debe existir en Azure DevOps**
-- Grupo de variables `next-project-secrets` con los secretos de Harbor y, por entorno (`DEV_*` y `PROD_*`): conexión a la BD, `JWT_SECRET`, `COTIZACION_LINK_SECRET`, `LEAD_LINK_SECRET`, `CORS_ORIGINS`, `GEMINI_*`, `BREVO_*`, `NEXT_PROJECT_*`, `OPERATIVO_POR_DEFECTO_EMAIL`, `BANCO_*` y las credenciales de los usuarios iniciales (`SEED_*`).
+- Grupo de variables `next-project-secrets` con los secretos de Harbor y, por entorno (`DEV_*` y `PROD_*`): conexión a la BD, `JWT_SECRET`, `COTIZACION_LINK_SECRET`, `LEAD_LINK_SECRET`, `CORS_ORIGINS`, `GEMINI_*`, `OPENROUTER_*`, `BREVO_*`, `NEXT_PROJECT_*`, `OPERATIVO_POR_DEFECTO_EMAIL`, `BANCO_*` y las credenciales de los usuarios iniciales (`SEED_*`).
 - Conexiones SSH `deploy-ssh-dev` y `deploy-ssh-prod`, y el agente `Zyntra Agent Pool` con Docker.
 
 **Antes de la primera ejecución sobre una base ya existente:** si esa base se creó a mano y no tiene la tabla `schema_migrations`, el motor intentaría aplicar V0 de nuevo y fallaría. Hay que sembrar primero las versiones ya aplicadas.
