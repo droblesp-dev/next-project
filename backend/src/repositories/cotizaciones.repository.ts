@@ -122,11 +122,13 @@ export interface ContactoParaCorreo {
   clienteNombre: string;
   clienteEmail: string;
   solicitudCodigo: string | null;
+  // Código comercial propio de la cotización (COT-XXXXXX, V12); NULL en cotizaciones históricas.
+  cotizacionCodigo: string | null;
 }
 
 export async function obtenerContactoParaCorreo(cotizacionId: string): Promise<ContactoParaCorreo | null> {
   const result = await pool.query<ContactoParaCorreo>(
-    `SELECT cl.nombre AS "clienteNombre", cl.email AS "clienteEmail", s.codigo AS "solicitudCodigo"
+    `SELECT cl.nombre AS "clienteNombre", cl.email AS "clienteEmail", s.codigo AS "solicitudCodigo", c.codigo AS "cotizacionCodigo"
      FROM cotizaciones c
      JOIN solicitudes s ON s.id = c.solicitud_id
      JOIN clientes cl ON cl.id = s.cliente_id

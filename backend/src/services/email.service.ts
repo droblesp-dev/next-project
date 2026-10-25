@@ -97,30 +97,41 @@ export interface EnlaceCotizacionInput {
   // el UUID interno. `null` en el caso (no esperado, pero no asumido) de
   // una solicitud histórica sin código asignado.
   solicitudCodigo: string | null;
+  // COT-XXXXXX; NULL en cotizaciones históricas sin código.
+  cotizacionCodigo: string | null;
   token: string;
 }
 
-// URL pública construida a partir del primer origen configurado en
-// CORS_ORIGINS (env.ts) — no se agrega ninguna variable de entorno nueva;
-// es el único dato que este backend ya tiene sobre dónde vive su
-// frontend. Misma ruta que ya interpreta el frontend
+// URL pública del frontend: FRONTEND_URL si está definida; si no, el primer origen de
+// CORS_ORIGINS (que debe ser el del frontend, no el del backend). Misma ruta que ya interpreta el frontend
 // (GestionCotizaciones.tsx::urlPublicaCotizacion -> `/cotizacion/publica/:token`),
 // ninguna ruta nueva.
 function construirUrlPublicaCotizacion(token: string): string {
-  const origen = env.corsOrigins[0] ?? '';
+  const origen = env.frontendUrl || (env.corsOrigins[0] ?? '');
   return `${origen}/cotizacion/publica/${encodeURIComponent(token)}`;
+}
+
+// Referencia legible para asunto y texto: el código de la cotización (COT-XXXXXX); las históricas
+// sin código usan el número de solicitud.
+function construirReferenciaCotizacion(ref: {
+  cotizacionCodigo: string | null;
+  solicitudCodigo: string | null;
+}): string {
+  if (ref.cotizacionCodigo) return ` — Cotización ${ref.cotizacionCodigo}`;
+  if (ref.solicitudCodigo) return ` — Solicitud ${ref.solicitudCodigo}`;
+  return '';
 }
 
 function construirContenidoCorreoCotizacion(
   input: EnlaceCotizacionInput
 ): { asunto: string; html: string; texto: string } {
   const url = construirUrlPublicaCotizacion(input.token);
-  const referencia = input.solicitudCodigo ? ` — Solicitud ${input.solicitudCodigo}` : '';
+  const referencia = construirReferenciaCotizacion(input);
   const asunto = `${env.nextProjectName} — Tu cotización ya está disponible${referencia}`;
   // Autorización explícita ("A. Incluir WhatsApp en el correo de cotización
   // disponible"): mismo mensaje genérico ya usado en los correos de
   // recuperación — nunca el código de acceso ni ningún token.
-  const enlaceWhatsApp = construirEnlaceWhatsApp(construirMensajeWhatsAppAyudaCotizacion(input.solicitudCodigo));
+  const enlaceWhatsApp = construirEnlaceWhatsApp(construirMensajeWhatsAppAyudaCotizacion(input));
 
   const texto = [
     `Hola ${input.destinatarioNombre}.`,
@@ -242,6 +253,8 @@ export interface CodigoTemporalCotizacionInput {
   destinatarioEmail: string;
   destinatarioNombre: string;
   solicitudCodigo: string | null;
+  // COT-XXXXXX; NULL en cotizaciones históricas sin código.
+  cotizacionCodigo: string | null;
   // Código temporal de verificación (OTP) de 6 dígitos — NUNCA el código
   // de acceso real de la cotización. Esta función nunca debe usarse para
   // enviar ese otro código (ver enviarCodigoAccesoRegenerado, abajo).
@@ -253,19 +266,25 @@ export interface CodigoTemporalCotizacionInput {
 // se reutiliza `construirEnlaceWhatsApp()` (mismo número oficial ya
 // configurado, sin inventar ninguno) con un mensaje predefinido genérico,
 // que nunca incluye el OTP, el código de acceso ni ningún token.
-// El número de solicitud (SOL-XXXXXX) sí se incluye, para que el asesor ubique la cotización sin
-// preguntarlo; es un identificador legible, no un secreto.
-function construirMensajeWhatsAppAyudaCotizacion(solicitudCodigo: string | null): string {
+// Se identifica la cotización por su código propio (COT-XXXXXX), distinto del número de solicitud;
+// las históricas sin código caen al número de solicitud. Son identificadores legibles, no secretos
+// (nunca se incluye el código de acceso, el OTP ni el token).
+function construirMensajeWhatsAppAyudaCotizacion(ref: {
+  cotizacionCodigo: string | null;
+  solicitudCodigo: string | null;
+}): string {
   const base = 'Hola, necesito ayuda con el acceso a mi cotización';
-  return solicitudCodigo ? `${base} de la solicitud ${solicitudCodigo}.` : `${base}.`;
+  if (ref.cotizacionCodigo) return `${base} ${ref.cotizacionCodigo}.`;
+  if (ref.solicitudCodigo) return `${base} de la solicitud ${ref.solicitudCodigo}.`;
+  return `${base}.`;
 }
 
 function construirContenidoCorreoOtp(
   input: CodigoTemporalCotizacionInput
 ): { asunto: string; html: string; texto: string } {
-  const referencia = input.solicitudCodigo ? ` — Solicitud ${input.solicitudCodigo}` : '';
+  const referencia = construirReferenciaCotizacion(input);
   const asunto = `${env.nextProjectName} — Código temporal de verificación${referencia}`;
-  const enlaceWhatsApp = construirEnlaceWhatsApp(construirMensajeWhatsAppAyudaCotizacion(input.solicitudCodigo));
+  const enlaceWhatsApp = construirEnlaceWhatsApp(construirMensajeWhatsAppAyudaCotizacion(input));
 
   const texto = [
     `Hola ${input.destinatarioNombre}.`,
@@ -370,6 +389,8 @@ export interface CodigoAccesoRegeneradoInput {
   destinatarioEmail: string;
   destinatarioNombre: string;
   solicitudCodigo: string | null;
+  // COT-XXXXXX; NULL en cotizaciones históricas sin código.
+  cotizacionCodigo: string | null;
   // Código de acceso REAL regenerado (6 dígitos) — NUNCA el OTP temporal.
   codigo: string;
 }
@@ -377,9 +398,9 @@ export interface CodigoAccesoRegeneradoInput {
 function construirContenidoCorreoCodigoRegenerado(
   input: CodigoAccesoRegeneradoInput
 ): { asunto: string; html: string; texto: string } {
-  const referencia = input.solicitudCodigo ? ` — Solicitud ${input.solicitudCodigo}` : '';
+  const referencia = construirReferenciaCotizacion(input);
   const asunto = `${env.nextProjectName} — Tu nuevo código de acceso${referencia}`;
-  const enlaceWhatsApp = construirEnlaceWhatsApp(construirMensajeWhatsAppAyudaCotizacion(input.solicitudCodigo));
+  const enlaceWhatsApp = construirEnlaceWhatsApp(construirMensajeWhatsAppAyudaCotizacion(input));
 
   const texto = [
     `Hola ${input.destinatarioNombre}.`,

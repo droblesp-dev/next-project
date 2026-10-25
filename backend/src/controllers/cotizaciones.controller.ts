@@ -320,6 +320,7 @@ export async function generarEnlaceController(req: Request, res: Response): Prom
         destinatarioEmail: destinatario.email,
         destinatarioNombre: destinatario.nombre,
         solicitudCodigo: destinatario.solicitudCodigo,
+        cotizacionCodigo: destinatario.cotizacionCodigo,
         token,
       });
       emailEnviado = envio.estado;

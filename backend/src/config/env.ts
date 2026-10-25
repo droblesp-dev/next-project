@@ -9,6 +9,13 @@ function parseTrustProxy(valor: string | undefined): boolean | number | string |
   return v;
 }
 
+// FRONTEND_URL es opcional: un valor vacío o un macro de Azure sin resolver ("$(PROD_FRONTEND_URL)")
+// cuenta como no definido.
+function parseUrlOpcional(valor: string | undefined): string {
+  const v = (valor ?? "").trim();
+  return !v || v.startsWith("$(") ? "" : v.replace(/\/+$/, "");
+}
+
 export const env = {
   port: Number(process.env.PORT) || 3000,
   corsOrigins: (
@@ -20,6 +27,9 @@ export const env = {
   // TRUST_PROXY: número de saltos de proxy ("1"), "true"/"false" o una lista de IP/subredes
   // de Express. Sin definir: undefined (no se toca la configuración por defecto de Express).
   trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
+  // URL pública del frontend (para los enlaces de los correos). Sin definir, se usa el primer
+  // origen de CORS_ORIGINS.
+  frontendUrl: parseUrlOpcional(process.env.FRONTEND_URL),
   db: {
     host: process.env.DB_HOST,
     port: Number(process.env.DB_PORT) || 5432,

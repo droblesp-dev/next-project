@@ -428,7 +428,7 @@ export interface EnlaceGenerado {
   // cualquier correo. `null` si no se pudo resolver un correo real del
   // cliente (relación inexistente o email vacío) — nunca se inventa ni se
   // asume un valor.
-  destinatario: { nombre: string; email: string; solicitudCodigo: string | null } | null;
+  destinatario: { nombre: string; email: string; solicitudCodigo: string | null; cotizacionCodigo: string | null } | null;
 }
 
 // Generar un enlace tiene sentido en ENVIADA (único estado desde el cual
@@ -478,7 +478,12 @@ export async function generarEnlaceCotizacion(id: string): Promise<EnlaceGenerad
   const emailContacto = contacto?.clienteEmail.trim();
   const destinatario =
     contacto && emailContacto
-      ? { nombre: contacto.clienteNombre, email: emailContacto, solicitudCodigo: contacto.solicitudCodigo }
+      ? {
+          nombre: contacto.clienteNombre,
+          email: emailContacto,
+          solicitudCodigo: contacto.solicitudCodigo,
+          cotizacionCodigo: contacto.cotizacionCodigo,
+        }
       : null;
 
   return { token, codigo, destinatario };
@@ -1094,6 +1099,7 @@ export async function solicitarRecuperacionCodigo(token: string): Promise<Estado
     destinatarioEmail: email,
     destinatarioNombre: contacto.clienteNombre,
     solicitudCodigo: contacto.solicitudCodigo,
+    cotizacionCodigo: contacto.cotizacionCodigo,
     otp,
   });
 
@@ -1173,6 +1179,7 @@ export async function verificarRecuperacionCodigo(token: string, otp: string): P
       destinatarioEmail: email,
       destinatarioNombre: contacto.clienteNombre,
       solicitudCodigo: contacto.solicitudCodigo,
+      cotizacionCodigo: contacto.cotizacionCodigo,
       codigo: nuevoCodigo,
     });
 

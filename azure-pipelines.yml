@@ -315,6 +315,7 @@ stages:
                       cat > "$ENV_FILE" <<EOF
                       PORT=3000
                       CORS_ORIGINS=$(DEV_CORS_ORIGINS)
+                      FRONTEND_URL=$(DEV_FRONTEND_URL)
                       DB_HOST=$(DEV_DB_HOST)
                       DB_PORT=$(DEV_DB_PORT)
                       DB_NAME=$(DEV_DB_NAME)
@@ -444,6 +445,7 @@ stages:
                       cat > "$ENV_FILE" <<EOF
                       PORT=3000
                       CORS_ORIGINS=$(PROD_CORS_ORIGINS)
+                      FRONTEND_URL=$(PROD_FRONTEND_URL)
                       DB_HOST=$(PROD_DB_HOST)
                       DB_PORT=$(PROD_DB_PORT)
                       DB_NAME=$(PROD_DB_NAME)
