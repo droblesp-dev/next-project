@@ -92,6 +92,7 @@ export interface CotizacionLockTransferencia {
   saldo_pendiente: string | null;
   comprobante_anticipo: string | null;
   comprobante_saldo: string | null;
+  metodo_anticipo: string | null;
   metodo_saldo: string | null;
 }
 
@@ -100,7 +101,7 @@ export async function lockParaTransferencia(
   client: PoolClient
 ): Promise<CotizacionLockTransferencia | null> {
   const result = await client.query<CotizacionLockTransferencia>(
-    `SELECT estado, estado_anticipo, estado_saldo, anticipo_valor, saldo_pendiente, comprobante_anticipo, comprobante_saldo, metodo_saldo
+    `SELECT estado, estado_anticipo, estado_saldo, anticipo_valor, saldo_pendiente, comprobante_anticipo, comprobante_saldo, metodo_anticipo, metodo_saldo
      FROM cotizaciones WHERE id = $1 FOR UPDATE`,
     [id]
   );
@@ -330,18 +331,25 @@ export async function marcarVencidasSiCorresponde(): Promise<void> {
   );
 }
 
-// Comprobante de transferencia (Fase D.6): UPDATE condicional — solo
-// aplica si la cotización sigue ACEPTADA, el método sigue siendo
-// TRANSFERENCIA y el anticipo sigue PENDIENTE (protege contra que alguien
-// suba un comprobante sobre un anticipo ya validado/rechazado, o sobre
-// una cotización que dejó de ser ACEPTADA). `nombreArchivo` es siempre un
-// nombre generado por el propio backend (uploadsComprobantes.ts), nunca
-// un valor recibido tal cual del cliente.
-export async function guardarComprobante(id: string, nombreArchivo: string): Promise<Cotizacion | null> {
-  const result = await pool.query<Cotizacion>(
+// Comprobante de transferencia del anticipo (Fase D.6): UPDATE condicional — solo aplica si la
+// cotización sigue ACEPTADA, el método es TRANSFERENCIA y el anticipo admite una carga nueva:
+//   - PENDIENTE sin comprobante previo (una segunda carga NO sobrescribe en silencio el que está en
+//     revisión), o
+//   - RECHAZADO: el cliente corrige y vuelve a subir; el anticipo regresa a PENDIENTE y se limpian
+//     los datos del rechazo anterior (el rechazo y su motivo siguen en transferencias_pago, y el
+//     archivo anterior en comprobantes_pago_cliente).
+// `nombreArchivo` es siempre un nombre generado por el propio backend (uploadsComprobantes.ts).
+export async function guardarComprobante(
+  id: string,
+  nombreArchivo: string,
+  executor: Executor = pool
+): Promise<Cotizacion | null> {
+  const result = await executor.query<Cotizacion>(
     `UPDATE cotizaciones
-     SET comprobante_anticipo = $2, actualizado_en = CURRENT_TIMESTAMP
-     WHERE id = $1 AND estado = 'ACEPTADA' AND metodo_anticipo = 'TRANSFERENCIA' AND estado_anticipo = 'PENDIENTE'
+     SET comprobante_anticipo = $2, estado_anticipo = 'PENDIENTE',
+         anticipo_confirmado_en = NULL, anticipo_confirmado_por = NULL, actualizado_en = CURRENT_TIMESTAMP
+     WHERE id = $1 AND estado = 'ACEPTADA' AND metodo_anticipo = 'TRANSFERENCIA'
+       AND ((estado_anticipo = 'PENDIENTE' AND comprobante_anticipo IS NULL) OR estado_anticipo = 'RECHAZADO')
      RETURNING ${COLUMNAS}`,
     [id, nombreArchivo]
   );
@@ -382,18 +390,23 @@ export async function actualizarEstadoAnticipo(
   return result.rows[0] ?? null;
 }
 
-// Comprobante de saldo (bloque saldo/entrega/cierre): mismo patrón que
-// guardarComprobante() para el anticipo — UPDATE condicional. A diferencia
-// del anticipo, `metodo_saldo` no se elige de antemano al crear la
-// cotización: esta subida lo fija implícitamente en TRANSFERENCIA la
-// primera vez (si ya estaba en TRANSFERENCIA, no cambia nada). Si ya se
-// hubiera fijado como EFECTIVO, la condición `metodo_saldo IS NULL OR
-// metodo_saldo = 'TRANSFERENCIA'` bloquea el UPDATE (0 filas afectadas).
-export async function guardarComprobanteSaldo(id: string, nombreArchivo: string): Promise<Cotizacion | null> {
-  const result = await pool.query<Cotizacion>(
+// Comprobante de saldo (bloque saldo/entrega/cierre): mismo patrón que guardarComprobante().
+// Regla QA-04: el saldo solo admite comprobante cuando el anticipo ya está VALIDADO (acreditación
+// confirmada) o no aplica — la condición vive en el propio UPDATE para que ni una llamada directa
+// ni dos solicitudes concurrentes puedan saltársela. `metodo_saldo` no se elige de antemano: esta
+// subida lo fija implícitamente en TRANSFERENCIA (si ya era EFECTIVO, el UPDATE no aplica).
+export async function guardarComprobanteSaldo(
+  id: string,
+  nombreArchivo: string,
+  executor: Executor = pool
+): Promise<Cotizacion | null> {
+  const result = await executor.query<Cotizacion>(
     `UPDATE cotizaciones
-     SET comprobante_saldo = $2, metodo_saldo = 'TRANSFERENCIA', actualizado_en = CURRENT_TIMESTAMP
-     WHERE id = $1 AND estado = 'ACEPTADA' AND estado_saldo = 'PENDIENTE'
+     SET comprobante_saldo = $2, metodo_saldo = 'TRANSFERENCIA', estado_saldo = 'PENDIENTE',
+         saldo_confirmado_en = NULL, saldo_confirmado_por = NULL, actualizado_en = CURRENT_TIMESTAMP
+     WHERE id = $1 AND estado = 'ACEPTADA'
+       AND estado_anticipo IN ('VALIDADO', 'NO_APLICA')
+       AND ((estado_saldo = 'PENDIENTE' AND comprobante_saldo IS NULL) OR estado_saldo = 'RECHAZADO')
        AND (metodo_saldo IS NULL OR metodo_saldo = 'TRANSFERENCIA')
      RETURNING ${COLUMNAS}`,
     [id, nombreArchivo]
@@ -453,8 +466,8 @@ export async function rechazarSaldo(
 // primer intento): se borran metodo_saldo/comprobante_saldo/
 // saldo_confirmado_en/_por para que "pueda presentarse nuevamente
 // comprobante y gestionarse normalmente" (decisión explícita), sin
-// arrastrar el método o comprobante del intento rechazado. No crea tabla
-// de historial — el registro del rechazo simplemente se sobrescribe.
+// arrastrar el método o comprobante del intento rechazado. Los comprobantes
+// que subió el cliente no se pierden: quedan en comprobantes_pago_cliente (V19).
 export async function reabrirSaldo(id: string): Promise<Cotizacion | null> {
   const result = await pool.query<Cotizacion>(
     `UPDATE cotizaciones

@@ -659,3 +659,195 @@ export async function enviarAvisoCambioPassword(input: AvisoCambioPasswordInput)
     clearTimeout(timeoutId);
   }
 }
+
+// ---------------------------------------------------------------------
+// Avisos de pago al cliente (anticipo / saldo): comprobante rechazado y pago confirmado.
+// Se envían DESPUÉS de que el cambio de estado ya quedó confirmado en la BD; un fallo de envío nunca
+// revierte ese estado (ver cotizaciones.controller.ts::notificarCliente). Nunca incluyen el código de
+// acceso, el OTP, el token ni importes.
+// ---------------------------------------------------------------------
+
+export type TipoPagoAviso = 'ANTICIPO' | 'SALDO';
+
+interface AvisoPagoBase {
+  destinatarioEmail: string;
+  destinatarioNombre: string;
+  solicitudCodigo: string | null;
+  cotizacionCodigo: string | null;
+  tipoPago: TipoPagoAviso;
+}
+
+export interface ComprobanteRechazadoInput extends AvisoPagoBase {
+  motivo: string;
+  detalle: string | null;
+}
+
+export type PagoConfirmadoInput = AvisoPagoBase;
+
+const ETIQUETA_PAGO: Record<TipoPagoAviso, string> = { ANTICIPO: 'anticipo', SALDO: 'saldo' };
+
+// Catálogo cerrado de motivos de rechazo (transferenciasPago.service.ts::MOTIVOS_RECHAZO).
+const TEXTO_MOTIVO_RECHAZO: Record<string, string> = {
+  COMPROBANTE_INCORRECTO: 'El comprobante no corresponde a este pago.',
+  IMPORTE_INCORRECTO: 'El importe del comprobante no coincide con el valor a pagar.',
+  COMPROBANTE_ILEGIBLE: 'El comprobante no se puede leer con claridad.',
+};
+
+export function textoMotivoRechazo(motivo: string, detalle: string | null): string {
+  if (motivo === 'OTRO') return detalle?.trim() || 'Otro motivo; contacta a tu asesor para más detalle.';
+  return TEXTO_MOTIVO_RECHAZO[motivo] ?? 'El comprobante no pudo ser aceptado.';
+}
+
+interface ContenidoCorreo {
+  asunto: string;
+  html: string;
+  texto: string;
+}
+
+function referenciaAviso(input: AvisoPagoBase): { referencia: string; cotizacionDe: string } {
+  const referencia = construirReferenciaCotizacion(input);
+  const codigo = input.cotizacionCodigo ?? input.solicitudCodigo;
+  return { referencia, cotizacionDe: codigo ? ` ${codigo}` : '' };
+}
+
+function construirContenidoComprobanteRechazado(input: ComprobanteRechazadoInput): ContenidoCorreo {
+  const { referencia, cotizacionDe } = referenciaAviso(input);
+  const pago = ETIQUETA_PAGO[input.tipoPago];
+  const motivo = textoMotivoRechazo(input.motivo, input.detalle);
+  const enlaceWhatsApp = construirEnlaceWhatsApp(construirMensajeWhatsAppAyudaCotizacion(input));
+  const asunto = `${env.nextProjectName} — Revisa tu comprobante de ${pago}${referencia}`;
+
+  const texto = [
+    `Hola ${input.destinatarioNombre}.`,
+    '',
+    `No pudimos aceptar el comprobante de tu ${pago} de la cotización${cotizacionDe}.`,
+    '',
+    'Motivo:',
+    motivo,
+    '',
+    'Para corregirlo, ingresa de nuevo a tu enlace de cotización con el código de seguridad de 6 dígitos y vuelve a subir un comprobante correcto en la sección de ' + pago + '.',
+    '',
+    '¿Necesitas ayuda? Contáctanos por WhatsApp:',
+    enlaceWhatsApp,
+  ].join('\n');
+
+  const html = `<!doctype html>
+<html lang="es">
+  <body style="margin:0;padding:24px;background:#f4f4f4;font-family:Arial,Helvetica,sans-serif;color:#1a1a1a;">
+    <div style="max-width:480px;margin:0 auto;background:#ffffff;padding:32px 24px;border-radius:4px;">
+      <p style="margin:0 0 16px;">Hola ${escaparHtml(input.destinatarioNombre)}.</p>
+      <p style="margin:0 0 16px;">No pudimos aceptar el comprobante de tu ${pago} de la cotización${escaparHtml(cotizacionDe)}.</p>
+      <p style="margin:0 0 4px;">Motivo:</p>
+      <p style="margin:0 0 16px;font-weight:bold;">${escaparHtml(motivo)}</p>
+      <p style="margin:0 0 24px;">Para corregirlo, ingresa de nuevo a tu enlace de cotización con el código de seguridad de 6 dígitos y vuelve a subir un comprobante correcto en la sección de ${pago}.</p>
+      <p style="text-align:center;margin:0;">
+        <a href="${enlaceWhatsApp}" style="display:inline-block;background:#d4a017;color:#1a1a1a;text-decoration:none;padding:12px 24px;border-radius:4px;font-weight:bold;">¿NECESITAS AYUDA? ESCRÍBENOS POR WHATSAPP</a>
+      </p>
+    </div>
+  </body>
+</html>`;
+
+  return { asunto, html, texto };
+}
+
+function construirContenidoPagoConfirmado(input: PagoConfirmadoInput): ContenidoCorreo {
+  const { referencia, cotizacionDe } = referenciaAviso(input);
+  const pago = ETIQUETA_PAGO[input.tipoPago];
+  const enlaceWhatsApp = construirEnlaceWhatsApp(construirMensajeWhatsAppAyudaCotizacion(input));
+  const asunto = `${env.nextProjectName} — Confirmamos tu ${pago}${referencia}`;
+
+  const texto = [
+    `Hola ${input.destinatarioNombre}.`,
+    '',
+    `Confirmamos que el pago de tu ${pago} de la cotización${cotizacionDe} ya fue acreditado en nuestra cuenta.`,
+    '',
+    'Puedes consultar el estado de tu cotización en cualquier momento desde tu enlace con el código de seguridad de 6 dígitos.',
+    '',
+    '¿Necesitas ayuda? Contáctanos por WhatsApp:',
+    enlaceWhatsApp,
+  ].join('\n');
+
+  const html = `<!doctype html>
+<html lang="es">
+  <body style="margin:0;padding:24px;background:#f4f4f4;font-family:Arial,Helvetica,sans-serif;color:#1a1a1a;">
+    <div style="max-width:480px;margin:0 auto;background:#ffffff;padding:32px 24px;border-radius:4px;">
+      <p style="margin:0 0 16px;">Hola ${escaparHtml(input.destinatarioNombre)}.</p>
+      <p style="margin:0 0 16px;">Confirmamos que el pago de tu ${pago} de la cotización${escaparHtml(cotizacionDe)} ya fue acreditado en nuestra cuenta.</p>
+      <p style="margin:0 0 24px;">Puedes consultar el estado de tu cotización en cualquier momento desde tu enlace con el código de seguridad de 6 dígitos.</p>
+      <p style="text-align:center;margin:0;">
+        <a href="${enlaceWhatsApp}" style="display:inline-block;background:#d4a017;color:#1a1a1a;text-decoration:none;padding:12px 24px;border-radius:4px;font-weight:bold;">¿NECESITAS AYUDA? ESCRÍBENOS POR WHATSAPP</a>
+      </p>
+    </div>
+  </body>
+</html>`;
+
+  return { asunto, html, texto };
+}
+
+// Envío común de los avisos de pago. SIEMPRE resuelve (nunca lanza), un solo intento.
+async function enviarAvisoPago(
+  etiqueta: string,
+  input: AvisoPagoBase,
+  contenido: ContenidoCorreo
+): Promise<ResultadoEnvioCorreo> {
+  if (!env.brevoApiKey || !env.nextProjectEmail) {
+    const motivo =
+      !env.brevoApiKey && !env.nextProjectEmail
+        ? 'BREVO_API_KEY y NEXT_PROJECT_EMAIL no configurados'
+        : !env.brevoApiKey
+          ? 'BREVO_API_KEY no configurado'
+          : 'NEXT_PROJECT_EMAIL no configurado';
+    console.log(`[EMAIL] ${etiqueta}: envío desactivado (${motivo}).`);
+    return { estado: 'skipped', motivo };
+  }
+
+  const destinoEnmascarado = enmascararEmail(input.destinatarioEmail);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), BREVO_TIMEOUT_MS);
+  try {
+    const response = await fetch(BREVO_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        'api-key': env.brevoApiKey,
+        ...(env.brevoSandbox ? { 'X-Sib-Sandbox': 'drop' } : {}),
+      },
+      body: JSON.stringify({
+        sender: { name: env.nextProjectName, email: env.nextProjectEmail },
+        to: [{ email: input.destinatarioEmail, name: input.destinatarioNombre }],
+        subject: contenido.asunto,
+        htmlContent: contenido.html,
+        textContent: contenido.texto,
+      }),
+      signal: controller.signal,
+    });
+
+    const data = (await response.json().catch(() => null)) as { messageId?: unknown; message?: unknown } | null;
+
+    if (!response.ok) {
+      const errorResumen = typeof data?.message === 'string' ? data.message : `HTTP ${response.status}`;
+      console.log(`[EMAIL] ${etiqueta}: falló su envío (destino=${destinoEnmascarado}): ${errorResumen}`);
+      return { estado: 'failed', error: errorResumen };
+    }
+
+    const messageId = typeof data?.messageId === 'string' ? data.messageId : undefined;
+    console.log(`[EMAIL] ${etiqueta} enviado correctamente (destino=${destinoEnmascarado}).`);
+    return { estado: 'sent', messageId };
+  } catch (error) {
+    const esTimeout = error instanceof Error && error.name === 'AbortError';
+    const errorResumen = esTimeout ? 'timeout' : error instanceof Error ? error.message : 'error desconocido';
+    console.log(`[EMAIL] ${etiqueta}: falló su envío (destino=${destinoEnmascarado}): ${errorResumen}`);
+    return { estado: 'failed', error: errorResumen };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+export async function enviarComprobanteRechazado(input: ComprobanteRechazadoInput): Promise<ResultadoEnvioCorreo> {
+  return enviarAvisoPago('Comprobante rechazado', input, construirContenidoComprobanteRechazado(input));
+}
+
+export async function enviarPagoConfirmado(input: PagoConfirmadoInput): Promise<ResultadoEnvioCorreo> {
+  return enviarAvisoPago('Pago confirmado', input, construirContenidoPagoConfirmado(input));
+}

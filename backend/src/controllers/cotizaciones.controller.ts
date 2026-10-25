@@ -37,6 +37,9 @@ import {
   MetodoAnticipoInvalidoError,
   DiasVigenciaInvalidoError,
   AccionNoPermitidaError,
+  SaldoRequiereAnticipoValidadoError,
+  ComprobanteYaRecibidoError,
+  type EscrituraArchivo,
   AnticipoNoGestionableError,
   SaldoNoGestionableError,
   MetodoSaldoRequeridoError,
@@ -45,8 +48,15 @@ import {
   SaldoNoRechazadoError,
   CotizacionNoEditableError,
 } from '../services/cotizaciones.service.js';
-import { uploadComprobante, generarNombreComprobante, COMPROBANTES_DIR, COMPROBANTE_MAX_BYTES } from '../config/uploadsComprobantes.js';
-import { enviarEnlaceCotizacion } from '../services/email.service.js';
+import {
+  uploadComprobante,
+  generarNombreComprobante,
+  contenidoComprobanteCoincideConMime,
+  COMPROBANTES_DIR,
+  COMPROBANTE_MAX_BYTES,
+} from '../config/uploadsComprobantes.js';
+import { enviarEnlaceCotizacion, enviarComprobanteRechazado, enviarPagoConfirmado } from '../services/email.service.js';
+import * as cotizacionesRepo from '../repositories/cotizaciones.repository.js';
 import { listarCuentasReceptorasActivas } from '../services/cuentasBancarias.service.js';
 import {
   registrarGestionPago,
@@ -537,6 +547,15 @@ export async function rechazarController(req: Request, res: Response): Promise<v
 
 // Endpoint público (sin requireAuth): el cliente sube el comprobante de
 // transferencia (multipart/form-data, campo "archivo" + campo "codigo").
+// Escritura/limpieza del archivo del comprobante (se ejecuta dentro de la transacción del servicio).
+function escrituraComprobante(nombreArchivo: string, buffer: Buffer): EscrituraArchivo {
+  const ruta = path.join(COMPROBANTES_DIR, nombreArchivo);
+  return {
+    escribir: () => fs.promises.writeFile(ruta, buffer),
+    deshacer: () => fs.promises.unlink(ruta),
+  };
+}
+
 // La subida se procesa manualmente (en vez de como middleware de ruta)
 // para poder responder con mensajes 400 claros ante un archivo inválido o
 // demasiado grande, en lugar de caer en el manejador de errores genérico.
@@ -571,6 +590,11 @@ async function procesarComprobante(req: Request, res: Response, err: unknown): P
     return;
   }
 
+  if (!contenidoComprobanteCoincideConMime(req.file.buffer, req.file.mimetype)) {
+    res.status(400).json({ message: 'El contenido del archivo no corresponde a un PDF, JPG o PNG válido.' });
+    return;
+  }
+
   const body = (req.body ?? {}) as Record<string, unknown>;
   const codigo = extraerCodigoValido(body);
   if (!codigo) {
@@ -580,11 +604,14 @@ async function procesarComprobante(req: Request, res: Response, err: unknown): P
 
   try {
     const nombreArchivo = generarNombreComprobante(req.file.mimetype);
-    const cotizacion = await registrarComprobantePublico(req.params.token, codigo, nombreArchivo);
-    // Solo se llega aquí si el token+código+estado ya fueron verificados
-    // y la referencia quedó persistida en BD — recién ahora se escribe el
-    // archivo real a disco.
-    await fs.promises.writeFile(path.join(COMPROBANTES_DIR, nombreArchivo), req.file.buffer);
+    // El archivo se escribe dentro de la transacción del servicio, solo después de verificar token +
+    // código + estado (F-02) y antes del COMMIT: si la escritura falla no queda ninguna referencia.
+    const cotizacion = await registrarComprobantePublico(
+      req.params.token,
+      codigo,
+      nombreArchivo,
+      escrituraComprobante(nombreArchivo, (req.file as Express.Multer.File).buffer)
+    );
     res.status(200).json({ cotizacion });
   } catch (error) {
     if (error instanceof EnlaceInvalidoError) {
@@ -603,9 +630,13 @@ async function procesarComprobante(req: Request, res: Response, err: unknown): P
       res.status(404).json({ message: 'Cotización no encontrada.' });
       return;
     }
+    if (error instanceof ComprobanteYaRecibidoError) {
+      res.status(409).json({ message: 'Ya recibimos tu comprobante y está en revisión. No es necesario enviarlo de nuevo.' });
+      return;
+    }
     if (error instanceof AccionNoPermitidaError) {
       res.status(409).json({
-        message: 'Solo se puede subir un comprobante para una cotización ACEPTADA, con método TRANSFERENCIA y anticipo PENDIENTE.',
+        message: 'Solo se puede subir un comprobante para una cotización ACEPTADA, con método TRANSFERENCIA y anticipo pendiente o rechazado.',
       });
       return;
     }
@@ -667,6 +698,38 @@ function manejarErrorTransferencia(error: unknown, res: Response): boolean {
   return false;
 }
 
+// Avisa al cliente por correo de un cambio en su pago. Se invoca SOLO después de que la transición ya
+// quedó confirmada en la BD (rechazarPago / confirmación de acreditación), por lo que cada evento
+// ocurre una única vez (una segunda acción sobre el mismo pago responde 409 y no llega aquí). Un fallo
+// de correo o de lectura NUNCA modifica ni revierte el estado del pago: solo se registra.
+async function notificarCliente(
+  cotizacionId: string,
+  aviso:
+    | { tipo: 'ANTICIPO' | 'SALDO'; evento: 'CONFIRMADO' }
+    | { tipo: 'ANTICIPO' | 'SALDO'; evento: 'RECHAZADO'; motivo: string; detalle: string | null }
+): Promise<void> {
+  try {
+    const contacto = await cotizacionesRepo.obtenerContactoParaCorreo(cotizacionId);
+    const email = contacto?.clienteEmail.trim();
+    if (!contacto || !email) return;
+
+    const base = {
+      destinatarioEmail: email,
+      destinatarioNombre: contacto.clienteNombre,
+      solicitudCodigo: contacto.solicitudCodigo,
+      cotizacionCodigo: contacto.cotizacionCodigo,
+      tipoPago: aviso.tipo,
+    };
+    if (aviso.evento === 'RECHAZADO') {
+      await enviarComprobanteRechazado({ ...base, motivo: aviso.motivo, detalle: aviso.detalle });
+    } else {
+      await enviarPagoConfirmado(base);
+    }
+  } catch (error) {
+    console.error('[EMAIL] No se pudo notificar el cambio de pago:', error instanceof Error ? error.message : error);
+  }
+}
+
 export async function gestionarAnticipoController(req: Request, res: Response): Promise<void> {
   const body = (req.body ?? {}) as Record<string, unknown>;
   const accion = body.accion;
@@ -707,6 +770,7 @@ export async function gestionarAnticipoController(req: Request, res: Response): 
       // `{ cotizacion }` — para no romper al frontend actual.
       if (accion === 'VALIDAR') {
         await confirmarAcreditacionDirecta({ cotizacionId: req.params.id, tipoPago: 'ANTICIPO', adminId: usuarioId });
+        await notificarCliente(req.params.id, { tipo: 'ANTICIPO', evento: 'CONFIRMADO' });
       } else {
         const motivoRechazo = body.motivoRechazo;
         const motivoRechazoDetalle = body.motivoRechazoDetalle;
@@ -720,6 +784,12 @@ export async function gestionarAnticipoController(req: Request, res: Response): 
           motivoRechazo,
           motivoRechazoDetalle: typeof motivoRechazoDetalle === 'string' ? motivoRechazoDetalle : null,
           rechazadoPor: usuarioId,
+        });
+        await notificarCliente(req.params.id, {
+          tipo: 'ANTICIPO',
+          evento: 'RECHAZADO',
+          motivo: motivoRechazo,
+          detalle: typeof motivoRechazoDetalle === 'string' ? motivoRechazoDetalle : null,
         });
       }
       const cotizacion = await obtenerCotizacion(req.params.id);
@@ -755,6 +825,7 @@ export async function gestionarAnticipoController(req: Request, res: Response): 
       verificadorId,
       registradoPor: usuarioId,
     });
+    await notificarCliente(req.params.id, { tipo: 'ANTICIPO', evento: 'CONFIRMADO' });
     const cotizacion = await obtenerCotizacion(req.params.id);
     res.status(200).json({ cotizacion, transferencia });
   } catch (error) {
@@ -818,6 +889,11 @@ async function procesarComprobanteSaldo(req: Request, res: Response, err: unknow
     return;
   }
 
+  if (!contenidoComprobanteCoincideConMime(req.file.buffer, req.file.mimetype)) {
+    res.status(400).json({ message: 'El contenido del archivo no corresponde a un PDF, JPG o PNG válido.' });
+    return;
+  }
+
   const body = (req.body ?? {}) as Record<string, unknown>;
   const codigo = extraerCodigoValido(body);
   if (!codigo) {
@@ -827,8 +903,12 @@ async function procesarComprobanteSaldo(req: Request, res: Response, err: unknow
 
   try {
     const nombreArchivo = generarNombreComprobante(req.file.mimetype);
-    const cotizacion = await registrarComprobanteSaldoPublico(req.params.token, codigo, nombreArchivo);
-    await fs.promises.writeFile(path.join(COMPROBANTES_DIR, nombreArchivo), req.file.buffer);
+    const cotizacion = await registrarComprobanteSaldoPublico(
+      req.params.token,
+      codigo,
+      nombreArchivo,
+      escrituraComprobante(nombreArchivo, (req.file as Express.Multer.File).buffer)
+    );
     res.status(200).json({ cotizacion });
   } catch (error) {
     if (error instanceof EnlaceInvalidoError) {
@@ -847,9 +927,19 @@ async function procesarComprobanteSaldo(req: Request, res: Response, err: unknow
       res.status(404).json({ message: 'Cotización no encontrada.' });
       return;
     }
+    if (error instanceof SaldoRequiereAnticipoValidadoError) {
+      res.status(409).json({
+        message: 'Podrás subir el comprobante del saldo cuando tu anticipo haya sido validado por nuestro equipo.',
+      });
+      return;
+    }
+    if (error instanceof ComprobanteYaRecibidoError) {
+      res.status(409).json({ message: 'Ya recibimos tu comprobante y está en revisión. No es necesario enviarlo de nuevo.' });
+      return;
+    }
     if (error instanceof AccionNoPermitidaError) {
       res.status(409).json({
-        message: 'Solo se puede subir un comprobante de saldo para una cotización ACEPTADA, con saldo PENDIENTE y sin un método de pago distinto ya definido.',
+        message: 'Solo se puede subir un comprobante de saldo para una cotización ACEPTADA, con saldo pendiente o rechazado y sin un método de pago distinto ya definido.',
       });
       return;
     }
@@ -905,6 +995,7 @@ export async function gestionarSaldoController(req: Request, res: Response): Pro
           adminId: usuarioId,
           metodoSaldo: metodo as string | undefined,
         });
+        await notificarCliente(req.params.id, { tipo: 'SALDO', evento: 'CONFIRMADO' });
       } else {
         const motivoRechazo = body.motivoRechazo;
         const motivoRechazoDetalle = body.motivoRechazoDetalle;
@@ -918,6 +1009,12 @@ export async function gestionarSaldoController(req: Request, res: Response): Pro
           motivoRechazo,
           motivoRechazoDetalle: typeof motivoRechazoDetalle === 'string' ? motivoRechazoDetalle : null,
           rechazadoPor: usuarioId,
+        });
+        await notificarCliente(req.params.id, {
+          tipo: 'SALDO',
+          evento: 'RECHAZADO',
+          motivo: motivoRechazo,
+          detalle: typeof motivoRechazoDetalle === 'string' ? motivoRechazoDetalle : null,
         });
       }
       const cotizacion = await obtenerCotizacion(req.params.id);
@@ -954,6 +1051,7 @@ export async function gestionarSaldoController(req: Request, res: Response): Pro
       registradoPor: usuarioId,
       metodoSaldo: metodo as string | undefined,
     });
+    await notificarCliente(req.params.id, { tipo: 'SALDO', evento: 'CONFIRMADO' });
     const cotizacion = await obtenerCotizacion(req.params.id);
     res.status(200).json({ cotizacion, transferencia });
   } catch (error) {

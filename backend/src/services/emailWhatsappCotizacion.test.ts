@@ -12,7 +12,13 @@ const envMock = vi.hoisted(() => ({
 }));
 vi.mock('../config/env.js', () => ({ env: envMock }));
 
-import { enviarCodigoAccesoRegenerado, enviarCodigoTemporalCotizacion, enviarEnlaceCotizacion } from './email.service.js';
+import {
+  enviarCodigoAccesoRegenerado,
+  enviarCodigoTemporalCotizacion,
+  enviarComprobanteRechazado,
+  enviarEnlaceCotizacion,
+  enviarPagoConfirmado,
+} from './email.service.js';
 
 const fetchMock = vi.fn();
 
@@ -125,5 +131,55 @@ describe('botón "VER MI COTIZACIÓN"', () => {
     expect(hrefDelBoton(correoEnviado().htmlContent, 'VER MI COTIZACIÓN')).toBe(
       'http://localhost:3000/cotizacion/publica/t'
     );
+  });
+});
+
+describe('avisos de pago al cliente', () => {
+  const aviso = { ...base, ...refs, tipoPago: 'ANTICIPO' as const };
+
+  it('comprobante rechazado: indica el motivo, la cotización correcta y cómo volver a subirlo', async () => {
+    await enviarComprobanteRechazado({ ...aviso, motivo: 'IMPORTE_INCORRECTO', detalle: null });
+    const c = correoEnviado();
+    expect(c.subject).toContain('comprobante de anticipo');
+    expect(c.subject).toContain('Cotización COT-000012');
+    for (const t of [c.textContent, c.htmlContent]) {
+      expect(t).toContain('El importe del comprobante no coincide con el valor a pagar.');
+      expect(t).toContain('vuelve a subir un comprobante correcto en la sección de anticipo');
+    }
+    expect(textoWhatsappEnviado()).toContain('COT-000012');
+  });
+
+  it('comprobante rechazado del saldo se identifica como saldo', async () => {
+    await enviarComprobanteRechazado({ ...aviso, tipoPago: 'SALDO', motivo: 'COMPROBANTE_ILEGIBLE', detalle: null });
+    expect(correoEnviado().subject).toContain('comprobante de saldo');
+  });
+
+  it('el motivo OTRO usa el detalle escrito por COMERCIAL y escapa el HTML', async () => {
+    await enviarComprobanteRechazado({ ...aviso, motivo: 'OTRO', detalle: 'Falta la <b>firma</b>' });
+    const c = correoEnviado();
+    expect(c.textContent).toContain('Falta la <b>firma</b>');
+    expect(c.htmlContent).toContain('Falta la &lt;b&gt;firma&lt;/b&gt;');
+    expect(c.htmlContent).not.toContain('<b>firma</b>');
+  });
+
+  it('pago confirmado: habla de acreditación, identifica anticipo o saldo y no incluye importes ni códigos de acceso', async () => {
+    await enviarPagoConfirmado(aviso);
+    const c = correoEnviado();
+    expect(c.subject).toContain('Confirmamos tu anticipo');
+    expect(c.textContent).toContain('ya fue acreditado en nuestra cuenta');
+    expect(c.textContent).not.toMatch(/\$\s?\d/);
+    fetchMock.mockClear();
+    await enviarPagoConfirmado({ ...aviso, tipoPago: 'SALDO' });
+    expect(correoEnviado().subject).toContain('Confirmamos tu saldo');
+  });
+
+  it('un fallo de Brevo no lanza: resuelve como failed', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 401, json: async () => ({ message: 'unauthorized' }) });
+    await expect(enviarPagoConfirmado(aviso)).resolves.toEqual({ estado: 'failed', error: 'unauthorized' });
+    fetchMock.mockRejectedValue(new Error('red caída'));
+    await expect(enviarComprobanteRechazado({ ...aviso, motivo: 'OTRO', detalle: 'x' })).resolves.toEqual({
+      estado: 'failed',
+      error: 'red caída',
+    });
   });
 });

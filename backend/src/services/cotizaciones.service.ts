@@ -5,6 +5,8 @@ import { pool } from '../config/db.js';
 import { env } from '../config/env.js';
 import * as cotizacionesRepo from '../repositories/cotizaciones.repository.js';
 import * as solicitudesRepo from '../repositories/solicitudes.repository.js';
+import * as comprobantesClienteRepo from '../repositories/comprobantesPagoCliente.repository.js';
+import * as transferenciasRepo from '../repositories/transferenciasPago.repository.js';
 import { listarCuentasActivasPublico } from './cuentasBancarias.service.js';
 import type { CuentaBancariaPublica } from '../repositories/cuentasBancarias.repository.js';
 import { crearOrdenAutomatica } from './ordenAutomatica.service.js';
@@ -29,6 +31,9 @@ export class MetodoAnticipoNoPermitidoError extends Error {}
 export class MetodoAnticipoInvalidoError extends Error {}
 export class DiasVigenciaInvalidoError extends Error {}
 export class AccionNoPermitidaError extends Error {}
+// Subclases con mensaje propio para el cliente (el controlador las atiende antes que la genérica).
+export class SaldoRequiereAnticipoValidadoError extends AccionNoPermitidaError {}
+export class ComprobanteYaRecibidoError extends AccionNoPermitidaError {}
 export class AnticipoNoGestionableError extends Error {}
 export class SaldoNoGestionableError extends Error {}
 export class MetodoSaldoRequeridoError extends Error {}
@@ -491,7 +496,14 @@ export async function generarEnlaceCotizacion(id: string): Promise<EnlaceGenerad
 
 export interface CotizacionPublica {
   id: string;
+  // Código comercial legible (COT-XXXXXX); null en cotizaciones históricas.
+  codigo: string | null;
   valor: string;
+  // Desglose oficial calculado por el backend (crearCotizacion): `valor` es el subtotal sin IVA.
+  subtotal: string | null;
+  iva_porcentaje: string | null;
+  iva_valor: string | null;
+  total: string | null;
   estado: string;
   descripcion: string | null;
   creado_en: string;
@@ -507,6 +519,11 @@ export interface CotizacionPublica {
   metodo_saldo: string | null;
   estado_saldo: string;
   saldo_comprobante_recibido: boolean;
+  // true cuando el saldo admite comprobante: el anticipo ya está VALIDADO o no aplica (regla QA-04).
+  saldo_habilitado: boolean;
+  // Motivo del último rechazo mientras el pago siga RECHAZADO; null en cualquier otro caso.
+  rechazo_anticipo: RechazoPagoPublico | null;
+  rechazo_saldo: RechazoPagoPublico | null;
   datos_bancarios: DatosBancarios | null;
   // PC-2026-01, Etapa 4: lista aditiva — convive con `datos_bancarios`
   // (variables BANCO_*, todavía no retiradas) sin romper el contrato
@@ -520,6 +537,12 @@ export interface CotizacionPublica {
     cantidad: number;
     especificaciones: string | null;
   };
+}
+
+export interface RechazoPagoPublico {
+  motivo: string | null;
+  detalle: string | null;
+  fecha: string;
 }
 
 interface DatosBancarios {
@@ -542,6 +565,8 @@ function obtenerDatosBancariosSiConfigurados(): DatosBancarios | null {
   return { banco, tipoCuenta, numeroCuenta, titular, ruc };
 }
 
+const FORMATO_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // Verifica firma + propósito del token y devuelve el cotizacionId real.
 // Compartido por obtenerCotizacionPublica() y verificarCodigoCotizacion().
 function verificarToken(token: string): string {
@@ -559,8 +584,32 @@ function verificarToken(token: string): string {
   if (payload.purpose !== ENLACE_PURPOSE || typeof payload.cotizacionId !== 'string') {
     throw new EnlaceInvalidoError();
   }
+  // Un identificador sin formato UUID no puede corresponder a ninguna cotización: se trata como
+  // enlace inválido (401) en vez de dejar que PostgreSQL falle con "invalid input syntax for type uuid" (500).
+  if (!FORMATO_UUID.test(payload.cotizacionId)) {
+    throw new EnlaceInvalidoError();
+  }
 
   return payload.cotizacionId;
+}
+
+// Regla QA-04 (confirmada por el negocio): el cliente solo puede subir el comprobante del saldo
+// cuando el anticipo ya fue VALIDADO (acreditación confirmada por ADMIN, directa o registrada por
+// COMERCIAL tras la confirmación telefónica de un ADMIN) o cuando no hay anticipo. Es la única
+// definición de «anticipo validado» que existe en el modelo de estados; si el negocio decide otro
+// evento, se cambia aquí y en `guardarComprobanteSaldo` (repositorio).
+export function anticipoPermiteSaldo(estadoAnticipo: string | null): boolean {
+  return estadoAnticipo === 'VALIDADO' || estadoAnticipo === 'NO_APLICA';
+}
+
+// Motivo del rechazo vigente de un pago (fila vigente RECHAZADO de transferencias_pago).
+async function obtenerRechazoVigente(
+  cotizacionId: string,
+  tipoPago: 'ANTICIPO' | 'SALDO'
+): Promise<RechazoPagoPublico | null> {
+  const vigente = await transferenciasRepo.obtenerVigente(cotizacionId, tipoPago);
+  if (!vigente || vigente.estado !== 'RECHAZADO') return null;
+  return { motivo: vigente.motivo_rechazo, detalle: vigente.motivo_rechazo_detalle, fecha: vigente.creado_en };
 }
 
 // Construye el DTO público a partir del estado REAL vigente en
@@ -578,9 +627,26 @@ async function construirCotizacionPublica(cotizacionId: string): Promise<Cotizac
     throw new SolicitudNoEncontradaError();
   }
 
+  const [rechazoAnticipo, rechazoSaldo] = await Promise.all([
+    cotizacion.estado_anticipo === 'RECHAZADO' ? obtenerRechazoVigente(cotizacion.id, 'ANTICIPO') : null,
+    cotizacion.estado_saldo === 'RECHAZADO' ? obtenerRechazoVigente(cotizacion.id, 'SALDO') : null,
+  ]);
+
+  // Las cuentas se entregan siempre que el cliente pueda necesitarlas: método TRANSFERENCIA ya fijado
+  // o cotización ACEPTADA (el saldo puede pagarse por transferencia aunque su método no esté definido).
+  const puedeTransferir =
+    cotizacion.metodo_anticipo === 'TRANSFERENCIA' ||
+    cotizacion.metodo_saldo === 'TRANSFERENCIA' ||
+    cotizacion.estado === 'ACEPTADA';
+
   return {
     id: cotizacion.id,
+    codigo: cotizacion.codigo,
     valor: cotizacion.valor,
+    subtotal: cotizacion.subtotal,
+    iva_porcentaje: cotizacion.iva_porcentaje,
+    iva_valor: cotizacion.iva_valor,
+    total: cotizacion.total,
     estado: cotizacion.estado,
     descripcion: cotizacion.descripcion,
     creado_en: cotizacion.creado_en,
@@ -596,14 +662,11 @@ async function construirCotizacionPublica(cotizacionId: string): Promise<Cotizac
     metodo_saldo: cotizacion.metodo_saldo,
     estado_saldo: cotizacion.estado_saldo,
     saldo_comprobante_recibido: cotizacion.saldo_comprobante_recibido,
-    datos_bancarios:
-      cotizacion.metodo_anticipo === 'TRANSFERENCIA' || cotizacion.metodo_saldo === 'TRANSFERENCIA'
-        ? obtenerDatosBancariosSiConfigurados()
-        : null,
-    cuentas_bancarias_activas:
-      cotizacion.metodo_anticipo === 'TRANSFERENCIA' || cotizacion.metodo_saldo === 'TRANSFERENCIA'
-        ? await listarCuentasActivasPublico()
-        : [],
+    saldo_habilitado: anticipoPermiteSaldo(cotizacion.estado_anticipo),
+    rechazo_anticipo: rechazoAnticipo,
+    rechazo_saldo: rechazoSaldo,
+    datos_bancarios: puedeTransferir ? obtenerDatosBancariosSiConfigurados() : null,
+    cuentas_bancarias_activas: puedeTransferir ? await listarCuentasActivasPublico() : [],
     solicitud: {
       servicio: solicitud.servicio,
       descripcion: solicitud.descripcion,
@@ -799,34 +862,88 @@ export async function rechazarCotizacionPublica(token: string, codigo: string): 
 // Comprobante de transferencia + gestión de anticipo (Fase D.6).
 // ---------------------------------------------------------------------
 
-// Público: el cliente sube el comprobante desde el enlace (token + código,
-// igual que aceptar/rechazar). Solo procede si la cotización está
-// ACEPTADA, el método es TRANSFERENCIA y el anticipo sigue PENDIENTE —
-// nunca modifica estado_anticipo (eso es exclusivo de Comercial). El
-// nombre de archivo llega ya generado por multer (uploadsComprobantes.ts),
-// nunca es un valor libre del cliente.
-export async function registrarComprobantePublico(
+// Escritura del archivo en disco, entregada por el controlador. Se ejecuta DENTRO de la transacción,
+// después de validar token + código + estado y antes del COMMIT: si la escritura falla se revierte
+// todo (la BD nunca referencia un archivo que no existe) y si el COMMIT falla se deshace el archivo.
+export interface EscrituraArchivo {
+  escribir: () => Promise<void>;
+  deshacer: () => Promise<void>;
+}
+
+// Núcleo compartido por anticipo y saldo. La fila de la cotización se bloquea (FOR UPDATE) igual que
+// en transferenciasPago.service.ts, de modo que una carga concurrente con un rechazo/validación
+// interna o con otra carga se serializa. Cada carga queda registrada en comprobantes_pago_cliente:
+// nunca se pierde un comprobante anterior.
+async function registrarComprobanteCliente(
+  tipoPago: 'ANTICIPO' | 'SALDO',
   token: string,
   codigo: string,
-  nombreArchivo: string
+  nombreArchivo: string,
+  archivo: EscrituraArchivo
 ): Promise<CotizacionPublica> {
   const cotizacion = await validarAccesoConCodigo(token, codigo);
 
-  if (cotizacion.estado !== 'ACEPTADA') {
-    throw new AccionNoPermitidaError();
-  }
-  if (cotizacion.metodo_anticipo !== 'TRANSFERENCIA') {
-    throw new AccionNoPermitidaError();
-  }
-  if (cotizacion.estado_anticipo !== 'PENDIENTE') {
-    throw new AccionNoPermitidaError();
+  const client = await pool.connect();
+  let escrito = false;
+  try {
+    await client.query('BEGIN');
+
+    const actual = await cotizacionesRepo.lockParaTransferencia(cotizacion.id, client);
+    if (!actual || actual.estado !== 'ACEPTADA') {
+      throw new AccionNoPermitidaError();
+    }
+
+    if (tipoPago === 'ANTICIPO') {
+      if (actual.metodo_anticipo !== 'TRANSFERENCIA') throw new AccionNoPermitidaError();
+      if (actual.estado_anticipo === 'PENDIENTE' && actual.comprobante_anticipo) throw new ComprobanteYaRecibidoError();
+      if (actual.estado_anticipo !== 'PENDIENTE' && actual.estado_anticipo !== 'RECHAZADO') throw new AccionNoPermitidaError();
+    } else {
+      if (actual.metodo_saldo !== null && actual.metodo_saldo !== 'TRANSFERENCIA') throw new AccionNoPermitidaError();
+      if (!anticipoPermiteSaldo(actual.estado_anticipo)) throw new SaldoRequiereAnticipoValidadoError();
+      if (actual.estado_saldo === 'PENDIENTE' && actual.comprobante_saldo) throw new ComprobanteYaRecibidoError();
+      if (actual.estado_saldo !== 'PENDIENTE' && actual.estado_saldo !== 'RECHAZADO') throw new AccionNoPermitidaError();
+    }
+
+    const actualizada =
+      tipoPago === 'ANTICIPO'
+        ? await cotizacionesRepo.guardarComprobante(cotizacion.id, nombreArchivo, client)
+        : await cotizacionesRepo.guardarComprobanteSaldo(cotizacion.id, nombreArchivo, client);
+    if (!actualizada) {
+      throw new AccionNoPermitidaError();
+    }
+
+    await comprobantesClienteRepo.registrar(
+      { id: crypto.randomUUID(), cotizacionId: cotizacion.id, tipoPago, archivo: nombreArchivo },
+      client
+    );
+
+    await archivo.escribir();
+    escrito = true;
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    if (escrito) {
+      await archivo.deshacer().catch(() => undefined);
+    }
+    throw error;
+  } finally {
+    client.release();
   }
 
-  const actualizada = await cotizacionesRepo.guardarComprobante(cotizacion.id, nombreArchivo);
-  if (!actualizada) {
-    throw new AccionNoPermitidaError();
-  }
-  return construirCotizacionPublica(actualizada.id);
+  return construirCotizacionPublica(cotizacion.id);
+}
+
+// Público: el cliente sube el comprobante del ANTICIPO desde el enlace (token + código, igual que
+// aceptar/rechazar). Solo procede si la cotización está ACEPTADA, el método es TRANSFERENCIA y el
+// anticipo está PENDIENTE sin comprobante o RECHAZADO (nueva carga tras corregir). Nunca resuelve el
+// anticipo: validarlo o rechazarlo es exclusivo del equipo interno.
+export async function registrarComprobantePublico(
+  token: string,
+  codigo: string,
+  nombreArchivo: string,
+  archivo: EscrituraArchivo
+): Promise<CotizacionPublica> {
+  return registrarComprobanteCliente('ANTICIPO', token, codigo, nombreArchivo, archivo);
 }
 
 // Interno (ADMIN/COMERCIAL, detrás de requireAuth+requireRole en la
@@ -872,34 +989,17 @@ export async function obtenerNombreComprobante(id: string): Promise<string | nul
 // explícita: incluso con anticipo 0% queda saldo pendiente por cobrar).
 // ---------------------------------------------------------------------
 
-// Público: el cliente sube el comprobante de transferencia del SALDO
-// desde el mismo enlace (token + código) ya usado para el anticipo. Fija
-// metodo_saldo en TRANSFERENCIA implícitamente (ver guardarComprobanteSaldo)
-// si todavía no estaba fijado; si ya estaba fijado en EFECTIVO, la
-// condición del repositorio bloquea el UPDATE y esta función lo traduce a
-// AccionNoPermitidaError.
+// Público: el cliente sube el comprobante de transferencia del SALDO desde el mismo enlace. Regla
+// QA-04: solo con el anticipo ya validado (o sin anticipo) — el backend la aplica aquí y de forma
+// atómica en el UPDATE del repositorio; ocultar el botón en la interfaz no es la protección.
+// Fija metodo_saldo en TRANSFERENCIA si todavía no estaba fijado (ver guardarComprobanteSaldo).
 export async function registrarComprobanteSaldoPublico(
   token: string,
   codigo: string,
-  nombreArchivo: string
+  nombreArchivo: string,
+  archivo: EscrituraArchivo
 ): Promise<CotizacionPublica> {
-  const cotizacion = await validarAccesoConCodigo(token, codigo);
-
-  if (cotizacion.estado !== 'ACEPTADA') {
-    throw new AccionNoPermitidaError();
-  }
-  if (cotizacion.estado_saldo !== 'PENDIENTE') {
-    throw new AccionNoPermitidaError();
-  }
-  if (cotizacion.metodo_saldo !== null && cotizacion.metodo_saldo !== 'TRANSFERENCIA') {
-    throw new AccionNoPermitidaError();
-  }
-
-  const actualizada = await cotizacionesRepo.guardarComprobanteSaldo(cotizacion.id, nombreArchivo);
-  if (!actualizada) {
-    throw new AccionNoPermitidaError();
-  }
-  return construirCotizacionPublica(actualizada.id);
+  return registrarComprobanteCliente('SALDO', token, codigo, nombreArchivo, archivo);
 }
 
 // Interno (ADMIN/COMERCIAL, ruta ya restringida a nivel de router):

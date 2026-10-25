@@ -37,6 +37,21 @@ export const uploadComprobante = multer({
   },
 }).single('archivo');
 
+// Firmas binarias reales (magic bytes) de los formatos permitidos. El MIME que declara el
+// cliente es solo una declaración: un archivo cuyo contenido no corresponde al formato que
+// declara se rechaza, sin excepción (mismo criterio que los logos de bancos).
+const FIRMAS: { mime: string; bytes: number[] }[] = [
+  { mime: 'application/pdf', bytes: [0x25, 0x50, 0x44, 0x46, 0x2d] }, // %PDF-
+  { mime: 'image/png', bytes: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] },
+  { mime: 'image/jpeg', bytes: [0xff, 0xd8, 0xff] },
+];
+
+export function contenidoComprobanteCoincideConMime(buffer: Buffer, mimetypeDeclarado: string): boolean {
+  const firma = FIRMAS.find((f) => f.mime === mimetypeDeclarado);
+  if (!firma || buffer.length < firma.bytes.length) return false;
+  return firma.bytes.every((byte, i) => buffer[i] === byte);
+}
+
 // Genera el nombre real del archivo (UUID + extensión derivada del
 // mimetype ya validado por `fileFilter`) — se invoca desde el controller
 // SOLO después de que `registrarComprobantePublico()` confirmó token +
