@@ -28,7 +28,7 @@ import {
   editarCuentaBancaria,
   cambiarActivoCuentaBancaria,
 } from '../services/cuentasBancarias.service.js';
-import { registrarGestionPago } from '../services/transferenciasPago.service.js';
+import { registrarGestionPago, confirmarAcreditacionDirecta } from '../services/transferenciasPago.service.js';
 
 let server: http.Server;
 let baseUrl: string;
@@ -38,6 +38,10 @@ let tokenAdmin: string;
 let tokenComercial: string;
 let tokenOperativo: string;
 let cotizacionId: string;
+// Cotización INDEPENDIENTE con el anticipo ya VALIDADO: la regla F1 solo permite gestionar el saldo
+// cuando el anticipo está VALIDADO o NO_APLICA, así que las pruebas de saldo no pueden usar
+// `cotizacionId` (anticipo PENDIENTE, compartida por las pruebas de anticipo).
+let cotizacionSaldoId: string;
 let restaurarFetch: () => void;
 
 const registro = new RegistroLimpieza();
@@ -123,6 +127,15 @@ async function crearCotizacionAceptada(aceptar = true): Promise<string> {
   return c.id;
 }
 
+// Cotización ficticia ACEPTADA cuyo anticipo se acredita con el flujo real (confirmación directa de
+// ADMIN): estado_anticipo = VALIDADO, requisito (F1) para gestionar el saldo. Su fila VALIDADO de
+// transferencias_pago se registra para limpieza igual que las demás (vía `cotizacionesCreadas`).
+async function crearCotizacionConAnticipoValidado(): Promise<string> {
+  const id = await crearCotizacionAceptada();
+  await confirmarAcreditacionDirecta({ cotizacionId: id, tipoPago: 'ANTICIPO', adminId });
+  return id;
+}
+
 beforeAll(async () => {
   // Cualquier llamada de red que no sea al servidor local de la prueba (correo,
   // IA…) se sustituye por una respuesta vacía.
@@ -152,6 +165,7 @@ beforeAll(async () => {
   baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 
   cotizacionId = await crearCotizacionAceptada();
+  cotizacionSaldoId = await crearCotizacionConAnticipoValidado();
 });
 
 afterAll(async () => {
@@ -190,8 +204,8 @@ async function gestionar(token: string, cuerpo: Record<string, unknown>) {
   });
 }
 
-async function historial(token = tokenComercial): Promise<Transferencia[]> {
-  const res = await pedir(`/${cotizacionId}/transferencias`, token);
+async function historial(token = tokenComercial, id = cotizacionId): Promise<Transferencia[]> {
+  const res = await pedir(`/${id}/transferencias`, token);
   expect(res.status).toBe(200);
   return ((await res.json()) as { transferencias: Transferencia[] }).transferencias;
 }
@@ -358,7 +372,7 @@ describe('Gestión de pago con cuenta receptora (anticipo) — snapshot e histor
 });
 
 describe('Cuenta inactiva: no se usa para pagos nuevos y el historial no cambia', () => {
-  async function gestionarSaldo(token: string, cuerpo: Record<string, unknown>, id = cotizacionId) {
+  async function gestionarSaldo(token: string, cuerpo: Record<string, unknown>, id = cotizacionSaldoId) {
     return pedir(`/${id}/saldo`, token, {
       method: 'PATCH',
       body: { accion: 'GESTIONAR', importeDeclarado: 500, ...cuerpo },
@@ -373,19 +387,21 @@ describe('Cuenta inactiva: no se usa para pagos nuevos y el historial no cambia'
           ? gestionar(token, { cuentaBancariaId: cuenta.id })
           : gestionarSaldo(token, { cuentaBancariaId: cuenta.id });
       const tipo = tramo === 'anticipo' ? 'ANTICIPO' : 'SALDO';
+      // el historial de cada tramo se lee de la cotización que se gestionó (el saldo usa la de anticipo VALIDADO)
+      const idTramo = tramo === 'anticipo' ? cotizacionId : cotizacionSaldoId;
 
       const ok = await enviar(tokenComercial);
       expect(ok.status).toBe(200);
       expect(((await ok.json()) as { transferencia: Transferencia }).transferencia.cuenta_bancaria_id).toBe(cuenta.id);
 
       await cambiarActivoCuentaBancaria(cuenta.id, false);
-      const antes = (await historial()).filter((t) => t.tipo_pago === tipo);
+      const antes = (await historial(tokenComercial, idTramo)).filter((t) => t.tipo_pago === tipo);
       const rechazada = await enviar(tokenComercial);
       expect(rechazada.status).toBe(400);
       expect(((await rechazada.json()) as { message: string }).message).toMatch(/cuentaBancariaId/);
       expect((await enviar(tokenAdmin)).status).toBe(400);
       // ningún intento nuevo ni cambio de vigencia
-      expect((await historial()).filter((t) => t.tipo_pago === tipo)).toEqual(antes);
+      expect((await historial(tokenComercial, idTramo)).filter((t) => t.tipo_pago === tipo)).toEqual(antes);
 
       await cambiarActivoCuentaBancaria(cuenta.id, true);
       expect((await enviar(tokenComercial)).status).toBe(200);
@@ -428,7 +444,7 @@ describe('Gestión de pago con cuenta receptora (saldo) — servicio', () => {
   it('un pago de SALDO guarda la cuenta elegida y su copia, separado del anticipo', async () => {
     const cuenta = await crearCuenta('SALDO', { titular: 'Titular Saldo', numero: '777888999' });
     const t = await registrarGestionPago({
-      cotizacionId,
+      cotizacionId: cotizacionSaldoId, // anticipo VALIDADO: el saldo no se gestiona con el anticipo pendiente (F1)
       tipoPago: 'SALDO',
       importeDeclarado: 500,
       cuentaBancariaId: cuenta.id,
@@ -440,8 +456,11 @@ describe('Gestión de pago con cuenta receptora (saldo) — servicio', () => {
     expect(t.titular_cuenta_snapshot).toBe('Titular Saldo');
     expect(t.numero_cuenta_snapshot).toBe('777888999');
 
-    // el anticipo vigente no se ve afectado por el pago de saldo
-    const anticipos = (await historial()).filter((x) => x.tipo_pago === 'ANTICIPO' && x.vigente);
-    expect(anticipos.length).toBeLessThanOrEqual(1);
+    // el anticipo vigente (la fila VALIDADO que dejó la acreditación) no se ve afectado por el pago de saldo
+    const anticipos = (await historial(tokenComercial, cotizacionSaldoId)).filter(
+      (x) => x.tipo_pago === 'ANTICIPO' && x.vigente
+    );
+    expect(anticipos).toHaveLength(1);
+    expect(anticipos[0].estado).toBe('VALIDADO');
   });
 });
