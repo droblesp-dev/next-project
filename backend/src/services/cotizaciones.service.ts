@@ -1072,6 +1072,11 @@ export async function reabrirSaldo(id: string): Promise<Cotizacion> {
   if (!actual) {
     throw new CotizacionNoEncontradaError();
   }
+  // Saldo RECHAZADO pero con el anticipo sin resolver (dato inconsistente): el UPDATE no aplica por
+  // la regla del anticipo, no porque el saldo no esté RECHAZADO; se informa con el error correcto.
+  if (actual.estado_saldo === 'RECHAZADO' && !anticipoPermiteSaldo(actual.estado_anticipo)) {
+    throw new SaldoRequiereAnticipoValidadoError();
+  }
   throw new SaldoNoRechazadoError();
 }
 

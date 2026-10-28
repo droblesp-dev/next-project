@@ -429,7 +429,11 @@ export async function obtenerNombreComprobanteSaldo(id: string): Promise<string 
 // VALIDAR — cubre el caso EFECTIVO, donde el método nunca se fijó antes
 // (no hay comprobante que lo determine implícitamente). UPDATE
 // condicional: solo aplica si la cotización sigue ACEPTADA con saldo
-// PENDIENTE.
+// PENDIENTE y con el anticipo ya resuelto (VALIDADO o NO_APLICA). Un anticipo
+// PENDIENTE, RECHAZADO o NULL (cotizaciones anteriores a D.2) NO cumple la
+// condición: es la defensa atómica final de la regla, la misma que ya aplica
+// `guardarComprobanteSaldo`, para que ninguna vía interna ni dos solicitudes
+// concurrentes puedan saltársela.
 export async function validarSaldo(
   id: string,
   confirmadoPor: string,
@@ -440,6 +444,7 @@ export async function validarSaldo(
     `UPDATE cotizaciones
      SET estado_saldo = 'VALIDADO', metodo_saldo = $3, saldo_confirmado_en = CURRENT_TIMESTAMP, saldo_confirmado_por = $2, actualizado_en = CURRENT_TIMESTAMP
      WHERE id = $1 AND estado = 'ACEPTADA' AND estado_saldo = 'PENDIENTE'
+       AND estado_anticipo IN ('VALIDADO', 'NO_APLICA')
      RETURNING ${COLUMNAS}`,
     [id, confirmadoPor, metodoSaldo]
   );
@@ -455,6 +460,7 @@ export async function rechazarSaldo(
     `UPDATE cotizaciones
      SET estado_saldo = 'RECHAZADO', saldo_confirmado_en = CURRENT_TIMESTAMP, saldo_confirmado_por = $2, actualizado_en = CURRENT_TIMESTAMP
      WHERE id = $1 AND estado = 'ACEPTADA' AND estado_saldo = 'PENDIENTE'
+       AND estado_anticipo IN ('VALIDADO', 'NO_APLICA')
      RETURNING ${COLUMNAS}`,
     [id, confirmadoPor]
   );
@@ -474,6 +480,7 @@ export async function reabrirSaldo(id: string): Promise<Cotizacion | null> {
      SET estado_saldo = 'PENDIENTE', metodo_saldo = NULL, comprobante_saldo = NULL,
          saldo_confirmado_en = NULL, saldo_confirmado_por = NULL, actualizado_en = CURRENT_TIMESTAMP
      WHERE id = $1 AND estado = 'ACEPTADA' AND estado_saldo = 'RECHAZADO'
+       AND estado_anticipo IN ('VALIDADO', 'NO_APLICA')
      RETURNING ${COLUMNAS}`,
     [id]
   );

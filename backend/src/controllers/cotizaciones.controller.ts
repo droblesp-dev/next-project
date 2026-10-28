@@ -695,6 +695,18 @@ function manejarErrorTransferencia(error: unknown, res: Response): boolean {
     res.status(409).json({ message: 'El pago por TRANSFERENCIA requiere un comprobante subido antes de validar.' });
     return true;
   }
+  // Regla F1: el saldo no se gestiona mientras el anticipo esté PENDIENTE, RECHAZADO o sin definir.
+  // Debe ir antes que AccionNoPermitidaError (su clase base) para conservar el mensaje específico.
+  if (error instanceof SaldoRequiereAnticipoValidadoError) {
+    res.status(409).json({
+      message: 'El saldo no puede gestionarse mientras el anticipo no esté VALIDADO o NO_APLICA.',
+    });
+    return true;
+  }
+  if (error instanceof AccionNoPermitidaError) {
+    res.status(409).json({ message: 'La acción no está permitida en el estado actual de la cotización.' });
+    return true;
+  }
   return false;
 }
 
@@ -1077,6 +1089,12 @@ export async function reabrirSaldoController(req: Request, res: Response): Promi
   } catch (error) {
     if (error instanceof CotizacionNoEncontradaError) {
       res.status(404).json({ message: 'Cotización no encontrada.' });
+      return;
+    }
+    if (error instanceof SaldoRequiereAnticipoValidadoError) {
+      res.status(409).json({
+        message: 'El saldo no puede gestionarse mientras el anticipo no esté VALIDADO o NO_APLICA.',
+      });
       return;
     }
     if (error instanceof SaldoNoRechazadoError) {

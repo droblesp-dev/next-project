@@ -4,7 +4,14 @@ import * as cotizacionesRepo from '../repositories/cotizaciones.repository.js';
 import * as cuentasBancariasRepo from '../repositories/cuentasBancarias.repository.js';
 import { findByIdWithRol } from '../repositories/usuarios.repository.js';
 import { crearOrdenAutomatica } from './ordenAutomatica.service.js';
-import { CotizacionNoEncontradaError } from './cotizaciones.service.js';
+import {
+  anticipoPermiteSaldo,
+  ComprobanteSaldoRequeridoError,
+  CotizacionNoEncontradaError,
+  MetodoSaldoInvalidoError,
+  MetodoSaldoRequeridoError,
+  SaldoRequiereAnticipoValidadoError,
+} from './cotizaciones.service.js';
 import type { TransferenciaPago } from '../repositories/transferenciasPago.repository.js';
 
 // PC-2026-01, Etapa 4: integra transferencias_pago (V13/V14) con el flujo
@@ -19,9 +26,17 @@ import type { TransferenciaPago } from '../repositories/transferenciasPago.repos
 // nuevo. `crearOrdenAutomatica()` se sigue llamando DESPUÉS del COMMIT,
 // igual que hoy — nunca dentro de la transacción de pago.
 
-// Una única clase para "cotización inexistente": la misma que el controlador reconoce con
-// `instanceof` (antes esta capa definía una propia y el controlador respondía 500).
-export { CotizacionNoEncontradaError };
+// Una única clase por error funcional: la misma que el controlador reconoce con `instanceof`.
+// Antes esta capa definía copias propias (CotizacionNoEncontradaError, MetodoSaldoRequeridoError,
+// MetodoSaldoInvalidoError, ComprobanteSaldoRequeridoError) que el controlador no reconocía y que
+// terminaban como HTTP 500; ahora se importan de `cotizaciones.service` y se re-exportan.
+export {
+  ComprobanteSaldoRequeridoError,
+  CotizacionNoEncontradaError,
+  MetodoSaldoInvalidoError,
+  MetodoSaldoRequeridoError,
+  SaldoRequiereAnticipoValidadoError,
+};
 export class TipoPagoInvalidoError extends Error {}
 export class CotizacionNoAceptadaError extends Error {}
 export class PagoNoGestionableError extends Error {}
@@ -31,9 +46,6 @@ export class MotivoRechazoInvalidoError extends Error {}
 export class ImporteInvalidoError extends Error {}
 export class CuentaBancariaInvalidaError extends Error {}
 export class VerificadorInvalidoError extends Error {}
-export class MetodoSaldoRequeridoError extends Error {}
-export class MetodoSaldoInvalidoError extends Error {}
-export class ComprobanteSaldoRequeridoError extends Error {}
 
 const FORMATO_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TIPOS_PAGO = ['ANTICIPO', 'SALDO'];
@@ -43,6 +55,17 @@ const METODOS_SALDO_PERMITIDOS = ['TRANSFERENCIA', 'EFECTIVO'];
 function validarTipoPago(tipoPago: string): void {
   if (!TIPOS_PAGO.includes(tipoPago)) {
     throw new TipoPagoInvalidoError(`tipoPago debe ser uno de: ${TIPOS_PAGO.join(', ')}`);
+  }
+}
+
+// Regla de negocio: el saldo no puede gestionarse (registrar, rechazar ni validar) mientras el
+// anticipo no esté VALIDADO o NO_APLICA — PENDIENTE, RECHAZADO y NULL (cotizaciones anteriores a
+// D.2) lo bloquean. Se invoca dentro de la transacción, con la fila ya bloqueada (FOR UPDATE) y
+// ANTES de cualquier escritura: al lanzar, el ROLLBACK no deja ningún cambio. El UPDATE condicional
+// del repositorio repite la condición como defensa atómica final.
+function exigirAnticipoResuelto(cotizacion: { estado_anticipo: string | null }): void {
+  if (!anticipoPermiteSaldo(cotizacion.estado_anticipo)) {
+    throw new SaldoRequiereAnticipoValidadoError();
   }
 }
 
@@ -93,6 +116,9 @@ export async function registrarGestionPago(input: {
     }
     if (cotizacion.estado !== 'ACEPTADA') {
       throw new CotizacionNoAceptadaError();
+    }
+    if (input.tipoPago === 'SALDO') {
+      exigirAnticipoResuelto(cotizacion);
     }
 
     let snapshot: {
@@ -178,6 +204,9 @@ export async function rechazarPago(input: {
     const cotizacion = await cotizacionesRepo.lockParaTransferencia(input.cotizacionId, client);
     if (!cotizacion) {
       throw new CotizacionNoEncontradaError();
+    }
+    if (input.tipoPago === 'SALDO') {
+      exigirAnticipoResuelto(cotizacion);
     }
 
     const actualizada =
@@ -297,6 +326,9 @@ async function confirmarAcreditacion(input: {
     if (input.tipoPago === 'ANTICIPO') {
       actualizada = await cotizacionesRepo.actualizarEstadoAnticipo(input.cotizacionId, 'VALIDADO', input.verificadoPor, client);
     } else {
+      // El saldo exige el anticipo resuelto (VALIDADO o NO_APLICA); se comprueba antes que el
+      // método y el comprobante porque es la condición de estado de la cotización.
+      exigirAnticipoResuelto(cotizacion);
       // Misma lógica ya usada hoy en gestionarSaldo() (cotizaciones.service.ts),
       // reimplementada aquí porque esa función no participa de esta transacción.
       const metodoEfectivo = cotizacion.metodo_saldo ?? input.metodoSaldo ?? null;
