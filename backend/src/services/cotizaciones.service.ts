@@ -571,6 +571,12 @@ function obtenerDatosBancariosSiConfigurados(): DatosBancarios | null {
   return { banco, tipoCuenta, numeroCuenta, titular, ruc };
 }
 
+// Decisión del negocio: el enlace de una cotización VENCIDA o CANCELADA responde con el mismo mensaje genérico
+// («Enlace inválido o expirado») y no revela ningún dato. RECHAZADA sí se muestra, con su mensaje, sin acciones.
+function estadoOcultoAlCliente(estado: string): boolean {
+  return estado === 'VENCIDA' || estado === 'CANCELADA';
+}
+
 const FORMATO_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Verifica firma + propósito del token y devuelve el cotizacionId real.
@@ -707,7 +713,7 @@ export async function validarEnlaceCotizacion(token: string): Promise<EnlaceVali
   if (!cotizacion) {
     throw new CotizacionNoEncontradaError();
   }
-  if (cotizacion.estado === 'VENCIDA') {
+  if (estadoOcultoAlCliente(cotizacion.estado)) {
     throw new EnlaceInvalidoError();
   }
 
@@ -732,7 +738,7 @@ async function validarAccesoConCodigo(token: string, codigo: string): Promise<Co
   if (!cotizacionActual) {
     throw new CotizacionNoEncontradaError();
   }
-  if (cotizacionActual.estado === 'VENCIDA') {
+  if (estadoOcultoAlCliente(cotizacionActual.estado)) {
     throw new EnlaceInvalidoError();
   }
 
@@ -1094,7 +1100,7 @@ export async function solicitarRecuperacionCodigo(token: string): Promise<Estado
   if (!cotizacion) {
     throw new CotizacionNoEncontradaError();
   }
-  if (cotizacion.estado === 'VENCIDA') {
+  if (estadoOcultoAlCliente(cotizacion.estado)) {
     throw new EnlaceInvalidoError();
   }
 
@@ -1163,7 +1169,7 @@ export async function verificarRecuperacionCodigo(token: string, otp: string): P
   if (!cotizacion) {
     throw new CotizacionNoEncontradaError();
   }
-  if (cotizacion.estado === 'VENCIDA') {
+  if (estadoOcultoAlCliente(cotizacion.estado)) {
     throw new EnlaceInvalidoError();
   }
 
