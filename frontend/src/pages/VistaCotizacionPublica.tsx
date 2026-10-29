@@ -78,6 +78,7 @@ interface CotizacionPublica {
     logo_url: string | null;
   }[];
   solicitud: {
+    codigo?: string | null;
     servicio: string;
     descripcion: string;
     cantidad: number;
@@ -657,9 +658,16 @@ export default function VistaCotizacionPublica({ token }: VistaCotizacionPublica
           {paso === 'cotizacion' && cotizacion && (
             <div className="space-y-5">
               <div className="flex justify-between items-start gap-4 border-b border-outline pb-4">
-                <h3 className="font-headline-md text-headline-md text-on-surface uppercase min-w-0 break-words">
-                  {cotizacion.solicitud.servicio}
-                </h3>
+                <div className="min-w-0">
+                  <h3 className="font-headline-md text-headline-md text-on-surface uppercase break-words">
+                    {cotizacion.solicitud.servicio}
+                  </h3>
+                  {(cotizacion.codigo || cotizacion.solicitud.codigo) && (
+                    <p className="font-code-sm text-code-sm text-on-surface-variant mt-1">
+                      {[cotizacion.codigo, cotizacion.solicitud.codigo].filter(Boolean).join(' · ')}
+                    </p>
+                  )}
+                </div>
                 <span className="font-code-sm text-code-sm text-primary-container shrink-0 text-right">
                   {etiquetaEstadoCotizacion(cotizacion.estado)}
                 </span>

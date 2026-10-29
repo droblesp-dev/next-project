@@ -536,6 +536,8 @@ export interface CotizacionPublica {
   // Solo cuentas activas, solo campos públicos (ver cuentasBancarias.repository.ts).
   cuentas_bancarias_activas: CuentaBancariaPublica[];
   solicitud: {
+    // Número de la solicitud (SOL-…) para que el cliente pueda referenciarla; NULL en solicitudes anteriores a V10.
+    codigo: string | null;
     servicio: string;
     descripcion: string;
     cantidad: number;
@@ -672,6 +674,7 @@ async function construirCotizacionPublica(cotizacionId: string): Promise<Cotizac
     datos_bancarios: puedeTransferir ? obtenerDatosBancariosSiConfigurados() : null,
     cuentas_bancarias_activas: puedeTransferir ? await listarCuentasActivasPublico() : [],
     solicitud: {
+      codigo: solicitud.codigo,
       servicio: solicitud.servicio,
       descripcion: solicitud.descripcion,
       cantidad: solicitud.cantidad,
