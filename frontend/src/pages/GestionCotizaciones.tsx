@@ -6,6 +6,12 @@ import { useBusquedaServidor } from '../lib/busquedaServidor';
 import type { Solicitud } from './BandejaSolicitudes';
 import PanelAcreditacionPago, { type DatosConfirmacion, type DatosSeguimiento } from './PanelAcreditacionPago';
 import {
+  avisoCaducidad,
+  ETIQUETA_CADUCIDAD,
+  explicacionEstadoSinAcciones,
+  notaVencimientoAutomatico,
+} from '../lib/caducidadCotizacion';
+import {
   etiquetaAccionAcreditacion,
   evaluarAcreditacion,
   lineaTrazabilidad,
@@ -397,7 +403,9 @@ function KpiCotizacion({
 // botones para una cotización ENVIADA.
 const TRANSICIONES: Record<string, string[]> = {
   BORRADOR: ['ENVIADA', 'CANCELADA'],
-  ENVIADA: ['VENCIDA', 'CANCELADA'],
+  // #5: «Marcar vencida» se retira de la interfaz: la cotización ENVIADA vence sola al cumplirse su fecha de
+  // caducidad (el backend la marca al consultarla). Cancelar sigue disponible. El backend conserva la transición.
+  ENVIADA: ['CANCELADA'],
   ACEPTADA: [],
   RECHAZADA: [],
   VENCIDA: [],
@@ -1830,7 +1838,19 @@ export default function GestionCotizaciones({
                   <dt className="text-on-surface-variant uppercase">Total</dt>
                   <dd className="text-on-surface font-bold">{cotizacionSeleccionada.total}</dd>
                 </div>
+                <div>
+                  <dt className="text-on-surface-variant uppercase">{ETIQUETA_CADUCIDAD}</dt>
+                  <dd className="text-on-surface">
+                    {cotizacionSeleccionada.fecha_vigencia ? new Date(cotizacionSeleccionada.fecha_vigencia).toLocaleString() : '—'}
+                  </dd>
+                </div>
               </dl>
+
+              {avisoCaducidad(cotizacionSeleccionada.estado, cotizacionSeleccionada.fecha_vigencia) && (
+                <p role="status" className="mt-3 font-['Inter'] text-[13px] font-semibold text-error">
+                  {avisoCaducidad(cotizacionSeleccionada.estado, cotizacionSeleccionada.fecha_vigencia)}
+                </p>
+              )}
 
               {cotizacionSeleccionada.descripcion && (
                 <div className="mt-3">
@@ -1866,10 +1886,15 @@ export default function GestionCotizaciones({
               ))}
               {(TRANSICIONES[cotizacionSeleccionada.estado] ?? []).length === 0 && (
                 <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">
-                  Este estado no admite más transiciones.
+                  {explicacionEstadoSinAcciones(cotizacionSeleccionada.estado)}
                 </p>
               )}
             </div>
+            {notaVencimientoAutomatico(cotizacionSeleccionada.estado) && (
+              <p className="font-['Inter'] text-[12px] font-normal text-on-surface-variant mt-3">
+                {notaVencimientoAutomatico(cotizacionSeleccionada.estado)}
+              </p>
+            )}
             {mensajeCambio && (
               <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase mt-3">{mensajeCambio}</p>
             )}

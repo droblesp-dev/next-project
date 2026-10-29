@@ -24,6 +24,9 @@ export class EnlaceInvalidoError extends Error {}
 export class CotizacionNoDisponibleError extends Error {}
 export class CodigoInvalidoError extends Error {}
 export class DemasiadosIntentosError extends Error {}
+// #4: el enlace es de una cotización VENCIDA. A diferencia de CANCELADA (mensaje genérico, sin revelar nada), al cliente
+// se le informa que caducó para que consulte con su asesor. No revela ningún dato de la cotización.
+export class CotizacionVencidaError extends Error {}
 export class IvaPorcentajeInvalidoError extends Error {}
 export class AnticipoPorcentajeInvalidoError extends Error {}
 export class MetodoAnticipoRequeridoError extends Error {}
@@ -551,10 +554,11 @@ function obtenerDatosBancariosSiConfigurados(): DatosBancarios | null {
   return { banco, tipoCuenta, numeroCuenta, titular, ruc };
 }
 
-// Decisión del negocio: el enlace de una cotización VENCIDA o CANCELADA responde con el mismo mensaje genérico
-// («Enlace inválido o expirado») y no revela ningún dato. RECHAZADA sí se muestra, con su mensaje, sin acciones.
-function estadoOcultoAlCliente(estado: string): boolean {
-  return estado === 'VENCIDA' || estado === 'CANCELADA';
+// Decisión del negocio: VENCIDA responde que la cotización caducó (sin datos) y CANCELADA el mensaje genérico
+// («Enlace inválido o expirado»), también sin datos. RECHAZADA sí se muestra, con su mensaje, sin acciones.
+function exigirVisibleAlCliente(estado: string): void {
+  if (estado === 'VENCIDA') throw new CotizacionVencidaError();
+  if (estado === 'CANCELADA') throw new EnlaceInvalidoError();
 }
 
 const FORMATO_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -693,9 +697,7 @@ export async function validarEnlaceCotizacion(token: string): Promise<EnlaceVali
   if (!cotizacion) {
     throw new CotizacionNoEncontradaError();
   }
-  if (estadoOcultoAlCliente(cotizacion.estado)) {
-    throw new EnlaceInvalidoError();
-  }
+  exigirVisibleAlCliente(cotizacion.estado);
 
   return { valido: true, requiereCodigo: true };
 }
@@ -718,9 +720,7 @@ async function validarAccesoConCodigo(token: string, codigo: string): Promise<Co
   if (!cotizacionActual) {
     throw new CotizacionNoEncontradaError();
   }
-  if (estadoOcultoAlCliente(cotizacionActual.estado)) {
-    throw new EnlaceInvalidoError();
-  }
+  exigirVisibleAlCliente(cotizacionActual.estado);
 
   await verificarNoBloqueado(cotizacionId);
 
@@ -1088,9 +1088,7 @@ export async function solicitarRecuperacionCodigo(token: string): Promise<Estado
   if (!cotizacion) {
     throw new CotizacionNoEncontradaError();
   }
-  if (estadoOcultoAlCliente(cotizacion.estado)) {
-    throw new EnlaceInvalidoError();
-  }
+  exigirVisibleAlCliente(cotizacion.estado);
 
   const estado = obtenerEstadoRecuperacion(cotizacionId);
   if (estado.bloqueado) {
@@ -1157,9 +1155,7 @@ export async function verificarRecuperacionCodigo(token: string, otp: string): P
   if (!cotizacion) {
     throw new CotizacionNoEncontradaError();
   }
-  if (estadoOcultoAlCliente(cotizacion.estado)) {
-    throw new EnlaceInvalidoError();
-  }
+  exigirVisibleAlCliente(cotizacion.estado);
 
   const estado = obtenerEstadoRecuperacion(cotizacionId);
   if (estado.bloqueado) {

@@ -385,7 +385,7 @@ describe('Recuperación del código de cotización — OTP por correo (nextproje
     expect(despues?.comprobante_recibido).toBe(antes?.comprobante_recibido);
   });
 
-  it('13) las cotizaciones VENCIDAS continúan protegidas', async () => {
+  it('13) las cotizaciones VENCIDAS continúan protegidas (410: caducó, sin datos ni OTP)', async () => {
     mockFetchExitoso();
     const { cotizacion } = await crearCotizacionEnviada('T13');
     const token = await obtenerToken(cotizacion.id);
@@ -396,11 +396,11 @@ describe('Recuperación del código de cotización — OTP por correo (nextproje
 
     const { res: resA, estado: estA } = crearRespuestaFake();
     await solicitarRecuperacionCodigoController({ params: { token } } as unknown as Request, resA);
-    expect(estA.status).toBe(401);
+    expect(estA.status).toBe(410);
 
     const { res: resB, estado: estB } = crearRespuestaFake();
     await verificarRecuperacionCodigoController({ params: { token }, body: { otp: '123456' } } as unknown as Request, resB);
-    expect(estB.status).toBe(401);
+    expect(estB.status).toBe(410);
   });
 
   it('14) un correo fallido no produce éxito falso y nunca deja al cliente sin una ruta de recuperación', async () => {

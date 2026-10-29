@@ -1,5 +1,6 @@
 // Enlace publico segun el estado de la cotizacion (decision del negocio):
-//  - VENCIDA y CANCELADA: mismo mensaje generico (EnlaceInvalidoError) en TODOS los puntos publicos, sin datos.
+//  - VENCIDA: CotizacionVencidaError (el cliente ve que caduco y consulta a su asesor) en TODOS los puntos publicos, sin datos.
+//  - CANCELADA: mensaje generico (EnlaceInvalidoError) en TODOS los puntos publicos, sin datos.
 //  - RECHAZADA: se muestra (estado RECHAZADA) pero no admite aceptar ni rechazar de nuevo.
 // Pruebas reales contra nextproject_test (comando manual `npm run test:integration`).
 import { randomUUID } from 'crypto';
@@ -10,6 +11,7 @@ import {
   AccionNoPermitidaError,
   aceptarCotizacionPublica,
   crearCotizacion,
+  CotizacionVencidaError,
   EnlaceInvalidoError,
   generarEnlaceCotizacion,
   rechazarCotizacionPublica,
@@ -58,20 +60,23 @@ async function cotizacionConEnlace() {
   return { id: cot.id, token: enlace.token, codigo: enlace.codigo };
 }
 
-describe.each(['VENCIDA', 'CANCELADA'] as const)('enlace de una cotizacion %s', (estado) => {
-  it('todos los puntos publicos responden con el mismo error generico y no revelan datos', async () => {
+describe.each([
+  ['VENCIDA', CotizacionVencidaError],
+  ['CANCELADA', EnlaceInvalidoError],
+] as const)('enlace de una cotizacion %s', (estado, ErrorEsperado) => {
+  it('todos los puntos publicos responden con el error esperado y no revelan datos', async () => {
     const { id, token, codigo } = await cotizacionConEnlace();
     // el enlace era valido mientras estaba ENVIADA
     await expect(validarEnlaceCotizacion(token)).resolves.toMatchObject({ valido: true });
 
     await pool.query(`UPDATE cotizaciones SET estado = $2 WHERE id = $1`, [id, estado]);
 
-    await expect(validarEnlaceCotizacion(token)).rejects.toBeInstanceOf(EnlaceInvalidoError);
-    await expect(verificarCodigoCotizacion(token, codigo)).rejects.toBeInstanceOf(EnlaceInvalidoError);
-    await expect(aceptarCotizacionPublica(token, codigo)).rejects.toBeInstanceOf(EnlaceInvalidoError);
-    await expect(rechazarCotizacionPublica(token, codigo)).rejects.toBeInstanceOf(EnlaceInvalidoError);
-    await expect(solicitarRecuperacionCodigo(token)).rejects.toBeInstanceOf(EnlaceInvalidoError);
-    await expect(verificarRecuperacionCodigo(token, '000000')).rejects.toBeInstanceOf(EnlaceInvalidoError);
+    await expect(validarEnlaceCotizacion(token)).rejects.toBeInstanceOf(ErrorEsperado);
+    await expect(verificarCodigoCotizacion(token, codigo)).rejects.toBeInstanceOf(ErrorEsperado);
+    await expect(aceptarCotizacionPublica(token, codigo)).rejects.toBeInstanceOf(ErrorEsperado);
+    await expect(rechazarCotizacionPublica(token, codigo)).rejects.toBeInstanceOf(ErrorEsperado);
+    await expect(solicitarRecuperacionCodigo(token)).rejects.toBeInstanceOf(ErrorEsperado);
+    await expect(verificarRecuperacionCodigo(token, '000000')).rejects.toBeInstanceOf(ErrorEsperado);
   });
 });
 

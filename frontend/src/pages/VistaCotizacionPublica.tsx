@@ -14,6 +14,7 @@ import {
   validarArchivoComprobante,
 } from '../lib/cotizacionPublica';
 import ComprobanteUploader from './ComprobanteUploader';
+import { MENSAJE_CLIENTE_COTIZACION_VENCIDA } from '../lib/caducidadCotizacion';
 import PieCotizacionPublica from './PieCotizacionPublica';
 import RecuperarCodigoCotizacion from './RecuperarCodigoCotizacion';
 
@@ -370,6 +371,11 @@ export default function VistaCotizacionPublica({ token }: VistaCotizacionPublica
 
         if (cancelado) return;
 
+        if (response.status === 410) {
+          setErrorEnlace(MENSAJE_CLIENTE_COTIZACION_VENCIDA);
+          setPaso('error_enlace');
+          return;
+        }
         if (response.status === 401) {
           setErrorEnlace('Este enlace no es válido o ya expiró. Solicite uno nuevo a su asesor comercial.');
           setPaso('error_enlace');
@@ -437,6 +443,11 @@ export default function VistaCotizacionPublica({ token }: VistaCotizacionPublica
         setPaso('codigo');
         return;
       }
+      if (response.status === 410) {
+        setErrorEnlace(MENSAJE_CLIENTE_COTIZACION_VENCIDA);
+        setPaso('error_enlace');
+        return;
+      }
       if (response.status === 401) {
         setErrorCodigo(data?.message === 'Código incorrecto.' ? 'El código ingresado es incorrecto.' : 'Este enlace ya no es válido.');
         setPaso('codigo');
@@ -484,6 +495,7 @@ export default function VistaCotizacionPublica({ token }: VistaCotizacionPublica
         const mensajes: Record<number, string> = {
           401: data?.message === 'Código incorrecto.' ? 'El código ingresado ya no es válido.' : 'Este enlace ya no es válido o expiró.',
           404: 'No se encontró ninguna cotización asociada a este enlace.',
+          410: MENSAJE_CLIENTE_COTIZACION_VENCIDA,
           409: data?.message || 'Esta cotización ya no admite esta acción.',
           429: data?.message || 'Demasiados intentos. Espere unos minutos antes de volver a intentar.',
         };

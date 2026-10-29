@@ -39,6 +39,7 @@ import {
   AccionNoPermitidaError,
   SaldoRequiereAnticipoValidadoError,
   ComprobanteYaRecibidoError,
+  CotizacionVencidaError,
   CuentaIndicadaInvalidaError,
   type EscrituraArchivo,
   AnticipoNoGestionableError,
@@ -91,6 +92,9 @@ function extraerCodigoValido(body: Record<string, unknown>): string | null {
   }
   return codigo;
 }
+
+// #4: respuesta (410) cuando el enlace público es de una cotización VENCIDA.
+const MENSAJE_COTIZACION_VENCIDA = 'Esta cotización caducó. Consulte con su asesor comercial.';
 
 // QA-08: cuenta que el cliente indica al subir un comprobante (opcional, solo informativa). Ausente o vacía = null;
 // presente pero sin formato UUID = inválida (undefined).
@@ -378,6 +382,10 @@ export async function obtenerPublicaController(req: Request, res: Response): Pro
     const resultado = await validarEnlaceCotizacion(req.params.token);
     res.status(200).json(resultado);
   } catch (error) {
+    if (error instanceof CotizacionVencidaError) {
+      res.status(410).json({ message: MENSAJE_COTIZACION_VENCIDA, estado: 'VENCIDA' });
+      return;
+    }
     if (error instanceof EnlaceInvalidoError) {
       res.status(401).json({ message: 'Enlace inválido o expirado.' });
       return;
@@ -407,6 +415,10 @@ export async function verificarCodigoController(req: Request, res: Response): Pr
     const cotizacion = await verificarCodigoCotizacion(req.params.token, codigo);
     res.status(200).json({ cotizacion });
   } catch (error) {
+    if (error instanceof CotizacionVencidaError) {
+      res.status(410).json({ message: MENSAJE_COTIZACION_VENCIDA, estado: 'VENCIDA' });
+      return;
+    }
     if (error instanceof EnlaceInvalidoError) {
       res.status(401).json({ message: 'Enlace inválido o expirado.' });
       return;
@@ -439,6 +451,10 @@ export async function solicitarRecuperacionCodigoController(req: Request, res: R
     const estado = await solicitarRecuperacionCodigo(req.params.token);
     res.status(200).json({ estado });
   } catch (error) {
+    if (error instanceof CotizacionVencidaError) {
+      res.status(410).json({ message: MENSAJE_COTIZACION_VENCIDA, estado: 'VENCIDA' });
+      return;
+    }
     if (error instanceof EnlaceInvalidoError) {
       res.status(401).json({ message: 'Enlace inválido o expirado.' });
       return;
@@ -469,6 +485,10 @@ export async function verificarRecuperacionCodigoController(req: Request, res: R
     const estado = await verificarRecuperacionCodigo(req.params.token, otp);
     res.status(200).json({ estado });
   } catch (error) {
+    if (error instanceof CotizacionVencidaError) {
+      res.status(410).json({ message: MENSAJE_COTIZACION_VENCIDA, estado: 'VENCIDA' });
+      return;
+    }
     if (error instanceof EnlaceInvalidoError) {
       res.status(401).json({ message: 'Enlace inválido o expirado.' });
       return;
@@ -498,6 +518,10 @@ export async function aceptarController(req: Request, res: Response): Promise<vo
     const cotizacion = await aceptarCotizacionPublica(req.params.token, codigo);
     res.status(200).json({ cotizacion });
   } catch (error) {
+    if (error instanceof CotizacionVencidaError) {
+      res.status(410).json({ message: MENSAJE_COTIZACION_VENCIDA, estado: 'VENCIDA' });
+      return;
+    }
     if (error instanceof EnlaceInvalidoError) {
       res.status(401).json({ message: 'Enlace inválido o expirado.' });
       return;
@@ -541,6 +565,10 @@ export async function rechazarController(req: Request, res: Response): Promise<v
     const cotizacion = await rechazarCotizacionPublica(req.params.token, codigo);
     res.status(200).json({ cotizacion });
   } catch (error) {
+    if (error instanceof CotizacionVencidaError) {
+      res.status(410).json({ message: MENSAJE_COTIZACION_VENCIDA, estado: 'VENCIDA' });
+      return;
+    }
     if (error instanceof EnlaceInvalidoError) {
       res.status(401).json({ message: 'Enlace inválido o expirado.' });
       return;
@@ -643,6 +671,10 @@ async function procesarComprobante(req: Request, res: Response, err: unknown): P
     // Va DESPUÉS de responder y nunca modifica la respuesta ni el estado: un fallo de correo solo se registra.
     await notificarCliente(cotizacion.id, { tipo: 'ANTICIPO', evento: 'RECIBIDO' });
   } catch (error) {
+    if (error instanceof CotizacionVencidaError) {
+      res.status(410).json({ message: MENSAJE_COTIZACION_VENCIDA, estado: 'VENCIDA' });
+      return;
+    }
     if (error instanceof EnlaceInvalidoError) {
       res.status(401).json({ message: 'Enlace inválido o expirado.' });
       return;
@@ -1016,6 +1048,10 @@ async function procesarComprobanteSaldo(req: Request, res: Response, err: unknow
     // Va DESPUÉS de responder y nunca modifica la respuesta ni el estado: un fallo de correo solo se registra.
     await notificarCliente(cotizacion.id, { tipo: 'SALDO', evento: 'RECIBIDO' });
   } catch (error) {
+    if (error instanceof CotizacionVencidaError) {
+      res.status(410).json({ message: MENSAJE_COTIZACION_VENCIDA, estado: 'VENCIDA' });
+      return;
+    }
     if (error instanceof EnlaceInvalidoError) {
       res.status(401).json({ message: 'Enlace inválido o expirado.' });
       return;
