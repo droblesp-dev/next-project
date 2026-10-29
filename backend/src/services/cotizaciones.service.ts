@@ -98,7 +98,6 @@ const ANTICIPO_PORCENTAJE_DEFAULT = 50;
 const ANTICIPO_PORCENTAJES_PERMITIDOS = [0, 50, 75];
 const DIAS_VIGENCIA_DEFAULT = 15;
 const METODOS_ANTICIPO_PERMITIDOS = ['TRANSFERENCIA', 'EFECTIVO'];
-const METODOS_SALDO_PERMITIDOS = ['TRANSFERENCIA', 'EFECTIVO'];
 
 function round2(valor: number): number {
   return Math.round((valor + Number.EPSILON) * 100) / 100;
@@ -951,35 +950,6 @@ export async function registrarComprobantePublico(
   return registrarComprobanteCliente('ANTICIPO', token, codigo, nombreArchivo, archivo);
 }
 
-// Interno (ADMIN/COMERCIAL, detrás de requireAuth+requireRole en la
-// ruta): confirma o rechaza el anticipo de una cotización ACEPTADA cuyo
-// anticipo sigue PENDIENTE. `confirmadoPor` siempre proviene de
-// `req.user.sub` — nunca del cliente público, que no tiene acceso a esta
-// ruta bajo ninguna circunstancia (ni con token+código, ni sin ellos).
-export async function gestionarAnticipo(
-  id: string,
-  accion: 'VALIDAR' | 'RECHAZAR',
-  confirmadoPor: string
-): Promise<Cotizacion> {
-  const nuevoEstadoAnticipo = accion === 'VALIDAR' ? 'VALIDADO' : 'RECHAZADO';
-
-  const actualizada = await cotizacionesRepo.actualizarEstadoAnticipo(id, nuevoEstadoAnticipo, confirmadoPor);
-  if (actualizada) {
-    // Bloque 1.1: al validar el anticipo se crea la orden. RECHAZAR no crea
-    // nada. crearOrdenAutomatica nunca lanza: la validación ya está guardada.
-    if (accion === 'VALIDAR') {
-      await crearOrdenAutomatica(actualizada.id, 'ANTICIPO_VALIDADO');
-    }
-    return actualizada;
-  }
-
-  const actual = await cotizacionesRepo.findById(id);
-  if (!actual) {
-    throw new CotizacionNoEncontradaError();
-  }
-  throw new AnticipoNoGestionableError();
-}
-
 // Interno: resuelve el nombre de archivo real para el endpoint de
 // descarga. Nunca se expone a través de listarCotizaciones/
 // obtenerCotizacion ni de ningún DTO público.
@@ -1005,54 +975,6 @@ export async function registrarComprobanteSaldoPublico(
   archivo: EscrituraArchivo
 ): Promise<CotizacionPublica> {
   return registrarComprobanteCliente('SALDO', token, codigo, nombreArchivo, archivo);
-}
-
-// Interno (ADMIN/COMERCIAL, ruta ya restringida a nivel de router):
-// valida o rechaza el saldo de una cotización ACEPTADA con saldo
-// PENDIENTE. `metodo` es obligatorio únicamente si la cotización todavía
-// no tiene `metodo_saldo` fijado (caso EFECTIVO, que nunca pasa por la
-// subida de comprobante); si ya está fijado (por una subida previa de
-// comprobante, siempre TRANSFERENCIA), no puede contradecirse con un
-// `metodo` distinto. TRANSFERENCIA exige que el comprobante ya exista;
-// EFECTIVO nunca lo exige (decisión explícita del bloque).
-export async function gestionarSaldo(
-  id: string,
-  accion: 'VALIDAR' | 'RECHAZAR',
-  confirmadoPor: string,
-  metodo?: string
-): Promise<Cotizacion> {
-  const cotizacion = await cotizacionesRepo.findById(id);
-  if (!cotizacion) {
-    throw new CotizacionNoEncontradaError();
-  }
-
-  if (accion === 'RECHAZAR') {
-    const actualizada = await cotizacionesRepo.rechazarSaldo(id, confirmadoPor);
-    if (!actualizada) {
-      throw new SaldoNoGestionableError();
-    }
-    return actualizada;
-  }
-
-  const metodoEfectivo = cotizacion.metodo_saldo ?? metodo ?? null;
-  if (!metodoEfectivo) {
-    throw new MetodoSaldoRequeridoError();
-  }
-  if (!METODOS_SALDO_PERMITIDOS.includes(metodoEfectivo)) {
-    throw new MetodoSaldoInvalidoError();
-  }
-  if (cotizacion.metodo_saldo && metodo && metodo !== cotizacion.metodo_saldo) {
-    throw new MetodoSaldoInvalidoError();
-  }
-  if (metodoEfectivo === 'TRANSFERENCIA' && !cotizacion.saldo_comprobante_recibido) {
-    throw new ComprobanteSaldoRequeridoError();
-  }
-
-  const actualizada = await cotizacionesRepo.validarSaldo(id, confirmadoPor, metodoEfectivo);
-  if (!actualizada) {
-    throw new SaldoNoGestionableError();
-  }
-  return actualizada;
 }
 
 // Interno: resuelve el nombre real del comprobante de saldo para el
