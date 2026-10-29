@@ -1,14 +1,33 @@
-import { construirEnlaceWhatsApp, NEXT_PROJECT_NAME, NEXT_PROJECT_WHATSAPP } from '../lib/config';
+import {
+  construirEnlaceWhatsApp,
+  NEXT_PROJECT_NAME,
+  NEXT_PROJECT_REDES,
+  NEXT_PROJECT_WHATSAPP,
+  type RedSocial,
+} from '../lib/config';
+import { IconoFacebook, IconoInstagram, IconoTikTok, IconoYouTube } from './IconosRedesSociales';
 
 interface PieCotizacionPublicaProps {
   // Código de la cotización (COT-XXXXXX) para identificarla en el mensaje de WhatsApp, si se conoce.
   codigoCotizacion?: string | null;
+  // URL de cada red social (null = sin configurar). Por defecto, la configuración del proyecto.
+  redes?: Record<RedSocial, string | null>;
 }
 
+const REDES: { clave: RedSocial; nombre: string; Icono: typeof IconoFacebook }[] = [
+  { clave: 'facebook', nombre: 'Facebook', Icono: IconoFacebook },
+  { clave: 'instagram', nombre: 'Instagram', Icono: IconoInstagram },
+  { clave: 'tiktok', nombre: 'TikTok', Icono: IconoTikTok },
+  { clave: 'youtube', nombre: 'YouTube', Icono: IconoYouTube },
+];
+
+const CLASE_ICONO_RED =
+  'inline-flex h-11 w-11 items-center justify-center border border-outline text-on-surface-variant';
+
 // Pie de la cotización pública: contacto con un asesor por el número oficial de WhatsApp (el mismo de
-// la web principal, configurado en lib/config.ts) y regreso al sitio. No se agregan redes sociales
-// porque todavía no hay URLs oficiales verificadas.
-export default function PieCotizacionPublica({ codigoCotizacion }: PieCotizacionPublicaProps) {
+// la web principal, configurado en lib/config.ts) y regreso al sitio. Las redes sociales (Facebook, Instagram,
+// TikTok y YouTube) se enlazan solo si su URL está configurada; si no, se muestra el ícono sin navegación.
+export default function PieCotizacionPublica({ codigoCotizacion, redes = NEXT_PROJECT_REDES }: PieCotizacionPublicaProps) {
   const mensaje = codigoCotizacion
     ? `Hola ${NEXT_PROJECT_NAME}, necesito hablar con un asesor sobre mi cotización ${codigoCotizacion}.`
     : `Hola ${NEXT_PROJECT_NAME}, necesito hablar con un asesor sobre mi cotización.`;
@@ -39,6 +58,37 @@ export default function PieCotizacionPublica({ codigoCotizacion }: PieCotizacion
           VOLVER A LA PÁGINA PRINCIPAL
         </a>
       </div>
+
+      <ul className="flex flex-wrap justify-center gap-3" aria-label="Redes sociales">
+        {REDES.map(({ clave, nombre, Icono }) => {
+          const url = redes[clave];
+          return (
+            <li key={clave}>
+              {url ? (
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`${nombre} (se abre en una pestaña nueva)`}
+                  className={`${CLASE_ICONO_RED} hover:text-primary-container hover:border-primary-container transition-colors focus:outline-none focus:ring-2 focus:ring-primary-container`}
+                >
+                  <Icono className="h-5 w-5" />
+                </a>
+              ) : (
+                <span
+                  role="img"
+                  aria-label={`${nombre} (enlace no configurado)`}
+                  title={`${nombre}: próximamente`}
+                  data-sin-enlace="true"
+                  className={`${CLASE_ICONO_RED} opacity-40 cursor-default`}
+                >
+                  <Icono className="h-5 w-5" />
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
 
       <p className="font-['Inter'] text-[12px] text-on-surface-variant">
         WhatsApp:{' '}

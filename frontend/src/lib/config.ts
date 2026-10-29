@@ -22,6 +22,29 @@ export function construirEnlaceWhatsApp(mensaje?: string): string {
   return mensaje ? `${base}?text=${encodeURIComponent(mensaje)}` : base;
 }
 
+// Redes sociales oficiales de NextProject para el pie de la cotización pública. Cada URL se configura con su
+// variable VITE_* (ver .env.example); mientras no esté definida (o no sea una URL https válida) la red queda en
+// null y el pie muestra su ícono SIN enlace: nunca se inventa una cuenta ni se apunta a un destino ficticio.
+export type RedSocial = 'facebook' | 'instagram' | 'tiktok' | 'youtube';
+
+export function urlRedSocial(valor: string | undefined | null): string | null {
+  const texto = (valor ?? '').trim();
+  if (!texto) return null;
+  try {
+    const url = new URL(texto);
+    return url.protocol === 'https:' && url.hostname.includes('.') ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+export const NEXT_PROJECT_REDES: Record<RedSocial, string | null> = {
+  facebook: urlRedSocial(import.meta.env.VITE_NEXT_PROJECT_FACEBOOK_URL),
+  instagram: urlRedSocial(import.meta.env.VITE_NEXT_PROJECT_INSTAGRAM_URL),
+  tiktok: urlRedSocial(import.meta.env.VITE_NEXT_PROJECT_TIKTOK_URL),
+  youtube: urlRedSocial(import.meta.env.VITE_NEXT_PROJECT_YOUTUBE_URL),
+};
+
 // Ubicación que se muestra en la sección de contacto y en el mapa incrustado. Hoy solo se conoce la
 // ciudad (no hay una dirección exacta publicada), así que el mapa apunta al centro de Shushufindi.
 // Para un marcador preciso basta definir VITE_NEXT_PROJECT_UBICACION_CONSULTA con la dirección

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { construirMapaUbicacion, NEXT_PROJECT_UBICACION_TEXTO } from './config';
+import { construirMapaUbicacion, NEXT_PROJECT_REDES, NEXT_PROJECT_UBICACION_TEXTO, urlRedSocial } from './config';
 
 describe('construirMapaUbicacion', () => {
   it('por defecto apunta a Shushufindi, con el mapa incrustado y el enlace externo', () => {
@@ -23,5 +23,23 @@ describe('construirMapaUbicacion', () => {
     expect(embed.startsWith('https://www.google.com/maps')).toBe(true);
     expect(enlace.startsWith('https://www.google.com/maps')).toBe(true);
     expect(embed).not.toContain('<');
+  });
+});
+
+describe('urlRedSocial (mejora 7)', () => {
+  it('acepta solo URLs https completas', () => {
+    expect(urlRedSocial('https://www.instagram.com/nextproject/')).toBe('https://www.instagram.com/nextproject/');
+    expect(urlRedSocial('  https://youtube.com/@next  ')).toBe('https://youtube.com/@next');
+  });
+
+  it.each([undefined, null, '', '   ', 'http://www.facebook.com/x', 'javascript:alert(1)', 'facebook.com/x', 'https://', 'https://localhost'])(
+    'rechaza %j (la red queda sin enlace)',
+    (valor) => {
+      expect(urlRedSocial(valor as string | undefined)).toBeNull();
+    }
+  );
+
+  it('sin variables VITE_* configuradas ninguna red tiene URL (no se inventan cuentas)', () => {
+    expect(NEXT_PROJECT_REDES).toEqual({ facebook: null, instagram: null, tiktok: null, youtube: null });
   });
 });
