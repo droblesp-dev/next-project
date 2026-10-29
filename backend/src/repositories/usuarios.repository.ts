@@ -132,6 +132,19 @@ export async function listarAdminsActivos(): Promise<UsuarioMinimo[]> {
   return result.rows;
 }
 
+// Listado ACOTADO (id y nombre) de OPERATIVOS activos para que un COMERCIAL pueda incorporarlos a una conversación
+// (#7). Mismo criterio que listarAdminsActivos: no expone el email ni el listado completo de usuarios.
+export async function listarOperativosActivos(): Promise<UsuarioMinimo[]> {
+  const result = await pool.query<UsuarioMinimo>(
+    `SELECT u.id, u.nombre
+     FROM usuarios u
+     JOIN roles r ON r.id = u.rol_id
+     WHERE r.nombre = 'OPERATIVO' AND u.activo = true
+     ORDER BY u.nombre`
+  );
+  return result.rows;
+}
+
 export async function existsByEmail(email: string): Promise<boolean> {
   const result = await pool.query('SELECT 1 FROM usuarios WHERE email = $1', [email]);
   return (result.rowCount ?? 0) > 0;

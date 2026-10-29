@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { usePendientesChat } from '../lib/usePendientesChat';
 import type { Sesion, Usuario } from '../lib/authClient';
 import BandejaSolicitudes from './BandejaSolicitudes';
 import DetalleSolicitud from './DetalleSolicitud';
@@ -55,6 +56,8 @@ export default function AreaPrivada({ usuario, token, onLogout, onSesionInvalida
   // Chat: exclusivo COMERCIAL/OPERATIVO — ADMIN no participa (decisión
   // aprobada explícitamente para este bloque).
   const puedeChatear = usuario.rol === 'COMERCIAL' || usuario.rol === 'OPERATIVO';
+  // #7: mensajes pendientes por solicitud (consulta periódica, al recuperar el foco y tras leer una conversación).
+  const { porSolicitud: pendientesChat, recargar: recargarPendientes } = usePendientesChat(token, puedeChatear, onSesionInvalida);
   // Corrección de responsabilidades por rol en DetalleSolicitud
   // (autorización explícita — "AUTORIZACIÓN DE IMPLEMENTACIÓN — DETALLE DE
   // SOLICITUDES POR ROL"): ADMIN pasa a ser exclusivamente de
@@ -318,7 +321,7 @@ export default function AreaPrivada({ usuario, token, onLogout, onSesionInvalida
                 puedeGestionarPago={puedeGestionarPago}
                 ordenIdSeleccionadaInicial={ordenIdDesdeAlerta}
                 onOrdenInicialConsumida={() => setOrdenIdDesdeAlerta(null)}
-                onVerComunicacion={handleVerComunicacionDesdeOrden}
+                onVerComunicacion={puedeChatear ? handleVerComunicacionDesdeOrden : undefined}
                 onSesionInvalida={onSesionInvalida}
               />
             ) : seccion === 'leads' && tieneBandeja ? (
@@ -354,6 +357,8 @@ export default function AreaPrivada({ usuario, token, onLogout, onSesionInvalida
                 puedeRevisarAnalisis={puedeRevisarAnalisis}
                 rolUsuario={usuario.rol}
                 enfocarChat={enfocarChat}
+                usuarioId={usuario.id}
+                onMensajesLeidos={recargarPendientes}
                 onVolver={() => handleAbrirSolicitud(null)}
                 onSesionInvalida={onSesionInvalida}
               />
@@ -363,6 +368,7 @@ export default function AreaPrivada({ usuario, token, onLogout, onSesionInvalida
                 puedeChatear={puedeChatear}
                 onSeleccionar={handleAbrirSolicitud}
                 onAbrirMensajes={handleVerComunicacionDesdeOrden}
+                pendientesChat={pendientesChat}
                 onSesionInvalida={onSesionInvalida}
               />
             ) : null}

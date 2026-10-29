@@ -1283,6 +1283,8 @@ export default function GestionOrdenes({
   // se puede determinar (p. ej. OPERATIVO no accede a cotizaciones), no se inventa ninguna conversación.
   function bloqueComunicacionTecnica(orden: Orden) {
     // solicitud_id viene en el DTO de la orden (también para OPERATIVO); los datos de apoyo solo son respaldo.
+    // #7: ADMIN no accede al chat; AreaPrivada solo entrega `onVerComunicacion` a COMERCIAL y OPERATIVO.
+    if (!onVerComunicacion) return null;
     const solicitudId = orden.solicitud_id ?? datosClienteServicio(orden.cotizacion_id).solicitud?.id ?? null;
     return (
       <div className="border-t border-outline pt-4">

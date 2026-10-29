@@ -338,6 +338,15 @@ export async function asignarResponsable(id: string, responsableId: string): Pro
 
   const actualizado = await ordenesRepo.updateResponsable(id, responsableId, ESTADOS_REASIGNACION_BLOQUEADA);
   if (actualizado) {
+    // #7: si el responsable cambió, se avisa al nuevo responsable mediante una alerta de la orden. Es un paso posterior a
+    // la reasignación: un fallo se registra y nunca revierte ni bloquea la reasignación ya hecha.
+    if (orden.responsable_id !== responsableId) {
+      try {
+        await alertasRepo.crearAlertaReasignacion(id, `La orden ${actualizado.codigo} fue asignada a ${usuario.nombre}.`);
+      } catch (error) {
+        console.error('No se pudo crear el aviso de reasignación de la orden', id, '-', error instanceof Error ? error.message : error);
+      }
+    }
     return actualizado;
   }
 

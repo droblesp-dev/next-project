@@ -37,7 +37,7 @@ export async function listarMensajesController(req: Request, res: Response): Pro
 
 // `autor_id`/`autor_tipo` provienen exclusivamente de `req.user` (JWT) —
 // nunca del body. La ruta ya exige requireRole('COMERCIAL','OPERATIVO'): ADMIN
-// solo puede leer (403 al escribir).
+// no accede al chat (403).
 export async function crearMensajeController(req: Request, res: Response): Promise<void> {
   const { contenido } = (req.body ?? {}) as { contenido?: unknown };
 

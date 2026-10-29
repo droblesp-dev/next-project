@@ -8,6 +8,9 @@ export const pool = new Pool({
   user: env.db.user,
   password: env.db.password,
   ssl: env.db.ssl ? { rejectUnauthorized: false } : undefined,
+  // Huella de esta versión del backend en `pg_stat_activity` (R0, #8): permite comprobar en la base que ninguna
+  // instancia anterior (que no declara este nombre) sigue conectada antes de abrir el chat tras un despliegue.
+  application_name: 'nextproject-api-r0',
 });
 
 pool.on('error', (error) => {

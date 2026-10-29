@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Eye, MessageSquare } from 'lucide-react';
 import { fetchAutenticado, SesionInvalidaError } from '../lib/authClient';
 import { coincideCodigo } from '../lib/busqueda';
+import { etiquetaMensajesPendientes, hayPendientes, textoContador, type PendientesPorSolicitud } from '../lib/mensajesPendientes';
 import { useBusquedaServidor } from '../lib/busquedaServidor';
 import { esCantidadDesconocida, formatearCantidad } from '../lib/cantidadSolicitud';
 import fabricacionGalleryImg from '../assets/images/fabricacion_gallery_1788229017518.jpg';
@@ -34,6 +35,9 @@ interface BandejaSolicitudesProps {
   // #7: abre la solicitud directamente en su comunicación técnica (chat entre Comercial y Operativo). El icono
   // solo se muestra a quien puede chatear (COMERCIAL/OPERATIVO).
   onAbrirMensajes?: (id: string) => void;
+  // Mensajes sin leer por solicitud (solo COMERCIAL/OPERATIVO). El icono aparece únicamente cuando hay pendientes y
+  // muestra su cantidad; el resto del tiempo no se ofrece (se entra a la conversación desde el detalle).
+  pendientesChat?: PendientesPorSolicitud;
   onSesionInvalida: () => void;
 }
 
@@ -136,7 +140,7 @@ function Kpi({
   );
 }
 
-export default function BandejaSolicitudes({ token, puedeChatear, onAbrirMensajes, onSeleccionar, onSesionInvalida }: BandejaSolicitudesProps) {
+export default function BandejaSolicitudes({ token, puedeChatear, onAbrirMensajes, pendientesChat, onSeleccionar, onSesionInvalida }: BandejaSolicitudesProps) {
   const [solicitudes, setSolicitudes] = useState<Solicitud[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -604,15 +608,19 @@ export default function BandejaSolicitudes({ token, puedeChatear, onAbrirMensaje
                     >
                       <Eye size={18} aria-hidden="true" />
                     </button>
-                    {puedeChatear && onAbrirMensajes && (
+                    {puedeChatear && onAbrirMensajes && hayPendientes(pendientesChat?.[s.id]) && (
                       <button
                         type="button"
                         onClick={() => onAbrirMensajes(s.id)}
-                        aria-label="Abrir mensajes de la solicitud"
-                        title="Mensajes"
-                        className="inline-flex items-center justify-center w-11 h-11 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container transition-colors cursor-pointer"
+                        aria-label={etiquetaMensajesPendientes(pendientesChat?.[s.id] ?? 0)}
+                        title="Mensajes sin leer"
+                        data-mensajes-pendientes
+                        className="relative inline-flex items-center justify-center w-11 h-11 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container transition-colors cursor-pointer"
                       >
                         <MessageSquare size={18} aria-hidden="true" />
+                        <span className="absolute -top-2 -right-2 min-w-5 h-5 px-1 inline-flex items-center justify-center bg-primary-container text-on-primary-container text-[11px] font-bold rounded-full">
+                          {textoContador(pendientesChat?.[s.id] ?? 0)}
+                        </span>
                       </button>
                     )}
                   </div>
@@ -677,17 +685,21 @@ export default function BandejaSolicitudes({ token, puedeChatear, onAbrirMensaje
               >
                 <Eye size={18} aria-hidden="true" />
               </button>
-              {puedeChatear && onAbrirMensajes && (
-                <button
-                  type="button"
-                  onClick={() => onAbrirMensajes(s.id)}
-                  aria-label="Abrir mensajes de la solicitud"
-                  title="Mensajes"
-                  className="flex-1 inline-flex items-center justify-center min-h-11 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container transition-colors cursor-pointer"
-                >
-                  <MessageSquare size={18} aria-hidden="true" />
-                </button>
-              )}
+              {puedeChatear && onAbrirMensajes && hayPendientes(pendientesChat?.[s.id]) && (
+                      <button
+                        type="button"
+                        onClick={() => onAbrirMensajes(s.id)}
+                        aria-label={etiquetaMensajesPendientes(pendientesChat?.[s.id] ?? 0)}
+                        title="Mensajes sin leer"
+                        data-mensajes-pendientes
+                        className="relative flex-1 inline-flex items-center justify-center min-h-11 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container transition-colors cursor-pointer"
+                      >
+                        <MessageSquare size={18} aria-hidden="true" />
+                        <span className="absolute -top-2 -right-2 min-w-5 h-5 px-1 inline-flex items-center justify-center bg-primary-container text-on-primary-container text-[11px] font-bold rounded-full">
+                          {textoContador(pendientesChat?.[s.id] ?? 0)}
+                        </span>
+                      </button>
+                    )}
             </div>
           </div>
           );
@@ -804,17 +816,21 @@ export default function BandejaSolicitudes({ token, puedeChatear, onAbrirMensaje
                 >
                   <Eye size={18} aria-hidden="true" />
                 </button>
-                {puedeChatear && onAbrirMensajes && (
-                  <button
-                    type="button"
-                    onClick={() => onAbrirMensajes(vistaRapida.id)}
-                    aria-label="Abrir mensajes de la solicitud"
-                    title="Mensajes"
-                    className="w-full inline-flex items-center justify-center h-11 mt-2 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container transition-colors cursor-pointer"
-                  >
-                    <MessageSquare size={18} aria-hidden="true" />
-                  </button>
-                )}
+                {puedeChatear && onAbrirMensajes && hayPendientes(pendientesChat?.[vistaRapida.id]) && (
+                      <button
+                        type="button"
+                        onClick={() => onAbrirMensajes(vistaRapida.id)}
+                        aria-label={etiquetaMensajesPendientes(pendientesChat?.[vistaRapida.id] ?? 0)}
+                        title="Mensajes sin leer"
+                        data-mensajes-pendientes
+                        className="relative w-full inline-flex items-center justify-center h-11 mt-2 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container transition-colors cursor-pointer"
+                      >
+                        <MessageSquare size={18} aria-hidden="true" />
+                        <span className="absolute -top-2 -right-2 min-w-5 h-5 px-1 inline-flex items-center justify-center bg-primary-container text-on-primary-container text-[11px] font-bold rounded-full">
+                          {textoContador(pendientesChat?.[vistaRapida.id] ?? 0)}
+                        </span>
+                      </button>
+                    )}
               </div>
             </div>
           )}

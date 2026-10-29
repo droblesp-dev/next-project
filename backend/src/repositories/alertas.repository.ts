@@ -111,6 +111,25 @@ export async function crearAlertaFichaTecnica(ordenId: string, mensaje: string):
   );
 }
 
+// #7: aviso de que una orden fue reasignada a otro OPERATIVO. Reutiliza `alertas` (sin tabla nueva): el nuevo
+// responsable la ve por el filtro existente alerta -> orden -> responsable. `condicion` identifica cada evento
+// (REASIGNADA-1, REASIGNADA-2…), así reasignar de nuevo, incluso a la misma persona, genera un aviso nuevo; los avisos anteriores aún
+// pendientes de esa orden se cancelan para que el siguiente responsable no vea un aviso dirigido a otro. El texto no
+// incluye ningún contenido del chat.
+export async function crearAlertaReasignacion(ordenId: string, mensaje: string): Promise<void> {
+  await pool.query(
+    `UPDATE alertas SET estado = 'CANCELADA'
+     WHERE orden_id = $1 AND tipo = 'ORDEN_REASIGNADA' AND estado = 'PENDIENTE'`,
+    [ordenId]
+  );
+  await pool.query(
+    `INSERT INTO alertas (id, orden_id, tipo, condicion, mensaje)
+     SELECT gen_random_uuid(), $1, 'ORDEN_REASIGNADA', 'REASIGNADA-' || (COUNT(*) + 1)::text, $2
+     FROM alertas WHERE orden_id = $1 AND tipo = 'ORDEN_REASIGNADA'`,
+    [ordenId, mensaje]
+  );
+}
+
 // ADMIN (decisión 3A): sin ningún filtro, ve todas las alertas del sistema.
 export async function listAll(): Promise<Alerta[]> {
   const result = await pool.query<Alerta>(`SELECT ${COLUMNAS} FROM alertas ORDER BY creado_en DESC`);

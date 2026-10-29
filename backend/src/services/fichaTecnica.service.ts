@@ -59,7 +59,9 @@ export async function generarFicha(ordenId: string): Promise<FichaTecnica> {
     throw new OrdenNoEncontradaError();
   }
 
-  const mensajesRecientes = await mensajesRepo.obtenerRecientes(solicitud.id, LIMITE_MENSAJES_CONTEXTO);
+  // Privacidad (#8): la ficha solo usa mensajes COMPARTIDOS de COMERCIAL y OPERATIVO; ninguna respuesta de NexIA
+  // (privada o histórica) entra en el contexto, sea cual sea el usuario o proceso que la genere.
+  const mensajesRecientes = await mensajesRepo.obtenerRecientesCompartidos(solicitud.id, LIMITE_MENSAJES_CONTEXTO);
   const analisisPrevios = await analisisIaRepo.listAll(solicitud.id);
   const ultimoAnalisisCompletado = analisisPrevios.find((a) => a.estado === 'COMPLETADO') ?? null;
 

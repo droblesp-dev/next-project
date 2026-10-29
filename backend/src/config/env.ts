@@ -16,6 +16,22 @@ function parseUrlOpcional(valor: string | undefined): string {
   return !v || v.startsWith("$(") ? "" : v.replace(/\/+$/, "");
 }
 
+// Chat (#7): modo de los participantes en solicitudes sin orden. SOMBRA (por defecto): el acceso sigue como antes y solo
+// se registra qué accesos se habrían denegado; ESTRICTO: se exige ser participante; OFF: sin participantes.
+type ModoParticipantes = "OFF" | "SOMBRA" | "ESTRICTO";
+function parseModoParticipantes(valor: string | undefined): ModoParticipantes {
+  const v = (valor ?? "").trim().toUpperCase();
+  return v === "OFF" || v === "ESTRICTO" ? v : "SOMBRA";
+}
+
+// Fecha de corte de los contadores de no leídos. Sin definir (o inválida) los contadores quedan inactivos.
+function parseFechaOpcional(valor: string | undefined): Date | null {
+  const v = (valor ?? "").trim();
+  if (!v) return null;
+  const fecha = new Date(v);
+  return Number.isNaN(fecha.getTime()) ? null : fecha;
+}
+
 export const env = {
   port: Number(process.env.PORT) || 3000,
   corsOrigins: (
@@ -30,6 +46,10 @@ export const env = {
   // URL pública del frontend (para los enlaces de los correos). Sin definir, se usa el primer
   // origen de CORS_ORIGINS.
   frontendUrl: parseUrlOpcional(process.env.FRONTEND_URL),
+  chat: {
+    participantesModo: parseModoParticipantes(process.env.CHAT_PARTICIPANTES_MODO),
+    pendientesDesde: parseFechaOpcional(process.env.CHAT_PENDIENTES_DESDE),
+  },
   db: {
     host: process.env.DB_HOST,
     port: Number(process.env.DB_PORT) || 5432,

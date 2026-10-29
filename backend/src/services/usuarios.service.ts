@@ -4,6 +4,7 @@ import { pool } from '../config/db.js';
 import {
   listAll,
   listarAdminsActivos as listarAdminsActivosRepo,
+  listarOperativosActivos as listarOperativosActivosRepo,
   existsByEmail,
   create as crearUsuarioRepo,
   lockActiveAdminIds,
@@ -35,6 +36,10 @@ export async function listarUsuarios(): Promise<UsuarioPublico[]> {
 
 export async function listarAdminsActivos(): Promise<UsuarioMinimo[]> {
   return listarAdminsActivosRepo();
+}
+
+export async function listarOperativosActivos(): Promise<UsuarioMinimo[]> {
+  return listarOperativosActivosRepo();
 }
 
 export async function crearUsuario(input: {

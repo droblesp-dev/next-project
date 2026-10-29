@@ -4,6 +4,7 @@ import { formatearCantidad } from '../lib/cantidadSolicitud';
 import { textoResultadoAnalisis } from '../lib/mensajeAnalisisIa';
 import type { Solicitud } from './BandejaSolicitudes';
 import ChatTecnico from './ChatTecnico';
+import { puedeUsarChat } from '../lib/chatAcceso';
 
 interface DetalleSolicitudProps {
   token: string;
@@ -38,6 +39,9 @@ interface DetalleSolicitudProps {
   puedeGenerarAnalisis: boolean;
   puedeRevisarAnalisis: boolean;
   rolUsuario: string;
+  // #7: id del usuario (lista de participantes) y aviso al leer la conversación (actualiza los contadores).
+  usuarioId?: string;
+  onMensajesLeidos?: () => void;
   // Al llegar desde el detalle de una orden (misma conversación de la solicitud) se enfoca el chat.
   enfocarChat?: boolean;
   onVolver: () => void;
@@ -181,6 +185,8 @@ export default function DetalleSolicitud({
   puedeGenerarAnalisis,
   puedeRevisarAnalisis,
   rolUsuario,
+  usuarioId,
+  onMensajesLeidos,
   enfocarChat,
   onVolver,
   onSesionInvalida,
@@ -676,11 +682,13 @@ export default function DetalleSolicitud({
               </div>
             )}
 
-            {solicitud && (
+            {solicitud && puedeUsarChat(rolUsuario) && (
               <ChatTecnico
                 token={token}
                 solicitudId={id}
                 rolUsuario={rolUsuario}
+                usuarioId={usuarioId ?? ''}
+                onLeido={onMensajesLeidos}
                 solicitudEstado={solicitud.estado}
                 enfocar={enfocarChat}
                 onSesionInvalida={onSesionInvalida}

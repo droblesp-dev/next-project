@@ -2,7 +2,11 @@ import { asegurarProveedorConfigurado, obtenerProveedorIa, redactarSecretosIa } 
 import * as mensajesRepo from '../repositories/solicitudMensajes.repository.js';
 import * as solicitudesRepo from '../repositories/solicitudes.repository.js';
 import * as ordenesRepo from '../repositories/ordenes.repository.js';
+import * as participantesRepo from '../repositories/solicitudMensajesParticipantes.repository.js';
+import { obtenerEsquemaChat } from '../repositories/chatEsquema.js';
 import { consumirInvocacionNexia } from './nexiaRateLimit.service.js';
+import { registrarEventoSeguridad } from './securityLog.js';
+import { env } from '../config/env.js';
 import type { SolicitudMensaje } from '../repositories/solicitudMensajes.repository.js';
 import type { Solicitud } from '../repositories/solicitudes.repository.js';
 
@@ -47,13 +51,35 @@ const REGEX_INVOCACION_NEXIA = /^\s*nexia\b/i;
 
 // Resuelve la solicitud y la orden asociada (si existe) y aplica la
 // autorización contextual de LECTURA:
-//   - COMERCIAL y ADMIN: siempre.
+//   - COMERCIAL: siempre.
 //   - OPERATIVO: sin orden, sí; con orden, solo si es su responsable
 //     (orden de otro OPERATIVO o sin responsable -> 403).
-//   - cualquier otro rol: 403.
+//   - ADMIN y cualquier otro rol: 403. El chat es exclusivo de COMERCIAL y OPERATIVO (#7): ADMIN no lo consulta
+//     ni por sus endpoints (conserva el acceso a las fichas técnicas, que es otra ruta).
 // La existencia de la orden decide el régimen; no se asume que la solicitud
 // haya cambiado a COTIZADA (hay datos históricos con orden y otro estado).
-async function resolverContextoChat(solicitudId: string, usuario: UsuarioChat) {
+export type OperacionChat = 'LEER' | 'ESCRIBIR' | 'MARCAR_LEIDO' | 'PARTICIPANTES';
+
+export interface ContextoChat {
+  solicitud: Solicitud;
+  orden: ordenesRepo.OrdenContextoChat | null;
+  // Solo en solicitudes SIN orden con participantes activos en la base: si el usuario es participante vigente.
+  participa: boolean | null;
+}
+
+// Régimen de acceso (#7):
+//   - Con orden: COMERCIAL accede; OPERATIVO solo si es el responsable vigente (se deriva de la orden, nada se copia).
+//   - Sin orden: lo deciden los participantes explícitos (tabla V26) según el modo configurado:
+//       OFF      -> sin participantes (comportamiento anterior);
+//       SOMBRA   -> el acceso sigue abierto y solo se registra qué accesos se habrían denegado (sin contenido);
+//       ESTRICTO -> se exige ser participante (salvo el primer mensaje de un COMERCIAL en un hilo sin COMERCIAL
+//                   participante, que lo convierte en participante).
+//   Sin la tabla de participantes en la base el chat se comporta como en OFF.
+export async function resolverContextoChat(
+  solicitudId: string,
+  usuario: UsuarioChat,
+  operacion: OperacionChat = 'LEER'
+): Promise<ContextoChat> {
   if (!UUID_RE.test(solicitudId)) {
     throw new SolicitudNoEncontradaError();
   }
@@ -63,14 +89,37 @@ async function resolverContextoChat(solicitudId: string, usuario: UsuarioChat) {
   }
   const orden = await ordenesRepo.findContextoChatPorSolicitud(solicitudId);
 
-  if (!['ADMIN', 'COMERCIAL', 'OPERATIVO'].includes(usuario.rol)) {
-    throw new SinAccesoChatError();
-  }
-  if (usuario.rol === 'OPERATIVO' && orden && (!orden.responsable_id || orden.responsable_id !== usuario.id)) {
+  if (!['COMERCIAL', 'OPERATIVO'].includes(usuario.rol)) {
     throw new SinAccesoChatError();
   }
 
-  return { solicitud, orden };
+  if (orden) {
+    if (usuario.rol === 'OPERATIVO' && (!orden.responsable_id || orden.responsable_id !== usuario.id)) {
+      throw new SinAccesoChatError();
+    }
+    return { solicitud, orden, participa: null };
+  }
+
+  const modo = env.chat.participantesModo;
+  const esquema = await obtenerEsquemaChat();
+  if (modo === 'OFF' || !esquema.participantes) {
+    return { solicitud, orden, participa: null };
+  }
+
+  const participa = await participantesRepo.esParticipanteActivo(solicitudId, usuario.id);
+  if (!participa) {
+    if (modo === 'ESTRICTO') {
+      const primerMensaje =
+        operacion === 'ESCRIBIR' && usuario.rol === 'COMERCIAL' && !(await participantesRepo.hayComercialParticipante(solicitudId));
+      if (!primerMensaje) {
+        throw new SinAccesoChatError();
+      }
+    } else {
+      // Modo sombra: no se deniega; se deja constancia (usuario, solicitud, operación; nunca contenido).
+      registrarEventoSeguridad('CHAT_ACCESO_SOMBRA_DENEGADO', { usuarioId: usuario.id, solicitudId, operacion });
+    }
+  }
+  return { solicitud, orden, participa };
 }
 
 // Única definición de "solo lectura derivada de estados existentes" (no hay estado de chat
@@ -90,10 +139,11 @@ export interface ResultadoListado {
 }
 
 export async function listarMensajes(solicitudId: string, usuario: UsuarioChat): Promise<ResultadoListado> {
-  const { solicitud, orden } = await resolverContextoChat(solicitudId, usuario);
-  const mensajes = await mensajesRepo.listarPorSolicitud(solicitudId);
-  // ADMIN solo lee; COMERCIAL/OPERATIVO escriben salvo que un estado cierre la conversación.
-  const soloLectura = usuario.rol === 'ADMIN' || chatCerradoPorEstado(solicitud, orden);
+  const { solicitud, orden } = await resolverContextoChat(solicitudId, usuario, 'LEER');
+  // Privacidad (#8): solo los mensajes compartidos y las respuestas de NexIA dirigidas a este usuario.
+  const mensajes = await mensajesRepo.listarVisiblesPara(solicitudId, usuario.id);
+  // COMERCIAL/OPERATIVO escriben salvo que un estado cierre la conversación.
+  const soloLectura = chatCerradoPorEstado(solicitud, orden);
   return { mensajes, modo: soloLectura ? 'SOLO_LECTURA' : 'EDITABLE' };
 }
 
@@ -116,13 +166,13 @@ export async function crearMensaje(
   usuario: UsuarioChat,
   contenido: unknown
 ): Promise<ResultadoMensaje> {
-  // Solo COMERCIAL y OPERATIVO escriben (ADMIN solo lee). La ruta ya lo filtra;
+  // Solo COMERCIAL y OPERATIVO participan en el chat. La ruta ya lo filtra;
   // se repite aquí como defensa en profundidad.
   if (usuario.rol !== 'COMERCIAL' && usuario.rol !== 'OPERATIVO') {
     throw new SinAccesoChatError();
   }
 
-  const { solicitud, orden } = await resolverContextoChat(solicitudId, usuario);
+  const { solicitud, orden } = await resolverContextoChat(solicitudId, usuario, 'ESCRIBIR');
 
   if (chatCerradoPorEstado(solicitud, orden)) {
     throw new ChatSoloLecturaError();
@@ -145,33 +195,50 @@ export async function crearMensaje(
     consumirInvocacionNexia(usuario.id);
   }
 
-  const mensaje = await mensajesRepo.crear({
-    solicitudId,
-    autorId: usuario.id,
-    autorTipo: usuario.rol,
-    contenido: contenidoLimpio,
-  });
+  // Carrera reasignación/envío (#7): el acceso se vuelve a comprobar y se bloquea DENTRO de la transacción que guarda el
+  // mensaje (usuario, solicitud, orden más reciente y participante). Si el usuario perdió el acceso antes de ese punto
+  // —reasignación de la orden, cambio de rol, desactivación, retiro como participante, solicitud cancelada—, el envío se
+  // rechaza y no se guarda nada. El primer COMERCIAL de un hilo sin COMERCIAL participante queda como participante.
+  const esquema = await obtenerEsquemaChat();
+  const modo = env.chat.participantesModo;
+  const resultado = await mensajesRepo.crearAutorizado(
+    { solicitudId, contenido: contenidoLimpio },
+    {
+      usuarioId: usuario.id,
+      rol: usuario.rol,
+      estadosOrdenSoloLectura: ESTADOS_ORDEN_SOLO_LECTURA,
+      participantes: modo === 'OFF' || !esquema.participantes ? 'NO' : modo,
+    }
+  );
+  if (!resultado.ok) {
+    if (resultado.motivo === 'SOLO_LECTURA') {
+      throw new ChatSoloLecturaError();
+    }
+    throw new SinAccesoChatError();
+  }
+  if (resultado.participanteNuevo) {
+    registrarEventoSeguridad('CHAT_PARTICIPANTE_INCORPORADO', { usuarioId: usuario.id, solicitudId, origen: 'PRIMER_MENSAJE' });
+  }
+  const mensaje = resultado.mensaje;
 
   if (!invocaNexia) {
     return { mensaje, respuestaNexia: null };
   }
 
-  const respuestaNexia = await generarRespuestaNexia(solicitud, solicitudId, contenidoLimpio);
+  const respuestaNexia = await generarRespuestaNexia(solicitud, solicitudId, contenidoLimpio, usuario.id);
   return { mensaje, respuestaNexia };
 }
 
+// Privacidad (#8): la respuesta se guarda dirigida al usuario que invocó a NexIA y solo él puede verla. La pregunta
+// (mensaje de la persona) sigue siendo compartida.
 async function generarRespuestaNexia(
   solicitud: Solicitud,
   solicitudId: string,
-  pregunta: string
+  pregunta: string,
+  destinatarioId: string
 ): Promise<SolicitudMensaje> {
-  const textoRespuesta = await consultarIa(solicitud, solicitudId, pregunta);
-  return mensajesRepo.crear({
-    solicitudId,
-    autorId: null,
-    autorTipo: 'NEXIA',
-    contenido: textoRespuesta,
-  });
+  const textoRespuesta = await consultarIa(solicitud, solicitudId, pregunta, destinatarioId);
+  return mensajesRepo.crearRespuestaNexia({ solicitudId, contenido: textoRespuesta, destinatarioId });
 }
 
 // Igual que generarAnalisis() en analisisIa.service.ts: el try/catch
@@ -179,12 +246,18 @@ async function generarRespuestaNexia(
 // timeout, respuesta vacía) nunca se propague como un error 500 al
 // usuario — en su lugar, NexIA "responde" con un aviso, manteniendo el
 // chat coherente.
-async function consultarIa(solicitud: Solicitud, solicitudId: string, pregunta: string): Promise<string> {
+async function consultarIa(
+  solicitud: Solicitud,
+  solicitudId: string,
+  pregunta: string,
+  usuarioId: string
+): Promise<string> {
   try {
     const ia = obtenerProveedorIa();
     asegurarProveedorConfigurado(ia);
 
-    const recientes = await mensajesRepo.obtenerRecientes(solicitudId, LIMITE_MENSAJES_CONTEXTO);
+    // Contexto = mensajes compartidos + SOLO las respuestas privadas de quien invoca (nunca las de otros usuarios).
+    const recientes = await mensajesRepo.obtenerRecientesParaUsuario(solicitudId, usuarioId, LIMITE_MENSAJES_CONTEXTO);
 
     const response = await ia.generar({
       prompt: construirPrompt(solicitud, recientes, pregunta),

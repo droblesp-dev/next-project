@@ -4,6 +4,7 @@ import { validarFormatoUuid } from '../middleware/uuidParam.middleware.js';
 import {
   listarController,
   listarAdminsActivosController,
+  listarOperativosActivosController,
   crearController,
   cambiarActivoController,
   cambiarRolController,
@@ -27,6 +28,9 @@ export const usuariosRouter = Router();
 // a ADMIN» (CONFIRMAR_TELEFONICA) y no tiene acceso al resto de este
 // router. Nunca expone email ni el listado completo de usuarios.
 usuariosRouter.get('/admins-activos', requireAuth, requireRole('ADMIN', 'COMERCIAL'), asyncRoute(listarAdminsActivosController));
+
+// #7: COMERCIAL necesita ver qué OPERATIVOS activos puede incorporar a una conversación (solo id y nombre).
+usuariosRouter.get('/operativos-activos', requireAuth, requireRole('COMERCIAL'), asyncRoute(listarOperativosActivosController));
 
 usuariosRouter.use(requireAuth, requireRole('ADMIN'));
 

@@ -11,6 +11,13 @@ import {
   listarMensajesController,
   crearMensajeController,
 } from '../controllers/solicitudMensajes.controller.js';
+import { pendientesController, marcarLeidoController } from '../controllers/chatLecturas.controller.js';
+import {
+  verParticipantesController,
+  incorporarParticipanteController,
+  retirarParticipanteController,
+  reclamarHiloController,
+} from '../controllers/chatParticipantes.controller.js';
 
 function asyncRoute(handler: (req: Request, res: Response) => Promise<void>): RequestHandler {
   return (req, res, next: NextFunction) => {
@@ -75,7 +82,20 @@ solicitudesRouter.param('id', (_req, res, next, valor: string) => {
   next();
 });
 
+// `:usuarioId` (retirar participante) debe ser un UUID; si no, no puede corresponder a ningún usuario.
+solicitudesRouter.param('usuarioId', (_req, res, next, valor: string) => {
+  if (!UUID_RE.test(valor)) {
+    res.status(400).json({ message: 'El usuario no es válido o no participa en esta conversación.' });
+    return;
+  }
+  next();
+});
+
 solicitudesRouter.post('/', publicoOAdminOComercial, asyncRoute(crearController));
+
+// Contadores de mensajes pendientes del usuario (#7). `/mensajes/pendientes` tiene dos segmentos, así que no choca con
+// `/:id` ni con `/:id/mensajes`; se declara antes de las rutas `/:id` por claridad.
+solicitudesRouter.get('/mensajes/pendientes', requireAuth, requireRole('COMERCIAL', 'OPERATIVO'), asyncRoute(pendientesController));
 
 // Bloque MVP (chat Comercial<->Operativo): OPERATIVO se agrega
 // ÚNICAMENTE a la lectura — nunca a la creación pública ni al cambio de
@@ -89,14 +109,13 @@ solicitudesRouter.patch(
   asyncRoute(cambiarEstadoController)
 );
 
-// Chat asociado a la solicitud. Bloque 2A: la LECTURA se abre a ADMIN (solo
-// lectura); escribir sigue siendo exclusivo de COMERCIAL/OPERATIVO (ADMIN → 403).
-// La autorización contextual (orden asociada, responsable, solo lectura por
-// estado) se aplica en el service.
+// Chat asociado a la solicitud. #7: el chat es exclusivo de COMERCIAL y OPERATIVO; ADMIN no lo consulta ni por
+// lectura (403). La autorización contextual (orden asociada, responsable, solo lectura por estado) y la
+// privacidad por mensaje (respuestas de NexIA solo para su destinatario) se aplican en el service/repositorio.
 solicitudesRouter.get(
   '/:id/mensajes',
   requireAuth,
-  requireRole('ADMIN', 'COMERCIAL', 'OPERATIVO'),
+  requireRole('COMERCIAL', 'OPERATIVO'),
   asyncRoute(listarMensajesController)
 );
 solicitudesRouter.post(
@@ -105,3 +124,13 @@ solicitudesRouter.post(
   requireRole('COMERCIAL', 'OPERATIVO'),
   asyncRoute(crearMensajeController)
 );
+
+// Participantes del chat (#7): quién participa en una solicitud sin orden. Solo COMERCIAL y OPERATIVO (ADMIN 403).
+// Incorporar, retirar y reclamar son exclusivos de COMERCIAL; la autorización contextual se aplica en el service.
+solicitudesRouter.get('/:id/participantes', requireAuth, requireRole('COMERCIAL', 'OPERATIVO'), asyncRoute(verParticipantesController));
+solicitudesRouter.post('/:id/participantes', requireAuth, requireRole('COMERCIAL'), asyncRoute(incorporarParticipanteController));
+solicitudesRouter.post('/:id/participantes/reclamar', requireAuth, requireRole('COMERCIAL'), asyncRoute(reclamarHiloController));
+solicitudesRouter.delete('/:id/participantes/:usuarioId', requireAuth, requireRole('COMERCIAL'), asyncRoute(retirarParticipanteController));
+
+// Marcador de lectura por usuario (#7): hasta qué mensaje ha leído. Solo COMERCIAL y OPERATIVO autorizados al hilo.
+solicitudesRouter.post('/:id/mensajes/leidos', requireAuth, requireRole('COMERCIAL', 'OPERATIVO'), asyncRoute(marcarLeidoController));

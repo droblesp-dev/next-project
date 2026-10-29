@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { fetchAutenticado, SesionInvalidaError } from '../lib/authClient';
+import PanelParticipantesChat, { type VistaParticipantes } from './PanelParticipantesChat';
 
 // Bloque 2B / 2B.1: comunicación técnica de la SOLICITUD (única conversación; no existe
 // chat de orden). Este componente solo representa en pantalla lo que decide el backend:
@@ -31,6 +32,9 @@ interface ChatTecnicoProps {
   solicitudEstado: string;
   // Desplaza la vista hasta el chat al abrirse (acceso desde el detalle de orden).
   enfocar?: boolean;
+  // #7: id del usuario autenticado y aviso al marcar la conversación como leída (para actualizar los contadores).
+  usuarioId?: string;
+  onLeido?: () => void;
   onSesionInvalida: () => void;
 }
 
@@ -48,6 +52,8 @@ export default function ChatTecnico({
   rolUsuario,
   solicitudEstado,
   enfocar,
+  usuarioId,
+  onLeido,
   onSesionInvalida,
 }: ChatTecnicoProps) {
   const [mensajes, setMensajes] = useState<Mensaje[] | null>(null);
@@ -55,6 +61,8 @@ export default function ChatTecnico({
   const [loadingMensajes, setLoadingMensajes] = useState(true);
   const [errorMensajes, setErrorMensajes] = useState<string | null>(null);
   const [sinAcceso, setSinAcceso] = useState(false);
+  const [vistaParticipantes, setVistaParticipantes] = useState<VistaParticipantes | null>(null);
+  const ultimoMarcado = useRef<string | null>(null);
   const [contenidoNuevo, setContenidoNuevo] = useState('');
   const [enviandoMensaje, setEnviandoMensaje] = useState(false);
   const [errorEnvioMensaje, setErrorEnvioMensaje] = useState<string | null>(null);
@@ -63,6 +71,38 @@ export default function ChatTecnico({
   const [forzarSoloLectura, setForzarSoloLectura] = useState(false);
   const raiz = useRef<HTMLDivElement | null>(null);
   const yaEnfocado = useRef(false);
+
+  // #7: quién participa (solicitudes sin orden) o por qué orden se rige la conversación. Un fallo no afecta al chat.
+  async function cargarParticipantes() {
+    try {
+      const response = await fetchAutenticado(`/api/solicitudes/${solicitudId}/participantes`, token);
+      setVistaParticipantes(response.ok ? ((await response.json()) as VistaParticipantes) : null);
+    } catch (err) {
+      if (err instanceof SesionInvalidaError) {
+        onSesionInvalida();
+      }
+    }
+  }
+
+  // #7: marca como leído hasta el último mensaje realmente mostrado. Es un paso posterior: si falla, el contador se
+  // mantiene y se reintentará en la siguiente carga; nunca se marca como leído localmente.
+  async function marcarLeido(ultimoId: string) {
+    if (ultimoMarcado.current === ultimoId) return;
+    try {
+      const response = await fetchAutenticado(`/api/solicitudes/${solicitudId}/mensajes/leidos`, token, {
+        method: 'POST',
+        body: JSON.stringify({ hasta_id: ultimoId }),
+      });
+      if (response.ok) {
+        ultimoMarcado.current = ultimoId;
+        onLeido?.();
+      }
+    } catch (err) {
+      if (err instanceof SesionInvalidaError) {
+        onSesionInvalida();
+      }
+    }
+  }
 
   async function cargarMensajes() {
     setLoadingMensajes(true);
@@ -76,6 +116,7 @@ export default function ChatTecnico({
         setSinAcceso(true);
         setMensajes(null);
         setModoBackend(null);
+        void cargarParticipantes();
         return;
       }
       if (!response.ok) {
@@ -87,6 +128,10 @@ export default function ChatTecnico({
       setSinAcceso(false);
       setMensajes(data.mensajes);
       setModoBackend(data.modo === 'EDITABLE' || data.modo === 'SOLO_LECTURA' ? data.modo : null);
+      void cargarParticipantes();
+      if (data.mensajes.length > 0) {
+        void marcarLeido(data.mensajes[data.mensajes.length - 1].id);
+      }
     } catch (err) {
       if (err instanceof SesionInvalidaError) {
         onSesionInvalida();
@@ -207,6 +252,19 @@ export default function ChatTecnico({
       <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase mb-2">
         Canal directo entre Comercial ↔ Operativo sobre esta solicitud.
       </p>
+
+      {vistaParticipantes && (
+        <PanelParticipantesChat
+          token={token}
+          solicitudId={solicitudId}
+          vista={vistaParticipantes}
+          usuarioId={usuarioId ?? ''}
+          onCambio={() => {
+            void cargarMensajes();
+          }}
+          onSesionInvalida={onSesionInvalida}
+        />
+      )}
 
       {modo === 'editable' && (
         <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant mb-4">

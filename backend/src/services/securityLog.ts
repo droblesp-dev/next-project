@@ -6,7 +6,11 @@ export type EventoSeguridad =
   | 'LOGIN_FALLIDO'
   | 'LOGIN_BLOQUEADO'
   | 'PASSWORD_CAMBIADA'
-  | 'PROMESA_NO_CAPTURADA';
+  | 'PROMESA_NO_CAPTURADA'
+  | 'CHAT_ACCESO_SOMBRA_DENEGADO'
+  | 'CHAT_PARTICIPANTE_INCORPORADO'
+  | 'CHAT_PARTICIPANTE_RETIRADO'
+  | 'CHAT_HILO_RECLAMADO';
 
 export function enmascararCorreo(email: string): string {
   const [local = '', dominio = ''] = email.trim().toLowerCase().split('@');

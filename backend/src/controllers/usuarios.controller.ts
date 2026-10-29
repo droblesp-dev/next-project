@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import {
   listarUsuarios,
   listarAdminsActivos,
+  listarOperativosActivos,
   crearUsuario,
   cambiarActivo,
   cambiarRol,
@@ -23,6 +24,11 @@ export async function listarController(_req: Request, res: Response): Promise<vo
 export async function listarAdminsActivosController(_req: Request, res: Response): Promise<void> {
   const admins = await listarAdminsActivos();
   res.status(200).json({ admins });
+}
+
+export async function listarOperativosActivosController(_req: Request, res: Response): Promise<void> {
+  const operativos = await listarOperativosActivos();
+  res.status(200).json({ operativos });
 }
 
 export async function crearController(req: Request, res: Response): Promise<void> {
