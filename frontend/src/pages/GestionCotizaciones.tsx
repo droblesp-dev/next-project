@@ -1940,7 +1940,7 @@ export default function GestionCotizaciones({
                     <dd className="text-on-surface">{cotizacionSeleccionada.anticipo_valor}</dd>
                   </div>
                   <div>
-                    <dt className="text-on-surface-variant uppercase">Saldo pendiente</dt>
+                    <dt className="text-on-surface-variant uppercase">{cotizacionSeleccionada.estado_saldo === 'VALIDADO' ? 'Saldo cobrado' : 'Saldo pendiente'}</dt>
                     <dd className="text-on-surface">{cotizacionSeleccionada.saldo_pendiente}</dd>
                   </div>
                   <div>
@@ -2148,7 +2148,7 @@ export default function GestionCotizaciones({
                   <dd className="text-on-surface">{cotizacionSeleccionada.metodo_saldo ?? 'Sin definir'}</dd>
                 </div>
                 <div>
-                  <dt className="text-on-surface-variant uppercase">Saldo pendiente</dt>
+                  <dt className="text-on-surface-variant uppercase">{cotizacionSeleccionada.estado_saldo === 'VALIDADO' ? 'Saldo cobrado' : 'Saldo pendiente'}</dt>
                   <dd className="text-on-surface">{cotizacionSeleccionada.saldo_pendiente}</dd>
                 </div>
                 <div>

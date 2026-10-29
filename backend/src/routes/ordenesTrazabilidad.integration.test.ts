@@ -92,7 +92,7 @@ async function detalle(id: string) {
 describe('V22 - trazabilidad de actores en ordenes', () => {
   it('una orden nueva no inventa autores', async () => {
     const orden = await detalle(await ordenNueva());
-    expect(orden).toMatchObject({ estado_cambiado_por: null, finalizada_por: null, entrega_confirmada_por: null, cerrada_por: null });
+    expect(orden).toMatchObject({ estado_cambiado_por: null, finalizada_por: null, entrega_confirmada_por: null, cerrada_por: null, responsable_nombre: 'Prueba trazabilidad OPERATIVO' });
   });
 
   it('registra quien cambio el estado, quien finalizo, quien confirmo la entrega y quien cerro', async () => {

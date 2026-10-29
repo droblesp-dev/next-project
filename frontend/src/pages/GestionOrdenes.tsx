@@ -25,6 +25,7 @@ export interface Orden {
   avance: number;
   entrega_confirmada_en: string | null;
   // V22: quién ejecutó cada hito (null = no registrado, p. ej. órdenes anteriores a V22).
+  responsable_nombre?: string | null;
   estado_cambiado_por_nombre?: string | null;
   finalizada_por_nombre?: string | null;
   entrega_confirmada_por_nombre?: string | null;
@@ -139,6 +140,8 @@ function formatearFechaEntrega(valor: string | null): string | null {
   const coincidencia = valor.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (!coincidencia) return null;
   const [, anio, mes, dia] = coincidencia;
+  // 1970-01-01 es la época Unix (dato nulo mal convertido), no una fecha de entrega real.
+  if (anio === '1970' && mes === '01' && dia === '01') return null;
   return `${dia}/${mes}/${anio}`;
 }
 
@@ -526,9 +529,9 @@ export default function GestionOrdenes({
   // resolverlo (usuariosPorId ya viene de cargarResponsables, exclusivo de
   // ADMIN) y sigue usando nombreResponsableAdmin() sin cambios. Este
   // helper es exclusivamente para las vistas COMERCIAL/OPERATIVO nuevas.
-  function responsableMostrable(responsableId: string | null): string {
+  function responsableMostrable(responsableId: string | null, nombre?: string | null): string {
     if (!responsableId) return 'Sin asignar';
-    return `Responsable ${responsableId.slice(0, 8)}…`;
+    return nombre || 'Responsable asignado';
   }
 
   const kpisAdmin = useMemo(() => {
@@ -907,8 +910,9 @@ export default function GestionOrdenes({
       const data = await response.json().catch(() => null);
 
       if (response.status === 409) {
-        setMensajeCambio(data?.message || 'Conflicto al cambiar el estado.');
+        // abrirDetalle limpia los mensajes: el aviso del conflicto se muestra DESPUÉS de recargar el detalle
         await abrirDetalle(ordenSeleccionada.id);
+        setMensajeCambio(data?.message || 'Conflicto al cambiar el estado.');
         await cargar();
         return;
       }
@@ -1052,6 +1056,8 @@ export default function GestionOrdenes({
 
       setOrdenSeleccionada(data.orden as Orden);
       setMensajeEntrega('Entrega confirmada correctamente.');
+      // un «No se puede cerrar…» anterior ya no aplica una vez confirmada la entrega
+      setMensajeCerrar(null);
     } catch (err) {
       if (err instanceof SesionInvalidaError) {
         onSesionInvalida();
@@ -1470,7 +1476,7 @@ export default function GestionOrdenes({
                 <dd className="text-on-surface">{cotizacion?.estado_saldo ?? '—'}</dd>
               </div>
               <div>
-                <dt className="text-on-surface-variant uppercase">Saldo pendiente</dt>
+                <dt className="text-on-surface-variant uppercase">{cotizacion?.estado_saldo === 'VALIDADO' ? 'Saldo cobrado' : 'Saldo pendiente'}</dt>
                 <dd className="text-on-surface">{cotizacion?.saldo_pendiente ?? '—'}</dd>
               </div>
               <div>
@@ -1647,7 +1653,7 @@ export default function GestionOrdenes({
           <div className="border-t border-outline pt-4">
             <p className="font-label-caps text-[10px] text-primary-container uppercase mb-2">Responsable</p>
             <p className="font-body-md text-body-md text-on-surface">
-              {responsableMostrable(ordenSeleccionada.responsable_id)}
+              {responsableMostrable(ordenSeleccionada.responsable_id, ordenSeleccionada.responsable_nombre)}
             </p>
           </div>
 
@@ -1941,7 +1947,7 @@ export default function GestionOrdenes({
                   <dd className="text-on-surface">{cotizacionSaldo?.estado_saldo ?? 'Cargando...'}</dd>
                 </div>
                 <div>
-                  <dt className="text-on-surface-variant uppercase">Saldo pendiente</dt>
+                  <dt className="text-on-surface-variant uppercase">{cotizacionSaldo?.estado_saldo === 'VALIDADO' ? 'Saldo cobrado' : 'Saldo pendiente'}</dt>
                   <dd className="text-on-surface">{cotizacionSaldo?.saldo_pendiente ?? '—'}</dd>
                 </div>
                 <div>

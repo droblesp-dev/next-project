@@ -24,6 +24,7 @@ export interface Orden {
   finalizada_por: string | null;
   entrega_confirmada_por: string | null;
   cerrada_por: string | null;
+  responsable_nombre: string | null;
   estado_cambiado_por_nombre: string | null;
   finalizada_por_nombre: string | null;
   entrega_confirmada_por_nombre: string | null;
@@ -42,6 +43,7 @@ const COLUMNAS = `id, cotizacion_id, responsable_id, estado, codigo, descripcion
                    fecha_cierre, observaciones, creado_en, actualizado_en, avance,
                    entrega_confirmada_en,
                    estado_cambiado_por, finalizada_por, entrega_confirmada_por, cerrada_por,
+                   (SELECT u.nombre FROM usuarios u WHERE u.id = ordenes.responsable_id) AS responsable_nombre,
                    (SELECT u.nombre FROM usuarios u WHERE u.id = ordenes.estado_cambiado_por) AS estado_cambiado_por_nombre,
                    (SELECT u.nombre FROM usuarios u WHERE u.id = ordenes.finalizada_por) AS finalizada_por_nombre,
                    (SELECT u.nombre FROM usuarios u WHERE u.id = ordenes.entrega_confirmada_por) AS entrega_confirmada_por_nombre,
