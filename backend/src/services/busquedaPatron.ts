@@ -35,7 +35,16 @@ export function patronParcial(termino: string): string {
 // en cuyo caso no se compara contra los números.
 export function patronCodigo(termino: string): string | null {
   const compacto = normalizarTermino(termino).replace(/[^a-z0-9]/g, '');
-  return compacto === '' ? null : `%${compacto}%`;
+  return compacto === '' ? null : `%${completarNumeroCodigo(compacto)}%`;
+}
+
+// «sol493», «cot 3» u «ord327» (prefijo + número SIN ceros a la izquierda) se leen como el número completo
+// SOL-000493 / COT-000003 / ORD-000327, que es cómo se guardan (6 dígitos). Con ceros o con más de 5 dígitos se
+// deja tal cual (búsqueda parcial). Solo para los prefijos de números legibles.
+const NUMERO_CORTO = /^(sol|cot|ord)([1-9]\d{0,4})$/;
+export function completarNumeroCodigo(compacto: string): string {
+  const m = NUMERO_CORTO.exec(compacto);
+  return m ? `${m[1]}${m[2].padStart(6, '0')}` : compacto;
 }
 
 // Valida el término recibido por query string: texto de 1 a LONGITUD_MAXIMA_TERMINO caracteres.

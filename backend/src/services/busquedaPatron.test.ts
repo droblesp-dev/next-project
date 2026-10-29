@@ -46,6 +46,19 @@ describe('patronCodigo: números legibles', () => {
     expect(patronCodigo('Cotización 7')).toBe('%cotizacion7%');
   });
 
+  it('prefijo + número sin ceros se lee como el número completo de 6 dígitos', () => {
+    expect(patronCodigo('COT-3')).toBe('%cot000003%');
+    expect(patronCodigo('sol 493')).toBe('%sol000493%');
+    expect(patronCodigo('ord327')).toBe('%ord000327%');
+  });
+
+  it('con ceros, con más dígitos o con otro prefijo no se completa (búsqueda parcial)', () => {
+    expect(patronCodigo('SOL-000')).toBe('%sol000%');
+    expect(patronCodigo('cot-000003')).toBe('%cot000003%');
+    expect(patronCodigo('sol123456')).toBe('%sol123456%');
+    expect(patronCodigo('lead 4')).toBe('%lead4%');
+  });
+
   it('un término sin letras ni dígitos no se compara contra números', () => {
     expect(patronCodigo('-')).toBeNull();
     expect(patronCodigo('  % _ ')).toBeNull();

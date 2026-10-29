@@ -26,6 +26,14 @@ describe('coincideCodigo: número de solicitud o cotización', () => {
     expect(coincideCodigo('COT-000001', 'COT-000001')).toBe(true);
   });
 
+  it('prefijo + número sin ceros encuentra el número completo (cot-3, sol 493, ord327)', () => {
+    expect(coincideCodigo('COT-3', 'COT-000003')).toBe(true);
+    expect(coincideCodigo('sol 493', 'SOL-000493')).toBe(true);
+    expect(coincideCodigo('ord327', 'ORD-000327')).toBe(true);
+    expect(coincideCodigo('cot-3', 'COT-000013')).toBe(false);
+    expect(coincideCodigo('cot-3', 'SOL-000003')).toBe(false);
+  });
+
   it('no mezcla solicitudes con cotizaciones ni encuentra números distintos', () => {
     expect(coincideCodigo('COT-000001', 'SOL-000491')).toBe(false);
     expect(coincideCodigo('SOL-000492', 'SOL-000491')).toBe(false);

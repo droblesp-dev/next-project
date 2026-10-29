@@ -21,9 +21,16 @@ export function coincideTexto(termino: string, texto: string | null | undefined)
 
 // El término aparece dentro de un número legible, tolerando guiones y espacios. Un término sin
 // letras ni dígitos (por ejemplo «-») no coincide con nada.
+// «sol493» / «cot 3» / «ord327» (prefijo + número sin ceros) se leen como el número completo de 6 dígitos, igual que
+// en el servidor (busquedaPatron.ts).
+function completarNumeroCodigo(compacto: string): string {
+  const m = /^(sol|cot|ord)([1-9]\d{0,4})$/.exec(compacto);
+  return m ? `${m[1]}${m[2].padStart(6, '0')}` : compacto;
+}
+
 export function coincideCodigo(termino: string, codigo: string | null | undefined): boolean {
   if (!codigo) return false;
-  const buscado = compactarCodigo(termino);
+  const buscado = completarNumeroCodigo(compactarCodigo(termino));
   return buscado !== '' && compactarCodigo(codigo).includes(buscado);
 }
 
