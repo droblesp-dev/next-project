@@ -19,6 +19,7 @@ export interface OpcionesPendientes {
 //  - Solo posteriores a la fecha de corte y al marcador propio del usuario, comparando por (creado_en, id).
 //  - Solo en hilos donde el usuario está autorizado AHORA: con orden, COMERCIAL siempre y OPERATIVO si es el
 //    responsable vigente; sin orden, según el modo de participantes.
+//  - COMERCIAL (C3): además, solo en hilos donde creó una cotización de la solicitud o escribió algún mensaje.
 export async function contarPendientes(
   usuarioId: string,
   rolUsuario: 'COMERCIAL' | 'OPERATIVO',
@@ -30,6 +31,14 @@ export async function contarPendientes(
     : `EXISTS (
          SELECT 1 FROM solicitud_mensajes_participantes p
          WHERE p.solicitud_id = c.solicitud_id AND p.usuario_id = $1 AND p.retirado_en IS NULL
+       )`;
+
+  // C3 (solo COMERCIAL): el contador se enciende únicamente en los hilos donde el usuario CREÓ una cotización de la
+  // solicitud o ESCRIBIÓ algún mensaje. No cambia el acceso: COMERCIAL puede abrir cualquier conversación autorizada, solo
+  // se evita que cada COMERCIAL vea un contador por todas las órdenes del sistema. OPERATIVO no se ve afectado.
+  const propiedadComercial = `(
+         EXISTS (SELECT 1 FROM cotizaciones cq WHERE cq.solicitud_id = c.solicitud_id AND cq.creado_por = $1)
+         OR EXISTS (SELECT 1 FROM solicitud_mensajes mi WHERE mi.solicitud_id = c.solicitud_id AND mi.autor_id = $1)
        )`;
 
   const result = await pool.query<PendientesSolicitud>(
@@ -53,8 +62,9 @@ export async function contarPendientes(
        ORDER BY o.creado_en DESC
        LIMIT 1
      ) ord ON TRUE
-     WHERE (ord.id IS NOT NULL AND ($4 = 'COMERCIAL' OR ord.responsable_id = $1))
-        OR (ord.id IS NULL AND ${autorizadoSinOrden})
+     WHERE ((ord.id IS NOT NULL AND ($4 = 'COMERCIAL' OR ord.responsable_id = $1))
+        OR (ord.id IS NULL AND ${autorizadoSinOrden}))
+       AND ($4 <> 'COMERCIAL' OR ${propiedadComercial})
      ORDER BY c.solicitud_id`,
     [usuarioId, rolContrario, opciones.desde, rolUsuario]
   );

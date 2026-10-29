@@ -266,7 +266,7 @@ describe('contadores y marcadores de lectura', () => {
     // OPERATIVO escribe: cuenta para COMERCIAL (cualquiera con acceso), no para OPERATIVO
     await crearMensaje(sol, U('OPE_1'), 'respuesta de operativo');
     expect(await pend('COM_A')).toBe(1);
-    expect(await pend('COM_B')).toBe(1);
+    expect(await pend('COM_B')).toBe(0); // C3: COM_B nunca escribió ni creó cotización en este hilo
     expect(await pend('OPE_2')).toBe(3);
   });
 
@@ -529,6 +529,43 @@ describe('carreras residuales: creación de la orden y respuesta de NexIA', () =
     expect(normal).toBe('GUARDADA');
     const respuestas = await pool.query(`SELECT destinatario_id FROM solicitud_mensajes WHERE solicitud_id = $1 AND autor_tipo = 'NEXIA'`, [sol]);
     expect(respuestas.rows).toEqual([{ destinatario_id: ids.COM_A }]);
+  });
+});
+
+describe('contadores de COMERCIAL (C3): hilos donde creó una cotización o escribió', () => {
+  const pend = async (clave: string, sol: string) =>
+    (await obtenerPendientes(U(clave))).por_solicitud.find((f) => f.solicitud_id === sol)?.pendientes ?? 0;
+
+  it('con orden: cuenta quien creó la cotización o escribió; el resto puede abrir el hilo pero no ve contador', async () => {
+    const sol = await solicitudNueva();
+    await conOrden(sol, 'OPE_1'); // la cotización de la orden la creó COM_A
+    await crearMensaje(sol, U('OPE_1'), 'primer aviso del responsable');
+
+    expect(await pend('COM_A', sol)).toBe(1); // creó la cotización
+    expect(await pend('COM_B', sol)).toBe(0); // no creó ni escribió
+    expect((await listarMensajes(sol, U('COM_B'))).mensajes).toHaveLength(1); // pero SÍ puede abrir la conversación
+
+    await crearMensaje(sol, U('COM_B'), 'COM_B se suma a la conversación');
+    await crearMensaje(sol, U('OPE_1'), 'segundo aviso del responsable');
+    expect(await pend('COM_B', sol)).toBe(2); // al escribir, pasa a contar (sin marcador propio: todo lo posterior al corte)
+    expect(await pend('COM_A', sol)).toBe(2);
+  });
+
+  it('sin orden: cuenta quien escribió en el hilo; otro COMERCIAL no', async () => {
+    env.chat.participantesModo = 'SOMBRA';
+    const sol = await solicitudNueva();
+    await crearMensaje(sol, U('COM_A'), 'abre el hilo');
+    await crearMensaje(sol, U('OPE_1'), 'respuesta del operativo');
+    expect(await pend('COM_A', sol)).toBe(1);
+    expect(await pend('COM_B', sol)).toBe(0);
+  });
+
+  it('OPERATIVO no se ve afectado: cuenta los mensajes de COMERCIAL en el hilo que le corresponde, sin haber escrito', async () => {
+    const sol = await solicitudNueva();
+    await conOrden(sol, 'OPE_1');
+    await crearMensaje(sol, U('COM_B'), 'mensaje de un COMERCIAL que no creó la cotización');
+    expect(await pend('OPE_1', sol)).toBe(1);
+    expect(await pend('OPE_2', sol)).toBe(0); // OPE_2 no es el responsable: el hilo no es suyo
   });
 });
 
