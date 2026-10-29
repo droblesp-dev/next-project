@@ -56,7 +56,12 @@ import {
   COMPROBANTES_DIR,
   COMPROBANTE_MAX_BYTES,
 } from '../config/uploadsComprobantes.js';
-import { enviarEnlaceCotizacion, enviarComprobanteRechazado, enviarPagoConfirmado } from '../services/email.service.js';
+import {
+  enviarEnlaceCotizacion,
+  enviarComprobanteRechazado,
+  enviarComprobanteRecibido,
+  enviarPagoConfirmado,
+} from '../services/email.service.js';
 import * as cotizacionesRepo from '../repositories/cotizaciones.repository.js';
 import { listarCuentasReceptorasActivas } from '../services/cuentasBancarias.service.js';
 import { listarConCuentaIndicada } from '../repositories/comprobantesPagoCliente.repository.js';
@@ -634,6 +639,9 @@ async function procesarComprobante(req: Request, res: Response, err: unknown): P
       cuentaIndicada
     );
     res.status(200).json({ cotizacion });
+    // Mejora 5: aviso de «comprobante recibido» (solo informa la recepción; no dice que esté aceptado ni acreditado).
+    // Va DESPUÉS de responder y nunca modifica la respuesta ni el estado: un fallo de correo solo se registra.
+    await notificarCliente(cotizacion.id, { tipo: 'ANTICIPO', evento: 'RECIBIDO' });
   } catch (error) {
     if (error instanceof EnlaceInvalidoError) {
       res.status(401).json({ message: 'Enlace inválido o expirado.' });
@@ -787,6 +795,7 @@ async function notificarCliente(
   cotizacionId: string,
   aviso:
     | { tipo: 'ANTICIPO' | 'SALDO'; evento: 'CONFIRMADO' }
+    | { tipo: 'ANTICIPO' | 'SALDO'; evento: 'RECIBIDO' }
     | { tipo: 'ANTICIPO' | 'SALDO'; evento: 'RECHAZADO'; motivo: string; detalle: string | null }
 ): Promise<void> {
   try {
@@ -803,6 +812,8 @@ async function notificarCliente(
     };
     if (aviso.evento === 'RECHAZADO') {
       await enviarComprobanteRechazado({ ...base, motivo: aviso.motivo, detalle: aviso.detalle });
+    } else if (aviso.evento === 'RECIBIDO') {
+      await enviarComprobanteRecibido(base);
     } else {
       await enviarPagoConfirmado(base);
     }
@@ -1001,6 +1012,9 @@ async function procesarComprobanteSaldo(req: Request, res: Response, err: unknow
       cuentaIndicada
     );
     res.status(200).json({ cotizacion });
+    // Mejora 5: aviso de «comprobante recibido» (solo informa la recepción; no dice que esté aceptado ni acreditado).
+    // Va DESPUÉS de responder y nunca modifica la respuesta ni el estado: un fallo de correo solo se registra.
+    await notificarCliente(cotizacion.id, { tipo: 'SALDO', evento: 'RECIBIDO' });
   } catch (error) {
     if (error instanceof EnlaceInvalidoError) {
       res.status(401).json({ message: 'Enlace inválido o expirado.' });

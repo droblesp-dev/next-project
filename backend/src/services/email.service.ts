@@ -683,6 +683,7 @@ export interface ComprobanteRechazadoInput extends AvisoPagoBase {
 }
 
 export type PagoConfirmadoInput = AvisoPagoBase;
+export type ComprobanteRecibidoInput = AvisoPagoBase;
 
 const ETIQUETA_PAGO: Record<TipoPagoAviso, string> = { ANTICIPO: 'anticipo', SALDO: 'saldo' };
 
@@ -740,6 +741,46 @@ function construirContenidoComprobanteRechazado(input: ComprobanteRechazadoInput
       <p style="margin:0 0 4px;">Motivo:</p>
       <p style="margin:0 0 16px;font-weight:bold;">${escaparHtml(motivo)}</p>
       <p style="margin:0 0 24px;">Para corregirlo, ingresa de nuevo a tu enlace de cotización con el código de seguridad de 6 dígitos y vuelve a subir un comprobante correcto en la sección de ${pago}.</p>
+      <p style="text-align:center;margin:0;">
+        <a href="${enlaceWhatsApp}" style="display:inline-block;background:#d4a017;color:#1a1a1a;text-decoration:none;padding:12px 24px;border-radius:4px;font-weight:bold;">¿NECESITAS AYUDA? ESCRÍBENOS POR WHATSAPP</a>
+      </p>
+    </div>
+  </body>
+</html>`;
+
+  return { asunto, html, texto };
+}
+
+// Mejora 5: aviso de «comprobante recibido». Solo informa que la carga llegó y está en revisión: NO dice que el
+// comprobante fue aceptado ni que el dinero esté acreditado (eso lo avisan el correo de rechazo y el de pago
+// confirmado, tras la revisión del equipo).
+function construirContenidoComprobanteRecibido(input: ComprobanteRecibidoInput): ContenidoCorreo {
+  const { referencia, cotizacionDe } = referenciaAviso(input);
+  const pago = ETIQUETA_PAGO[input.tipoPago];
+  const enlaceWhatsApp = construirEnlaceWhatsApp(construirMensajeWhatsAppAyudaCotizacion(input));
+  const asunto = `${env.nextProjectName} — Recibimos tu comprobante de ${pago}${referencia}`;
+
+  const texto = [
+    `Hola ${input.destinatarioNombre}.`,
+    '',
+    `Recibimos el comprobante de tu ${pago} de la cotización${cotizacionDe}. Nuestro equipo lo está revisando.`,
+    '',
+    'Este aviso solo confirma que lo recibimos: todavía no está aceptado ni acreditado. Te avisaremos por este medio cuando tengamos novedades.',
+    '',
+    'Puedes consultar el estado de tu cotización desde tu enlace con el código de seguridad de 6 dígitos.',
+    '',
+    '¿Necesitas ayuda? Contáctanos por WhatsApp:',
+    enlaceWhatsApp,
+  ].join('\n');
+
+  const html = `<!doctype html>
+<html lang="es">
+  <body style="margin:0;padding:24px;background:#f4f4f4;font-family:Arial,Helvetica,sans-serif;color:#1a1a1a;">
+    <div style="max-width:480px;margin:0 auto;background:#ffffff;padding:32px 24px;border-radius:4px;">
+      <p style="margin:0 0 16px;">Hola ${escaparHtml(input.destinatarioNombre)}.</p>
+      <p style="margin:0 0 16px;">Recibimos el comprobante de tu ${pago} de la cotización${escaparHtml(cotizacionDe)}. Nuestro equipo lo está revisando.</p>
+      <p style="margin:0 0 16px;">Este aviso solo confirma que lo recibimos: todavía no está aceptado ni acreditado. Te avisaremos por este medio cuando tengamos novedades.</p>
+      <p style="margin:0 0 24px;">Puedes consultar el estado de tu cotización desde tu enlace con el código de seguridad de 6 dígitos.</p>
       <p style="text-align:center;margin:0;">
         <a href="${enlaceWhatsApp}" style="display:inline-block;background:#d4a017;color:#1a1a1a;text-decoration:none;padding:12px 24px;border-radius:4px;font-weight:bold;">¿NECESITAS AYUDA? ESCRÍBENOS POR WHATSAPP</a>
       </p>
@@ -846,6 +887,10 @@ async function enviarAvisoPago(
 
 export async function enviarComprobanteRechazado(input: ComprobanteRechazadoInput): Promise<ResultadoEnvioCorreo> {
   return enviarAvisoPago('Comprobante rechazado', input, construirContenidoComprobanteRechazado(input));
+}
+
+export async function enviarComprobanteRecibido(input: ComprobanteRecibidoInput): Promise<ResultadoEnvioCorreo> {
+  return enviarAvisoPago('Comprobante recibido', input, construirContenidoComprobanteRecibido(input));
 }
 
 export async function enviarPagoConfirmado(input: PagoConfirmadoInput): Promise<ResultadoEnvioCorreo> {
