@@ -8,6 +8,7 @@ import { openApiSpec } from './config/openapi.js';
 import { authRouter } from './routes/auth.routes.js';
 import { usuariosRouter } from './routes/usuarios.routes.js';
 import { clientesRouter } from './routes/clientes.routes.js';
+import { busquedaRouter } from './routes/busqueda.routes.js';
 import { solicitudesRouter } from './routes/solicitudes.routes.js';
 import { cotizacionesRouter } from './routes/cotizaciones.routes.js';
 import { ordenesRouter } from './routes/ordenes.routes.js';
@@ -76,6 +77,7 @@ if (process.env.NODE_ENV !== 'production') {
 app.use('/api/auth', authRouter);
 app.use('/api/usuarios', usuariosRouter);
 app.use('/api/clientes', clientesRouter);
+app.use('/api/busqueda', busquedaRouter);
 app.use('/api/solicitudes', solicitudesRouter);
 app.use('/api/cotizaciones', cotizacionesRouter);
 app.use('/api/ordenes', ordenesRouter);
