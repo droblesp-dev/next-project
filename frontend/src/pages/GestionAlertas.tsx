@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Eye } from 'lucide-react';
 import { fetchAutenticado, SesionInvalidaError } from '../lib/authClient';
+import { coincideCodigo } from '../lib/busqueda';
+import { useBusquedaServidor } from '../lib/busquedaServidor';
 import type { Solicitud } from './BandejaSolicitudes';
 
 export interface Alerta {
@@ -48,6 +50,8 @@ interface OrdenResumen {
 }
 
 interface CotizacionResumen {
+  // N.º legible de la cotización (COT-XXXXXX); null en cotizaciones anteriores a la numeración.
+  codigo?: string | null;
   solicitud_id: string;
 }
 
@@ -137,6 +141,8 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
   const [alertaSeleccionada, setAlertaSeleccionada] = useState<Alerta | null>(null);
 
   const [busquedaAdmin, setBusquedaAdmin] = useState('');
+  // Búsqueda parcial resuelta en la BD (ids de todas las coincidencias); mientras llega, filtro local.
+  const idsServidor = useBusquedaServidor('alertas', busquedaAdmin, token, onSesionInvalida);
   const [tipoFiltroAdmin, setTipoFiltroAdmin] = useState('TODOS');
   const [condicionFiltroAdmin, setCondicionFiltroAdmin] = useState('TODOS');
   const [estadoFiltroAdmin, setEstadoFiltroAdmin] = useState('TODOS');
@@ -212,7 +218,7 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
 
         const dataOrdenes = (await respOrdenes.json()) as { ordenes: OrdenResumen[] };
         const dataCotizaciones = (await respCotizaciones.json()) as {
-          cotizaciones: { id: string; solicitud_id: string }[];
+          cotizaciones: { id: string; solicitud_id: string; codigo: string | null }[];
         };
         const dataSolicitudes = (await respSolicitudes.json()) as { solicitudes: Solicitud[] };
         const dataClientes = (await respClientes.json()) as {
@@ -224,7 +230,7 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
           const mapaOrdenes = new Map<string, OrdenResumen>();
           dataOrdenes.ordenes.forEach((o) => mapaOrdenes.set(o.id, o));
           const mapaCotizaciones = new Map<string, CotizacionResumen>();
-          dataCotizaciones.cotizaciones.forEach((c) => mapaCotizaciones.set(c.id, { solicitud_id: c.solicitud_id }));
+          dataCotizaciones.cotizaciones.forEach((c) => mapaCotizaciones.set(c.id, { solicitud_id: c.solicitud_id, codigo: c.codigo }));
           const mapaSolicitudes = new Map<string, Solicitud>();
           dataSolicitudes.solicitudes.forEach((s) => mapaSolicitudes.set(s.id, s));
           const mapaClientes = new Map<string, ClienteResumen>();
@@ -256,16 +262,28 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
 
   // Resuelve alerta.orden_id -> orden -> cotización -> solicitud ->
   // cliente, todo sobre los mapas ya cargados (sin ningún GET adicional).
-  function datosOrdenAlerta(ordenId: string): { orden: OrdenResumen | null; cliente: string; servicio: string } {
-    if (estadoApoyo === 'cargando') return { orden: null, cliente: 'Cargando…', servicio: 'Cargando…' };
-    if (estadoApoyo === 'error') return { orden: null, cliente: '—', servicio: '—' };
+  function datosOrdenAlerta(ordenId: string): {
+    orden: OrdenResumen | null;
+    cliente: string;
+    servicio: string;
+    solicitudCodigo: string | null;
+    cotizacionCodigo: string | null;
+  } {
+    if (estadoApoyo === 'cargando') return { orden: null, cliente: 'Cargando…', servicio: 'Cargando…', solicitudCodigo: null, cotizacionCodigo: null };
+    if (estadoApoyo === 'error') return { orden: null, cliente: '—', servicio: '—', solicitudCodigo: null, cotizacionCodigo: null };
     const orden = ordenesPorId.get(ordenId) ?? null;
-    if (!orden) return { orden: null, cliente: '—', servicio: '—' };
+    if (!orden) return { orden: null, cliente: '—', servicio: '—', solicitudCodigo: null, cotizacionCodigo: null };
     const cotizacion = cotizacionesPorId.get(orden.cotizacion_id);
     const solicitud = cotizacion ? solicitudesPorId.get(cotizacion.solicitud_id) : undefined;
     const cliente = solicitud ? clientesPorId.get(solicitud.cliente_id) : undefined;
     const nombreCliente = cliente ? (cliente.empresa?.trim() ? cliente.empresa : cliente.nombre) : '—';
-    return { orden, cliente: nombreCliente, servicio: solicitud?.servicio ?? '—' };
+    return {
+      orden,
+      cliente: nombreCliente,
+      servicio: solicitud?.servicio ?? '—',
+      solicitudCodigo: solicitud?.codigo ?? null,
+      cotizacionCodigo: cotizacion?.codigo ?? null,
+    };
   }
 
   function nombreResponsableAlerta(responsableId: string | null): string {
@@ -318,10 +336,15 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
       if (estadoFiltroAdmin !== 'TODOS' && a.estado !== estadoFiltroAdmin) return false;
       if (!fechaEnRangoAlerta(a.creado_en, fechaDesdeAdmin, fechaHastaAdmin)) return false;
 
-      if (termino) {
-        const { orden, cliente, servicio } = datosOrdenAlerta(a.orden_id);
+      if (termino && idsServidor) {
+        if (!idsServidor.has(a.id)) return false;
+      } else if (termino) {
+        const { orden, cliente, servicio, solicitudCodigo, cotizacionCodigo } = datosOrdenAlerta(a.orden_id);
         const coincide =
           (orden?.codigo.toLowerCase().includes(termino) ?? false) ||
+          coincideCodigo(termino, orden?.codigo) ||
+          coincideCodigo(termino, solicitudCodigo) ||
+          coincideCodigo(termino, cotizacionCodigo) ||
           cliente.toLowerCase().includes(termino) ||
           servicio.toLowerCase().includes(termino) ||
           a.mensaje.toLowerCase().includes(termino);
@@ -333,6 +356,7 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
   }, [
     alertas,
     busquedaAdmin,
+    idsServidor,
     tipoFiltroAdmin,
     condicionFiltroAdmin,
     estadoFiltroAdmin,
@@ -556,7 +580,7 @@ export default function GestionAlertas({ token, esAdmin, puedeAtender, onVerOrde
                     type="text"
                     value={busquedaAdmin}
                     onChange={(e) => setBusquedaAdmin(e.target.value)}
-                    placeholder="Buscar por código de orden, cliente, servicio o mensaje…"
+                    placeholder="Buscar por código de orden, n.º de solicitud o cotización, cliente, servicio o mensaje…"
                     className="w-full bg-background border border-outline pl-10 pr-3 py-2.5 text-on-surface text-sm focus:border-primary-container focus:outline-hidden font-body-md"
                   />
                 </div>

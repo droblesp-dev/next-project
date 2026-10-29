@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Eye } from 'lucide-react';
 import { fetchAutenticado, SesionInvalidaError } from '../lib/authClient';
+import { coincideCodigo } from '../lib/busqueda';
+import { useBusquedaServidor } from '../lib/busquedaServidor';
 import type { Solicitud } from './BandejaSolicitudes';
 import {
   estadoSelectorCuentas,
@@ -368,6 +370,8 @@ export default function GestionCotizaciones({
   const [estadoApoyo, setEstadoApoyo] = useState<EstadoApoyo>('cargando');
 
   const [busquedaAdmin, setBusquedaAdmin] = useState('');
+  // Búsqueda parcial resuelta en la BD (ids de todas las coincidencias); mientras llega, filtro local.
+  const idsServidor = useBusquedaServidor('cotizaciones', busquedaAdmin, token, onSesionInvalida);
   const [estadoFiltroAdmin, setEstadoFiltroAdmin] = useState<EstadoFiltroCotizacion>('TODOS');
   const [fechaDesdeAdmin, setFechaDesdeAdmin] = useState('');
   const [fechaHastaAdmin, setFechaHastaAdmin] = useState('');
@@ -382,6 +386,7 @@ export default function GestionCotizaciones({
   // solicitudesPorId ya cargado, ningún endpoint nuevo.
   const [mostrandoFormularioCrear, setMostrandoFormularioCrear] = useState(false);
   const [busquedaSolicitudNueva, setBusquedaSolicitudNueva] = useState('');
+  const idsSolicitudNueva = useBusquedaServidor('solicitudes', busquedaSolicitudNueva, token, onSesionInvalida);
   const [mostrandoBuscadorSolicitud, setMostrandoBuscadorSolicitud] = useState(false);
 
   const [solicitudIdNueva, setSolicitudIdNueva] = useState('');
@@ -652,7 +657,9 @@ export default function GestionCotizaciones({
       if (estadoFiltroAdmin !== 'TODOS' && c.estado !== estadoFiltroAdmin) return false;
       if (!fechaEnRangoCotizacion(c.creado_en, fechaDesdeAdmin, fechaHastaAdmin)) return false;
 
-      if (termino) {
+      if (termino && idsServidor) {
+        if (!idsServidor.has(c.id)) return false;
+      } else if (termino) {
         const solicitud = solicitudesPorId.get(c.solicitud_id) ?? null;
         const cliente = solicitud && estadoApoyo === 'disponible' ? clientesPorId.get(solicitud.cliente_id) : null;
         const coincide =
@@ -663,14 +670,14 @@ export default function GestionCotizaciones({
           (cliente?.empresa ? cliente.empresa.toLowerCase().includes(termino) : false) ||
           c.id.toLowerCase().includes(termino) ||
           c.solicitud_id.toLowerCase().includes(termino) ||
-          (solicitud?.codigo?.toLowerCase().includes(termino) ?? false) ||
-          (c.codigo?.toLowerCase().includes(termino) ?? false);
+          coincideCodigo(termino, solicitud?.codigo) ||
+          coincideCodigo(termino, c.codigo);
         if (!coincide) return false;
       }
 
       return true;
     });
-  }, [cotizaciones, busquedaAdmin, estadoFiltroAdmin, fechaDesdeAdmin, fechaHastaAdmin, solicitudesPorId, clientesPorId, estadoApoyo]);
+  }, [cotizaciones, busquedaAdmin, idsServidor, estadoFiltroAdmin, fechaDesdeAdmin, fechaHastaAdmin, solicitudesPorId, clientesPorId, estadoApoyo]);
 
   const ordenadasAdmin = useMemo(() => {
     const copia = [...filtradasAdmin];
@@ -738,8 +745,10 @@ export default function GestionCotizaciones({
       .filter((s) => s.estado === 'EN_REVISION')
       .filter((s) => {
         if (!termino) return true;
+        if (idsSolicitudNueva) return idsSolicitudNueva.has(s.id);
         const cliente = estadoApoyo === 'disponible' ? clientesPorId.get(s.cliente_id) : null;
         return (
+          coincideCodigo(termino, s.codigo) ||
           s.servicio.toLowerCase().includes(termino) ||
           s.descripcion.toLowerCase().includes(termino) ||
           (cliente?.nombre.toLowerCase().includes(termino) ?? false) ||
@@ -747,7 +756,7 @@ export default function GestionCotizaciones({
         );
       })
       .sort((a, b) => new Date(b.creado_en).getTime() - new Date(a.creado_en).getTime());
-  }, [solicitudesPorId, clientesPorId, estadoApoyo, busquedaSolicitudNueva]);
+  }, [solicitudesPorId, clientesPorId, estadoApoyo, busquedaSolicitudNueva, idsSolicitudNueva]);
 
   const solicitudSeleccionadaNueva = solicitudIdNueva ? solicitudesPorId.get(solicitudIdNueva) ?? null : null;
 
@@ -1492,15 +1501,6 @@ export default function GestionCotizaciones({
                 <dd className="text-on-surface">{cotizacionSeleccionada.estado_saldo}</dd>
               </div>
             </dl>
-          </div>
-
-          <div className="border-t border-outline pt-4 space-y-1">
-            <p className="font-code-sm text-[10px] text-on-surface-variant uppercase break-all">
-              ID técnico de la cotización: {cotizacionSeleccionada.id}
-            </p>
-            <p className="font-code-sm text-[10px] text-on-surface-variant uppercase break-all">
-              ID técnico de la solicitud: {cotizacionSeleccionada.solicitud_id}
-            </p>
           </div>
         </div>
       </div>
@@ -2920,7 +2920,7 @@ export default function GestionCotizaciones({
                           type="text"
                           value={busquedaSolicitudNueva}
                           onChange={(e) => setBusquedaSolicitudNueva(e.target.value)}
-                          placeholder="Buscar solicitud por cliente, servicio o descripción…"
+                          placeholder="Buscar solicitud por n.º, cliente, servicio o descripción…"
                           className="w-full bg-background border border-outline pl-10 pr-3 py-2.5 text-on-surface text-sm focus:border-primary-container focus:outline-hidden font-body-md"
                         />
                       </div>

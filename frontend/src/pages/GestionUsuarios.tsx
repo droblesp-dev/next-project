@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useBusquedaServidor } from '../lib/busquedaServidor';
 import { fetchAutenticado, SesionInvalidaError, type Usuario } from '../lib/authClient';
 
 interface GestionUsuariosProps {
@@ -87,6 +88,8 @@ export default function GestionUsuarios({ token, onSesionInvalida }: GestionUsua
   const [errorPorFila, setErrorPorFila] = useState<Record<string, string>>({});
 
   const [busqueda, setBusqueda] = useState('');
+  // Búsqueda parcial resuelta en la BD (ids de todas las coincidencias); mientras llega, filtro local.
+  const idsServidor = useBusquedaServidor('usuarios', busqueda, token, onSesionInvalida);
   const [rolFiltro, setRolFiltro] = useState<RolFiltro>('TODOS');
   const [estadoFiltro, setEstadoFiltro] = useState<EstadoFiltroUsuario>('TODOS');
   const [ordenPor, setOrdenPor] = useState<OrdenPorUsuario>('recientes');
@@ -255,14 +258,16 @@ export default function GestionUsuarios({ token, onSesionInvalida }: GestionUsua
       if (estadoFiltro === 'ACTIVO' && !u.activo) return false;
       if (estadoFiltro === 'INACTIVO' && u.activo) return false;
 
-      if (termino) {
+      if (termino && idsServidor) {
+        if (!idsServidor.has(u.id)) return false;
+      } else if (termino) {
         const coincide = u.nombre.toLowerCase().includes(termino) || u.email.toLowerCase().includes(termino);
         if (!coincide) return false;
       }
 
       return true;
     });
-  }, [usuarios, busqueda, rolFiltro, estadoFiltro]);
+  }, [usuarios, busqueda, idsServidor, rolFiltro, estadoFiltro]);
 
   const ordenados = useMemo(() => {
     const copia = [...filtrados];

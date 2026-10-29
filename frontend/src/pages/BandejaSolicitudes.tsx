@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Eye } from 'lucide-react';
 import { fetchAutenticado, SesionInvalidaError } from '../lib/authClient';
+import { coincideCodigo } from '../lib/busqueda';
+import { useBusquedaServidor } from '../lib/busquedaServidor';
 import { esCantidadDesconocida, formatearCantidad } from '../lib/cantidadSolicitud';
 import fabricacionGalleryImg from '../assets/images/fabricacion_gallery_1788229017518.jpg';
 
@@ -146,6 +148,8 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
   // Filtros — todos client-side, sobre el array ya cargado (el backend no
   // acepta ningún parámetro de filtro/paginación).
   const [busqueda, setBusqueda] = useState('');
+  // Búsqueda parcial resuelta en la BD (ids de todas las coincidencias); mientras llega, filtro local.
+  const idsServidor = useBusquedaServidor('solicitudes', busqueda, token, onSesionInvalida);
   const [estadoFiltro, setEstadoFiltro] = useState<EstadoFiltro>('TODOS');
   const [servicioFiltro, setServicioFiltro] = useState('TODOS');
   const [fechaDesde, setFechaDesde] = useState('');
@@ -293,12 +297,14 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
       if (servicioFiltro !== 'TODOS' && s.servicio !== servicioFiltro) return false;
       if (!fechaEnRango(s.creado_en, fechaDesde, fechaHasta)) return false;
 
-      if (termino) {
+      if (termino && idsServidor) {
+        if (!idsServidor.has(s.id)) return false;
+      } else if (termino) {
         const cliente = estadoClientes === 'disponible' ? clientesPorId.get(s.cliente_id) : null;
         const coincide =
           s.servicio.toLowerCase().includes(termino) ||
           s.descripcion.toLowerCase().includes(termino) ||
-          (s.codigo?.toLowerCase().includes(termino) ?? false) ||
+          coincideCodigo(termino, s.codigo) ||
           (cliente ? cliente.nombre.toLowerCase().includes(termino) : false) ||
           (cliente?.empresa ? cliente.empresa.toLowerCase().includes(termino) : false);
         if (!coincide) return false;
@@ -306,7 +312,7 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
 
       return true;
     });
-  }, [solicitudes, busqueda, estadoFiltro, servicioFiltro, fechaDesde, fechaHasta, estadoClientes, clientesPorId]);
+  }, [solicitudes, busqueda, idsServidor, estadoFiltro, servicioFiltro, fechaDesde, fechaHasta, estadoClientes, clientesPorId]);
 
   const ordenadas = useMemo(() => {
     const copia = [...filtradas];

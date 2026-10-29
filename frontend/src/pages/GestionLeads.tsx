@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { Eye } from 'lucide-react';
 import { fetchAutenticado, obtenerMe, SesionInvalidaError, type Usuario } from '../lib/authClient';
+import { coincideCodigo } from '../lib/busqueda';
+import { useBusquedaServidor } from '../lib/busquedaServidor';
 import type { Solicitud } from './BandejaSolicitudes';
 
 export interface Lead {
@@ -301,6 +303,7 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
   const [solicitudIdInput, setSolicitudIdInput] = useState('');
   const [busquedaClienteVinculo, setBusquedaClienteVinculo] = useState('');
   const [busquedaSolicitudVinculo, setBusquedaSolicitudVinculo] = useState('');
+  const idsSolicitudVinculo = useBusquedaServidor('solicitudes', busquedaSolicitudVinculo, token, onSesionInvalida);
   const [confirmandoDescarte, setConfirmandoDescarte] = useState(false);
   // Selector de vinculación abierto (solo presentación).
   const [selectorVinculo, setSelectorVinculo] = useState<'cliente' | 'solicitud' | null>(null);
@@ -336,6 +339,8 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
   const [estadoApoyo, setEstadoApoyo] = useState<EstadoApoyo>('cargando');
 
   const [busquedaAdmin, setBusquedaAdmin] = useState('');
+  // Búsqueda parcial resuelta en la BD (ids de todas las coincidencias); mientras llega, filtro local.
+  const idsServidor = useBusquedaServidor('leads', busquedaAdmin, token, onSesionInvalida);
   const [fuenteFiltroAdmin, setFuenteFiltroAdmin] = useState<(typeof FUENTES_FILTRO)[number]>('TODAS');
   const [clasificacionFiltroAdmin, setClasificacionFiltroAdmin] = useState<(typeof CLASIFICACIONES_FILTRO)[number]>('TODAS');
   const [estadoFiltroAdmin, setEstadoFiltroAdmin] = useState<(typeof ESTADOS_FILTRO_LEAD)[number]>('TODOS');
@@ -554,8 +559,10 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
       .filter((s) => !clienteDelLeadId || s.cliente_id === clienteDelLeadId)
       .filter((s) => {
         if (!termino) return true;
+        if (idsSolicitudVinculo) return idsSolicitudVinculo.has(s.id);
         const cliente = clientesPorId.get(s.cliente_id);
         return (
+          coincideCodigo(termino, s.codigo) ||
           s.servicio.toLowerCase().includes(termino) ||
           s.descripcion.toLowerCase().includes(termino) ||
           s.estado.toLowerCase().includes(termino) ||
@@ -565,7 +572,7 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
         );
       })
       .sort((a, b) => new Date(b.creado_en).getTime() - new Date(a.creado_en).getTime());
-  }, [solicitudesPorId, clientesPorId, busquedaSolicitudVinculo, clienteDelLeadId]);
+  }, [solicitudesPorId, clientesPorId, busquedaSolicitudVinculo, idsSolicitudVinculo, clienteDelLeadId]);
 
   // Cotizaciones de la solicitud vinculada (solo lectura, endpoint existente).
   const solicitudDelLeadCaliente =
@@ -629,7 +636,9 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
       if (estadoFiltroAdmin !== 'TODOS' && l.estado !== estadoFiltroAdmin) return false;
       if (!fechaEnRangoLead(l.creado_en, fechaDesdeAdmin, fechaHastaAdmin)) return false;
 
-      if (termino) {
+      if (termino && idsServidor) {
+        if (!idsServidor.has(l.id)) return false;
+      } else if (termino) {
         const empresa = empresaAdmin(l.cliente_id);
         const coincide =
           l.nombre.toLowerCase().includes(termino) ||
@@ -644,6 +653,7 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
   }, [
     leads,
     busquedaAdmin,
+    idsServidor,
     fuenteFiltroAdmin,
     clasificacionFiltroAdmin,
     estadoFiltroAdmin,
@@ -1529,7 +1539,7 @@ export default function GestionLeads({ token, esAdmin, onSesionInvalida, onVerCo
     const solicitudesLista = solicitudesCandidatasVinculo.filter((s) => s.id !== leadSeleccionado.solicitud_id);
     const listaSolicitudes = (
       <div className="space-y-2">
-        {cajaBuscador(busquedaSolicitudVinculo, setBusquedaSolicitudVinculo, 'Buscar solicitud…')}
+        {cajaBuscador(busquedaSolicitudVinculo, setBusquedaSolicitudVinculo, 'Buscar solicitud por n.º, servicio…')}
         <div className="max-h-56 overflow-y-auto border border-outline divide-y divide-outline">
           {estadoApoyo === 'cargando' && (
             <p className="p-3 font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">Cargando solicitudes…</p>

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Eye } from 'lucide-react';
 import { fetchAutenticado, SesionInvalidaError, type Usuario } from '../lib/authClient';
+import { coincideCodigo } from '../lib/busqueda';
+import { useBusquedaServidor } from '../lib/busquedaServidor';
 import type { Solicitud } from './BandejaSolicitudes';
 
 export interface Orden {
@@ -57,6 +59,8 @@ interface ClienteResumen {
 // para decidir qué cotizaciones son candidatas a crear una orden.
 interface CotizacionResumen {
   id: string;
+  // N.º legible de la cotización (COT-XXXXXX); null en cotizaciones anteriores a la numeración.
+  codigo?: string | null;
   solicitud_id: string;
   estado: string;
   valor: string;
@@ -260,6 +264,7 @@ export default function GestionOrdenes({
   // cargado, ningún endpoint nuevo.
   const [mostrandoFormularioCrearOrden, setMostrandoFormularioCrearOrden] = useState(false);
   const [busquedaCotizacionNueva, setBusquedaCotizacionNueva] = useState('');
+  const idsCotizacionNueva = useBusquedaServidor('cotizaciones', busquedaCotizacionNueva, token, onSesionInvalida);
   const [mostrandoBuscadorCotizacion, setMostrandoBuscadorCotizacion] = useState(false);
 
   const [cotizacionIdNueva, setCotizacionIdNueva] = useState('');
@@ -321,6 +326,8 @@ export default function GestionOrdenes({
   const [estadoApoyo, setEstadoApoyo] = useState<EstadoApoyo>('cargando');
 
   const [busquedaAdmin, setBusquedaAdmin] = useState('');
+  // Búsqueda parcial resuelta en la BD (ids de todas las coincidencias); mientras llega, filtro local.
+  const idsServidor = useBusquedaServidor('ordenes', busquedaAdmin, token, onSesionInvalida);
   const [estadoFiltroAdmin, setEstadoFiltroAdmin] = useState<EstadoFiltroOrden>('TODOS');
   const [fechaDesdeAdmin, setFechaDesdeAdmin] = useState('');
   const [fechaHastaAdmin, setFechaHastaAdmin] = useState('');
@@ -534,11 +541,16 @@ export default function GestionOrdenes({
       if (estadoFiltroAdmin !== 'TODOS' && o.estado !== estadoFiltroAdmin) return false;
       if (!fechaEnRangoOrden(o.creado_en, fechaDesdeAdmin, fechaHastaAdmin)) return false;
 
-      if (termino) {
-        const { cliente, servicio } = datosClienteServicio(o.cotizacion_id);
+      if (termino && idsServidor) {
+        if (!idsServidor.has(o.id)) return false;
+      } else if (termino) {
+        const { cliente, servicio, solicitud } = datosClienteServicio(o.cotizacion_id);
         const responsable = nombreResponsableAdmin(o.responsable_id);
         const coincide =
           o.codigo.toLowerCase().includes(termino) ||
+          coincideCodigo(termino, o.codigo) ||
+          coincideCodigo(termino, solicitud?.codigo) ||
+          coincideCodigo(termino, cotizacionesPorId.get(o.cotizacion_id)?.codigo) ||
           cliente.toLowerCase().includes(termino) ||
           servicio.toLowerCase().includes(termino) ||
           responsable.toLowerCase().includes(termino);
@@ -550,6 +562,7 @@ export default function GestionOrdenes({
   }, [
     ordenes,
     busquedaAdmin,
+    idsServidor,
     estadoFiltroAdmin,
     fechaDesdeAdmin,
     fechaHastaAdmin,
@@ -634,17 +647,20 @@ export default function GestionOrdenes({
       .filter((c) => !cotizacionesConOrden.has(c.id))
       .filter((c) => {
         if (!termino) return true;
+        if (idsCotizacionNueva) return idsCotizacionNueva.has(c.id);
         const solicitud = solicitudesPorId.get(c.solicitud_id) ?? null;
         const cliente = solicitud && estadoApoyo === 'disponible' ? clientesPorId.get(solicitud.cliente_id) : null;
         return (
           c.id.toLowerCase().includes(termino) ||
+          coincideCodigo(termino, c.codigo) ||
+          coincideCodigo(termino, solicitud?.codigo) ||
           (solicitud?.servicio.toLowerCase().includes(termino) ?? false) ||
           (solicitud?.descripcion.toLowerCase().includes(termino) ?? false) ||
           (cliente?.nombre.toLowerCase().includes(termino) ?? false) ||
           (cliente?.empresa ? cliente.empresa.toLowerCase().includes(termino) : false)
         );
       });
-  }, [cotizacionesPorId, solicitudesPorId, clientesPorId, estadoApoyo, cotizacionesConOrden, busquedaCotizacionNueva]);
+  }, [cotizacionesPorId, solicitudesPorId, clientesPorId, estadoApoyo, cotizacionesConOrden, busquedaCotizacionNueva, idsCotizacionNueva]);
 
   const cotizacionSeleccionadaNueva = cotizacionIdNueva ? cotizacionesPorId.get(cotizacionIdNueva) ?? null : null;
 
@@ -2039,7 +2055,7 @@ export default function GestionOrdenes({
                     type="text"
                     value={busquedaAdmin}
                     onChange={(e) => setBusquedaAdmin(e.target.value)}
-                    placeholder="Buscar por código, cliente, servicio o responsable…"
+                    placeholder="Buscar por código de orden, n.º de solicitud o cotización, cliente, servicio o responsable…"
                     className="w-full bg-background border border-outline pl-10 pr-3 py-2.5 text-on-surface text-sm focus:border-primary-container focus:outline-hidden font-body-md"
                   />
                 </div>
@@ -2498,7 +2514,7 @@ export default function GestionOrdenes({
                             type="text"
                             value={busquedaCotizacionNueva}
                             onChange={(e) => setBusquedaCotizacionNueva(e.target.value)}
-                            placeholder="Buscar cotización por cliente, servicio o descripción…"
+                            placeholder="Buscar cotización por n.º, cliente, servicio o descripción…"
                             className="w-full bg-background border border-outline pl-10 pr-3 py-2.5 text-on-surface text-sm focus:border-primary-container focus:outline-hidden font-body-md"
                           />
                         </div>
@@ -2597,7 +2613,7 @@ export default function GestionOrdenes({
                       type="text"
                       value={busquedaAdmin}
                       onChange={(e) => setBusquedaAdmin(e.target.value)}
-                      placeholder="Buscar por código, cliente o servicio…"
+                      placeholder="Buscar por código de orden, n.º de solicitud o cotización, cliente o servicio…"
                       className="w-full bg-background border border-outline pl-10 pr-3 py-2.5 text-on-surface text-sm focus:border-primary-container focus:outline-hidden font-body-md"
                     />
                   </div>
