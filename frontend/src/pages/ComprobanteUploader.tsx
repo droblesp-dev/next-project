@@ -11,7 +11,24 @@ interface ComprobanteUploaderProps {
   subiendo: boolean;
   onSeleccionar: (archivo: File | null) => void;
   onSubir: () => void;
+  // Textos propios cuando se reutiliza para otro tipo de archivo (p. ej. la evidencia de una orden). Por defecto
+  // son los de los comprobantes de pago, sin cambios para la pantalla pública.
+  textos?: Partial<TextosUploader>;
 }
+
+export interface TextosUploader {
+  seleccion: string;
+  vistaPrevia: string;
+  subir: string;
+  instruccion: string;
+}
+
+const TEXTOS_COMPROBANTE: TextosUploader = {
+  seleccion: 'Selecciona tu comprobante',
+  vistaPrevia: 'Vista previa del comprobante seleccionado',
+  subir: 'SUBIR COMPROBANTE',
+  instruccion: 'Primero selecciona el archivo y después pulsa «Subir comprobante».',
+};
 
 // Carga de un comprobante de pago: seleccionar, ver una vista previa, quitar o cambiar la selección y
 // recién entonces enviarlo. Quitar una selección NO toca ningún comprobante ya enviado (esos se
@@ -25,7 +42,9 @@ export default function ComprobanteUploader({
   subiendo,
   onSeleccionar,
   onSubir,
+  textos: textosPropios,
 }: ComprobanteUploaderProps) {
+  const t = { ...TEXTOS_COMPROBANTE, ...textosPropios };
   const inputRef = useRef<HTMLInputElement>(null);
   const [vistaPrevia, setVistaPrevia] = useState<string | null>(null);
 
@@ -80,7 +99,7 @@ export default function ComprobanteUploader({
           <span className="material-symbols-outlined text-primary-container text-[32px]" aria-hidden="true">
             cloud_upload
           </span>
-          <span className="font-['Inter'] text-[14px] font-semibold text-on-surface">Selecciona tu comprobante</span>
+          <span className="font-['Inter'] text-[14px] font-semibold text-on-surface">{t.seleccion}</span>
           <span className="font-['Inter'] text-[12px] font-normal text-on-surface-variant">PDF, JPG o PNG · Máximo 5 MB</span>
           <span className="inline-flex items-center gap-1.5 px-4 py-2 mt-1 bg-primary-container text-on-primary-container font-['Inter'] text-[13px] font-semibold">
             <span className="material-symbols-outlined text-[16px]" aria-hidden="true">
@@ -94,7 +113,7 @@ export default function ComprobanteUploader({
           {vistaPrevia ? (
             <img
               src={vistaPrevia}
-              alt="Vista previa del comprobante seleccionado"
+              alt={t.vistaPrevia}
               className="mx-auto max-h-56 max-w-full object-contain bg-surface"
             />
           ) : (
@@ -145,10 +164,10 @@ export default function ComprobanteUploader({
         onClick={onSubir}
         className="w-full inline-flex items-center justify-center px-6 py-3 bg-primary-container text-on-primary-container font-['Inter'] text-[14px] font-semibold hover:bg-primary-fixed-dim transition-colors disabled:opacity-50 cursor-pointer"
       >
-        {subiendo ? 'SUBIENDO...' : 'SUBIR COMPROBANTE'}
+        {subiendo ? 'SUBIENDO...' : t.subir}
       </button>
       <p className="font-['Inter'] text-[12px] font-normal text-on-surface-variant text-center">
-        Primero selecciona el archivo y después pulsa «Subir comprobante».
+        {t.instruccion}
       </p>
     </div>
   );

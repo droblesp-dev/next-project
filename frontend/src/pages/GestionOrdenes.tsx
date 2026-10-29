@@ -4,6 +4,8 @@ import { fetchAutenticado, SesionInvalidaError, type Usuario } from '../lib/auth
 import { coincideCodigo } from '../lib/busqueda';
 import { ayudaReferencia, referenciaOrigen } from '../lib/referenciasOrden';
 import { gestionOperativo } from '../lib/estadoOperativo';
+import { validarArchivoComprobante } from '../lib/cotizacionPublica';
+import ComprobanteUploader from './ComprobanteUploader';
 import { useBusquedaServidor } from '../lib/busquedaServidor';
 import type { Solicitud } from './BandejaSolicitudes';
 
@@ -317,6 +319,7 @@ export default function GestionOrdenes({
   const [archivoEvidencia, setArchivoEvidencia] = useState<File | null>(null);
   const [subiendoEvidencia, setSubiendoEvidencia] = useState(false);
   const [mensajeEvidencia, setMensajeEvidencia] = useState<string | null>(null);
+  const [errorArchivoEvidencia, setErrorArchivoEvidencia] = useState<string | null>(null);
 
   const [cotizacionSaldo, setCotizacionSaldo] = useState<CotizacionSaldo | null>(null);
   const [confirmandoEntrega, setConfirmandoEntrega] = useState(false);
@@ -1006,8 +1009,8 @@ export default function GestionOrdenes({
     }
   }
 
-  async function handleSubirEvidencia(e: FormEvent) {
-    e.preventDefault();
+  async function handleSubirEvidencia(e?: FormEvent) {
+    e?.preventDefault();
     if (!ordenSeleccionada || !archivoEvidencia) return;
     setSubiendoEvidencia(true);
     setMensajeEvidencia(null);
@@ -1792,21 +1795,28 @@ export default function GestionOrdenes({
                 </p>
               )}
 
-              <form className="flex flex-wrap items-end gap-3" onSubmit={handleSubirEvidencia}>
-                <input
-                  type="file"
-                  accept="application/pdf,image/jpeg,image/png"
-                  onChange={(e) => setArchivoEvidencia(e.target.files?.[0] ?? null)}
-                  className="font-code-sm text-code-sm text-on-surface-variant"
-                />
-                <button
-                  disabled={subiendoEvidencia || !archivoEvidencia}
-                  type="submit"
-                  className="inline-flex items-center px-4 py-2 bg-primary-container text-on-primary-container font-['Inter'] text-[14px] font-semibold hover:bg-primary-fixed-dim transition-colors disabled:opacity-50 cursor-pointer"
-                >
-                  {subiendoEvidencia ? 'SUBIENDO...' : 'SUBIR EVIDENCIA'}
-                </button>
-              </form>
+              <ComprobanteUploader
+                id="archivo-evidencia"
+                titulo="Subir evidencia"
+                descripcion="Foto o PDF del trabajo realizado."
+                archivo={archivoEvidencia}
+                error={errorArchivoEvidencia}
+                subiendo={subiendoEvidencia}
+                onSeleccionar={(archivo) => {
+                  setMensajeEvidencia(null);
+                  // Feedback inmediato de tipo y tamaño; la validación real del contenido ocurre en el servidor.
+                  const problema = archivo ? validarArchivoComprobante(archivo) : null;
+                  setErrorArchivoEvidencia(problema);
+                  setArchivoEvidencia(problema ? null : archivo);
+                }}
+                onSubir={() => handleSubirEvidencia()}
+                textos={{
+                  seleccion: 'Selecciona la evidencia',
+                  vistaPrevia: 'Vista previa de la evidencia seleccionada',
+                  subir: 'SUBIR EVIDENCIA',
+                  instruccion: 'Primero selecciona el archivo y después pulsa «Subir evidencia».',
+                }}
+              />
               <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase mt-2">
                 Máximo 5 fotos y 2 PDF por orden. No se requieren ambos formatos.
               </p>
