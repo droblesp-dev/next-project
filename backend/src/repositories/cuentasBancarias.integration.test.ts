@@ -241,7 +241,7 @@ describe('cuentasBancarias — servicio y repositorio (V14+V15), nextproject_tes
     expect(fila).toBeDefined();
     expect(fila!.titular).toBeNull();
     expect(fila!.logo_url).toBeNull();
-    expect(Object.keys(fila!).sort()).toEqual(['banco', 'logo_url', 'numero_cuenta', 'titular', 'tipo_cuenta'].sort());
+    expect(Object.keys(fila!).sort()).toEqual(['banco', 'id', 'logo_url', 'numero_cuenta', 'titular', 'tipo_cuenta'].sort());
 
     // Limpieza mínima: no afecta otras pruebas (cuenta propia, banco único).
     await cambiarActivoCuentaBancaria(cuenta.id, false);

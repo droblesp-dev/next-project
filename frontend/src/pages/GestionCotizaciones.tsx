@@ -83,6 +83,34 @@ interface TransferenciaPago {
   registrado_por_nombre?: string | null;
 }
 
+// QA-08: comprobante subido por el cliente, con la cuenta que dijo haber usado (si la indicó).
+interface ComprobanteClienteConCuenta {
+  tipo_pago: string;
+  creado_en: string;
+  cuenta_indicada: { banco: string; tipo_cuenta: string; numero_cuenta: string } | null;
+}
+
+function CuentaIndicadaPorCliente({ comprobantes, tipoPago }: { comprobantes: ComprobanteClienteConCuenta[]; tipoPago: 'ANTICIPO' | 'SALDO' }) {
+  const filas = comprobantes.filter((c) => c.tipo_pago === tipoPago);
+  if (filas.length === 0) return null;
+  return (
+    <div className="space-y-1" data-testid={`cuenta-indicada-${tipoPago.toLowerCase()}`}>
+      <p className="font-code-sm text-[11px] text-on-surface-variant uppercase">Comprobantes del cliente</p>
+      {filas.map((c, i) => (
+        <p key={`${c.creado_en}-${i}`} className="font-code-sm text-[12px] text-on-surface-variant">
+          {new Date(c.creado_en).toLocaleString()} ·{' '}
+          {c.cuenta_indicada
+            ? `el cliente indicó la cuenta ${c.cuenta_indicada.banco} ${c.cuenta_indicada.tipo_cuenta} ${c.cuenta_indicada.numero_cuenta}`
+            : 'el cliente no indicó la cuenta'}
+        </p>
+      ))}
+      <p className="font-code-sm text-[11px] text-on-surface-variant">
+        Dato informativo: confirme la cuenta real al gestionar el pago.
+      </p>
+    </div>
+  );
+}
+
 // Catálogo real de motivos de rechazo (backend/src/services/
 // transferenciasPago.service.ts::MOTIVOS_RECHAZO) — OTRO exige
 // motivoRechazoDetalle, validado también en el backend.
@@ -461,6 +489,8 @@ export default function GestionCotizaciones({
   // transferencias_pago de la cotización abierta (ambos tipos, se filtra en
   // el cliente — ver historialAnticipo/historialSaldo más abajo).
   const [historialTransferencias, setHistorialTransferencias] = useState<TransferenciaPago[] | null>(null);
+  // QA-08: comprobantes que subió el cliente y la cuenta que indicó (informativa; la real se confirma al gestionar).
+  const [comprobantesCliente, setComprobantesCliente] = useState<ComprobanteClienteConCuenta[]>([]);
   const [cargandoHistorial, setCargandoHistorial] = useState(false);
   const [errorHistorial, setErrorHistorial] = useState<string | null>(null);
 
@@ -917,8 +947,9 @@ export default function GestionCotizaciones({
         setErrorHistorial('No se pudo cargar el historial de transferencias.');
         return;
       }
-      const data = (await response.json()) as { transferencias: TransferenciaPago[] };
+      const data = (await response.json()) as { transferencias: TransferenciaPago[]; comprobantes_cliente?: ComprobanteClienteConCuenta[] };
       setHistorialTransferencias(data.transferencias);
+      setComprobantesCliente(data.comprobantes_cliente ?? []);
     } catch (err) {
       if (err instanceof SesionInvalidaError) {
         onSesionInvalida();
@@ -1962,6 +1993,7 @@ export default function GestionCotizaciones({
 
                 {/* Historial — nunca oculta intentos anteriores, rechazados
                     o no vigentes (regla explícita de esta tarea). */}
+                <CuentaIndicadaPorCliente comprobantes={comprobantesCliente} tipoPago="ANTICIPO" />
                 <div className="space-y-2">
                   <p className="font-code-sm text-[11px] text-on-surface-variant uppercase">Historial de intentos de pago</p>
                   {cargandoHistorial && (
@@ -2171,6 +2203,7 @@ export default function GestionCotizaciones({
               {/* Historial — nunca oculta intentos anteriores, rechazados o
                   no vigentes (regla explícita de esta tarea). */}
               <div className="space-y-2">
+                <CuentaIndicadaPorCliente comprobantes={comprobantesCliente} tipoPago="SALDO" />
                 <p className="font-code-sm text-[11px] text-on-surface-variant uppercase">Historial de intentos de pago</p>
                 {cargandoHistorial && (
                   <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">Cargando historial…</p>

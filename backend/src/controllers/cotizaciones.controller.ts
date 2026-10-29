@@ -39,6 +39,7 @@ import {
   AccionNoPermitidaError,
   SaldoRequiereAnticipoValidadoError,
   ComprobanteYaRecibidoError,
+  CuentaIndicadaInvalidaError,
   type EscrituraArchivo,
   AnticipoNoGestionableError,
   SaldoNoGestionableError,
@@ -58,6 +59,7 @@ import {
 import { enviarEnlaceCotizacion, enviarComprobanteRechazado, enviarPagoConfirmado } from '../services/email.service.js';
 import * as cotizacionesRepo from '../repositories/cotizaciones.repository.js';
 import { listarCuentasReceptorasActivas } from '../services/cuentasBancarias.service.js';
+import { listarConCuentaIndicada } from '../repositories/comprobantesPagoCliente.repository.js';
 import {
   registrarGestionPago,
   rechazarPago,
@@ -83,6 +85,15 @@ function extraerCodigoValido(body: Record<string, unknown>): string | null {
     return null;
   }
   return codigo;
+}
+
+// QA-08: cuenta que el cliente indica al subir un comprobante (opcional, solo informativa). Ausente o vacía = null;
+// presente pero sin formato UUID = inválida (undefined).
+const UUID_CUENTA = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function extraerCuentaIndicada(body: Record<string, unknown>): string | null | undefined {
+  const valor = body.cuentaBancariaId;
+  if (valor === undefined || valor === null || valor === '') return null;
+  return typeof valor === 'string' && UUID_CUENTA.test(valor) ? valor : undefined;
 }
 
 export async function listarController(_req: Request, res: Response): Promise<void> {
@@ -605,6 +616,11 @@ async function procesarComprobante(req: Request, res: Response, err: unknown): P
     res.status(400).json({ message: 'codigo es requerido y debe tener 6 dígitos.' });
     return;
   }
+  const cuentaIndicada = extraerCuentaIndicada(body);
+  if (cuentaIndicada === undefined) {
+    res.status(400).json({ message: 'cuentaBancariaId no es válido.' });
+    return;
+  }
 
   try {
     const nombreArchivo = generarNombreComprobante(req.file.mimetype);
@@ -614,7 +630,8 @@ async function procesarComprobante(req: Request, res: Response, err: unknown): P
       req.params.token,
       codigo,
       nombreArchivo,
-      escrituraComprobante(nombreArchivo, (req.file as Express.Multer.File).buffer)
+      escrituraComprobante(nombreArchivo, (req.file as Express.Multer.File).buffer),
+      cuentaIndicada
     );
     res.status(200).json({ cotizacion });
   } catch (error) {
@@ -632,6 +649,10 @@ async function procesarComprobante(req: Request, res: Response, err: unknown): P
     }
     if (error instanceof CotizacionNoEncontradaError || error instanceof SolicitudNoEncontradaError) {
       res.status(404).json({ message: 'Cotización no encontrada.' });
+      return;
+    }
+    if (error instanceof CuentaIndicadaInvalidaError) {
+      res.status(400).json({ message: 'La cuenta indicada no está disponible. Elija una de las cuentas mostradas.' });
       return;
     }
     if (error instanceof ComprobanteYaRecibidoError) {
@@ -964,6 +985,11 @@ async function procesarComprobanteSaldo(req: Request, res: Response, err: unknow
     res.status(400).json({ message: 'codigo es requerido y debe tener 6 dígitos.' });
     return;
   }
+  const cuentaIndicada = extraerCuentaIndicada(body);
+  if (cuentaIndicada === undefined) {
+    res.status(400).json({ message: 'cuentaBancariaId no es válido.' });
+    return;
+  }
 
   try {
     const nombreArchivo = generarNombreComprobante(req.file.mimetype);
@@ -971,7 +997,8 @@ async function procesarComprobanteSaldo(req: Request, res: Response, err: unknow
       req.params.token,
       codigo,
       nombreArchivo,
-      escrituraComprobante(nombreArchivo, (req.file as Express.Multer.File).buffer)
+      escrituraComprobante(nombreArchivo, (req.file as Express.Multer.File).buffer),
+      cuentaIndicada
     );
     res.status(200).json({ cotizacion });
   } catch (error) {
@@ -995,6 +1022,10 @@ async function procesarComprobanteSaldo(req: Request, res: Response, err: unknow
       res.status(409).json({
         message: 'Podrás subir el comprobante del saldo cuando tu anticipo haya sido validado por nuestro equipo.',
       });
+      return;
+    }
+    if (error instanceof CuentaIndicadaInvalidaError) {
+      res.status(400).json({ message: 'La cuenta indicada no está disponible. Elija una de las cuentas mostradas.' });
       return;
     }
     if (error instanceof ComprobanteYaRecibidoError) {
@@ -1185,7 +1216,9 @@ export async function descargarComprobanteSaldoController(req: Request, res: Res
 export async function historialTransferenciasController(req: Request, res: Response): Promise<void> {
   try {
     const transferencias = await obtenerHistorial(req.params.id);
-    res.status(200).json({ transferencias });
+    // QA-08: comprobantes que subió el cliente y la cuenta que indicó (informativa; la real la confirma COMERCIAL).
+    const comprobantes_cliente = await listarConCuentaIndicada(req.params.id);
+    res.status(200).json({ transferencias, comprobantes_cliente });
   } catch (error) {
     if (error instanceof CotizacionNoEncontradaError) {
       res.status(404).json({ message: 'Cotización no encontrada.' });

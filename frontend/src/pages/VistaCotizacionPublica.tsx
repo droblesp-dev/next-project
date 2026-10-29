@@ -72,6 +72,7 @@ interface CotizacionPublica {
   // (decisión 5 de la autorización) — nunca se inventa un valor en su
   // lugar.
   cuentas_bancarias_activas: {
+    id?: string;
     banco: string;
     titular: string | null;
     tipo_cuenta: string;
@@ -88,6 +89,7 @@ interface CotizacionPublica {
 }
 
 type CuentaBancariaPublicaFront = {
+  id?: string;
   banco: string;
   titular: string | null;
   tipo_cuenta: string;
@@ -540,6 +542,10 @@ export default function VistaCotizacionPublica({ token }: VistaCotizacionPublica
       const formData = new FormData();
       formData.append('codigo', codigoInput);
       formData.append('archivo', archivo);
+      // QA-08: la cuenta que el cliente eligió en pantalla viaja como dato informativo (la real la confirma COMERCIAL).
+      const indiceCuenta = ruta === 'comprobante' ? cuentaElegidaAnticipo : cuentaElegidaSaldo;
+      const cuentaElegida = cotizacion?.cuentas_bancarias_activas?.[indiceCuenta];
+      if (cuentaElegida?.id) formData.append('cuentaBancariaId', cuentaElegida.id);
 
       const response = await fetch(`${API_BASE}/api/cotizaciones/publica/${encodeURIComponent(token)}/${ruta}`, {
         method: 'POST',

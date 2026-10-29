@@ -30,6 +30,8 @@ export type CuentaBancariaConLogo = CuentaBancaria & { logo_path: string | null 
 // cuentasBancarias.service.ts::aPublica) — no es un campo opcional
 // olvidado, la ausencia es intencional.
 export interface CuentaBancariaPublica {
+  // Identificador opaco de la cuenta activa: el cliente lo devuelve al subir el comprobante (QA-08, informativo).
+  id: string;
   banco: string;
   titular: string | null;
   tipo_cuenta: string;

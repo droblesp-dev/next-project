@@ -7,7 +7,7 @@ import * as cotizacionesRepo from '../repositories/cotizaciones.repository.js';
 import * as solicitudesRepo from '../repositories/solicitudes.repository.js';
 import * as comprobantesClienteRepo from '../repositories/comprobantesPagoCliente.repository.js';
 import * as transferenciasRepo from '../repositories/transferenciasPago.repository.js';
-import { listarCuentasActivasPublico } from './cuentasBancarias.service.js';
+import { existeCuentaActiva, listarCuentasActivasPublico } from './cuentasBancarias.service.js';
 import type { CuentaBancariaPublica } from '../repositories/cuentasBancarias.repository.js';
 import { crearOrdenAutomatica } from './ordenAutomatica.service.js';
 import { convertirLeadPorAceptacion } from './leads.service.js';
@@ -39,6 +39,8 @@ export class SaldoRequiereAnticipoValidadoError extends AccionNoPermitidaError {
 export class AnticipoRequiereComprobanteError extends AccionNoPermitidaError {}
 export class AnticipoRequiereRevisionError extends AccionNoPermitidaError {}
 export class ComprobanteYaRecibidoError extends AccionNoPermitidaError {}
+// QA-08: la cuenta que el cliente indicó al subir el comprobante no existe o no está activa.
+export class CuentaIndicadaInvalidaError extends Error {}
 export class AnticipoNoGestionableError extends Error {}
 export class SaldoNoGestionableError extends Error {}
 export class MetodoSaldoRequeridoError extends Error {}
@@ -870,7 +872,8 @@ async function registrarComprobanteCliente(
   token: string,
   codigo: string,
   nombreArchivo: string,
-  archivo: EscrituraArchivo
+  archivo: EscrituraArchivo,
+  cuentaBancariaId: string | null = null
 ): Promise<CotizacionPublica> {
   const cotizacion = await validarAccesoConCodigo(token, codigo);
 
@@ -903,8 +906,13 @@ async function registrarComprobanteCliente(
       throw new AccionNoPermitidaError();
     }
 
+    // QA-08: la cuenta indicada por el cliente es solo informativa, pero debe ser una cuenta activa real.
+    if (cuentaBancariaId !== null && !(await existeCuentaActiva(cuentaBancariaId, client))) {
+      throw new CuentaIndicadaInvalidaError();
+    }
+
     await comprobantesClienteRepo.registrar(
-      { id: crypto.randomUUID(), cotizacionId: cotizacion.id, tipoPago, archivo: nombreArchivo },
+      { id: crypto.randomUUID(), cotizacionId: cotizacion.id, tipoPago, archivo: nombreArchivo, cuentaBancariaId },
       client
     );
 
@@ -932,9 +940,10 @@ export async function registrarComprobantePublico(
   token: string,
   codigo: string,
   nombreArchivo: string,
-  archivo: EscrituraArchivo
+  archivo: EscrituraArchivo,
+  cuentaBancariaId: string | null = null
 ): Promise<CotizacionPublica> {
-  return registrarComprobanteCliente('ANTICIPO', token, codigo, nombreArchivo, archivo);
+  return registrarComprobanteCliente('ANTICIPO', token, codigo, nombreArchivo, archivo, cuentaBancariaId);
 }
 
 // Interno: resuelve el nombre de archivo real para el endpoint de
@@ -959,9 +968,10 @@ export async function registrarComprobanteSaldoPublico(
   token: string,
   codigo: string,
   nombreArchivo: string,
-  archivo: EscrituraArchivo
+  archivo: EscrituraArchivo,
+  cuentaBancariaId: string | null = null
 ): Promise<CotizacionPublica> {
-  return registrarComprobanteCliente('SALDO', token, codigo, nombreArchivo, archivo);
+  return registrarComprobanteCliente('SALDO', token, codigo, nombreArchivo, archivo, cuentaBancariaId);
 }
 
 // Interno: resuelve el nombre real del comprobante de saldo para el

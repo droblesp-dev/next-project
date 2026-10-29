@@ -348,7 +348,7 @@ describe('transferenciasPago.service — integración con gestionarAnticipo/gest
   it('listarCuentasActivasPublico() sigue devolviendo solo campos públicos (reutilizado por el DTO público, sin romper su contrato)', async () => {
     const activas = await listarCuentasActivasPublico();
     if (activas.length > 0) {
-      expect(Object.keys(activas[0]).sort()).toEqual(['banco', 'logo_url', 'numero_cuenta', 'titular', 'tipo_cuenta'].sort());
+      expect(Object.keys(activas[0]).sort()).toEqual(['banco', 'id', 'logo_url', 'numero_cuenta', 'titular', 'tipo_cuenta'].sort());
     }
   });
 });

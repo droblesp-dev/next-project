@@ -141,9 +141,17 @@ export async function listarCuentasBancarias(): Promise<CuentaBancariaConLogo[]>
 // se construye a partir de datos inventados. `logo_url` se calcula aquí
 // (único lugar) para que el contrato público nunca exponga el nombre de
 // archivo crudo del disco.
+// QA-08: ¿existe esta cuenta y está activa? Sirve para validar la cuenta que el cliente indica al subir un
+// comprobante (dato informativo) sin exponer nada de ella.
+export async function existeCuentaActiva(id: string, executor?: Parameters<typeof cuentasBancariasRepo.findById>[1]): Promise<boolean> {
+  const cuenta = await cuentasBancariasRepo.findById(id, executor);
+  return cuenta !== null && cuenta.activo === true;
+}
+
 export async function listarCuentasActivasPublico(): Promise<CuentaBancariaPublica[]> {
   const filas = await cuentasBancariasRepo.listActivas();
   return filas.map((c) => ({
+    id: c.id,
     banco: c.banco,
     titular: c.titular_visible_cliente ? c.titular : null,
     tipo_cuenta: c.tipo_cuenta,
