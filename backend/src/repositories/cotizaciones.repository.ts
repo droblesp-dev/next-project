@@ -491,6 +491,45 @@ export async function guardarCodigoAcceso(id: string, hash: string): Promise<voi
   await pool.query('UPDATE cotizaciones SET acceso_codigo_hash = $2 WHERE id = $1', [id, hash]);
 }
 
+// QA-06 (V23): bloqueo por intentos fallidos del código de acceso, persistente. Todo se decide en SQL con
+// el reloj de la base: no depende de la memoria del proceso ni del reloj de la aplicación.
+export async function accesoEstaBloqueado(id: string): Promise<boolean> {
+  const result = await pool.query<{ bloqueado: boolean }>(
+    'SELECT COALESCE(acceso_bloqueado_hasta > now(), false) AS bloqueado FROM cotizaciones WHERE id = $1',
+    [id]
+  );
+  return result.rows[0]?.bloqueado ?? false;
+}
+
+// Suma un fallo (un bloqueo ya vencido reinicia la cuenta en 1; uno vigente no se modifica ni se extiende)
+// y fija el bloqueo al llegar a `maxIntentos`. UPDATE atómico: dos fallos simultáneos no pierden la cuenta.
+export async function registrarFalloAcceso(id: string, maxIntentos: number, bloqueoMs: number): Promise<void> {
+  await pool.query(
+    `UPDATE cotizaciones
+     SET acceso_intentos_fallidos = CASE
+           WHEN acceso_bloqueado_hasta > now() THEN acceso_intentos_fallidos
+           WHEN acceso_bloqueado_hasta IS NOT NULL THEN 1
+           ELSE acceso_intentos_fallidos + 1
+         END,
+         acceso_bloqueado_hasta = CASE
+           WHEN acceso_bloqueado_hasta > now() THEN acceso_bloqueado_hasta
+           WHEN (CASE WHEN acceso_bloqueado_hasta IS NOT NULL THEN 1 ELSE acceso_intentos_fallidos + 1 END) >= $2
+             THEN now() + ($3::int * interval '1 millisecond')
+           ELSE NULL
+         END
+     WHERE id = $1`,
+    [id, maxIntentos, bloqueoMs]
+  );
+}
+
+export async function limpiarFallosAcceso(id: string): Promise<void> {
+  await pool.query(
+    `UPDATE cotizaciones SET acceso_intentos_fallidos = 0, acceso_bloqueado_hasta = NULL
+     WHERE id = $1 AND (acceso_intentos_fallidos <> 0 OR acceso_bloqueado_hasta IS NOT NULL)`,
+    [id]
+  );
+}
+
 export async function obtenerHashCodigoAcceso(id: string): Promise<string | null> {
   const result = await pool.query<{ acceso_codigo_hash: string | null }>(
     'SELECT acceso_codigo_hash FROM cotizaciones WHERE id = $1',

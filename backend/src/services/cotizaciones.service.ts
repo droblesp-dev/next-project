@@ -376,55 +376,33 @@ interface EnlacePayload {
 }
 
 // ---------------------------------------------------------------------
-// Código de acceso (Fase B — segundo factor, independiente del token).
-// Rate limiting en memoria del propio proceso backend: política definida
-// para el alcance actual del proyecto (un único proceso Node, sin
-// balanceo de carga) — máximo 5 intentos fallidos por cotización, bloqueo
-// de 15 minutos al superarlo. El contador se reinicia con un código
-// correcto o al expirar el bloqueo. No sobrevive a un reinicio del
-// backend: limitación conocida y aceptada para este alcance (decisión
-// explícita de no usar columnas persistentes de intentos/bloqueo).
+// Bloqueo por intentos fallidos del código de acceso (QA-06, V23): máximo 5 fallos consecutivos por
+// cotización y bloqueo de 15 minutos al superarlo. Es PERSISTENTE (columnas de `cotizaciones`): sobrevive a
+// reinicios y se comparte entre instancias. El contador se reinicia con un código correcto, al generar un
+// código nuevo, al terminar la recuperación por correo o cuando el bloqueo vence. Mientras dura el bloqueo
+// no se suman más fallos, así que no se extiende. Quien esté bloqueado puede recuperar su código por
+// correo (flujo independiente) sin esperar los 15 minutos.
 // ---------------------------------------------------------------------
 
 const CODIGO_SALT_ROUNDS = 10;
 const MAX_INTENTOS_FALLIDOS = 5;
 const BLOQUEO_MS = 15 * 60 * 1000;
 
-interface EstadoIntentos {
-  fallidos: number;
-  bloqueadoHasta: number | null;
-}
-
-const intentosPorCotizacion = new Map<string, EstadoIntentos>();
-
-function obtenerEstadoIntentos(cotizacionId: string): EstadoIntentos {
-  const actual = intentosPorCotizacion.get(cotizacionId);
-  if (actual?.bloqueadoHasta !== null && actual?.bloqueadoHasta !== undefined && actual.bloqueadoHasta <= Date.now()) {
-    intentosPorCotizacion.delete(cotizacionId);
-    return { fallidos: 0, bloqueadoHasta: null };
-  }
-  return actual ?? { fallidos: 0, bloqueadoHasta: null };
-}
-
 // Se verifica ANTES de comparar el código: un código correcto presentado
 // durante el bloqueo debe seguir siendo rechazado (requisito explícito de
 // Fase B), no solo los códigos incorrectos.
-function verificarNoBloqueado(cotizacionId: string): void {
-  const estado = obtenerEstadoIntentos(cotizacionId);
-  if (estado.bloqueadoHasta !== null && estado.bloqueadoHasta > Date.now()) {
+async function verificarNoBloqueado(cotizacionId: string): Promise<void> {
+  if (await cotizacionesRepo.accesoEstaBloqueado(cotizacionId)) {
     throw new DemasiadosIntentosError();
   }
 }
 
-function registrarIntentoFallido(cotizacionId: string): void {
-  const estado = obtenerEstadoIntentos(cotizacionId);
-  const fallidos = estado.fallidos + 1;
-  const bloqueadoHasta = fallidos >= MAX_INTENTOS_FALLIDOS ? Date.now() + BLOQUEO_MS : null;
-  intentosPorCotizacion.set(cotizacionId, { fallidos, bloqueadoHasta });
+async function registrarIntentoFallido(cotizacionId: string): Promise<void> {
+  await cotizacionesRepo.registrarFalloAcceso(cotizacionId, MAX_INTENTOS_FALLIDOS, BLOQUEO_MS);
 }
 
-function limpiarIntentos(cotizacionId: string): void {
-  intentosPorCotizacion.delete(cotizacionId);
+async function limpiarIntentos(cotizacionId: string): Promise<void> {
+  await cotizacionesRepo.limpiarFallosAcceso(cotizacionId);
 }
 
 export interface EnlaceGenerado {
@@ -471,7 +449,7 @@ export async function generarEnlaceCotizacion(id: string): Promise<EnlaceGenerad
   const codigo = crypto.randomInt(100000, 1000000).toString();
   const hash = await bcrypt.hash(codigo, CODIGO_SALT_ROUNDS);
   await cotizacionesRepo.guardarCodigoAcceso(id, hash);
-  limpiarIntentos(id);
+  await limpiarIntentos(id);
 
   const payload: EnlacePayload = { cotizacionId: id, purpose: ENLACE_PURPOSE };
   const token = jwt.sign(payload, env.cotizacionLinkSecret, { algorithm: 'HS256', expiresIn: ENLACE_EXPIRA_EN });
@@ -742,7 +720,7 @@ async function validarAccesoConCodigo(token: string, codigo: string): Promise<Co
     throw new EnlaceInvalidoError();
   }
 
-  verificarNoBloqueado(cotizacionId);
+  await verificarNoBloqueado(cotizacionId);
 
   const hashGuardado = await cotizacionesRepo.obtenerHashCodigoAcceso(cotizacionId);
   if (!hashGuardado) {
@@ -754,11 +732,11 @@ async function validarAccesoConCodigo(token: string, codigo: string): Promise<Co
 
   const coincide = await bcrypt.compare(codigo, hashGuardado);
   if (!coincide) {
-    registrarIntentoFallido(cotizacionId);
+    await registrarIntentoFallido(cotizacionId);
     throw new CodigoInvalidoError();
   }
 
-  limpiarIntentos(cotizacionId);
+  await limpiarIntentos(cotizacionId);
   return cotizacionActual;
 }
 
@@ -1034,12 +1012,12 @@ function isUniqueViolation(error: unknown): boolean {
 // alcance aquí).
 //
 // Contadores/bloqueo en memoria del propio proceso, completamente
-// INDEPENDIENTES de `intentosPorCotizacion` (que protege el código de
-// acceso REAL en el flujo de acceso normal, arriba en este mismo archivo)
-// — nunca se comparten ni se debilitan entre sí.
+// INDEPENDIENTES del bloqueo persistente del código de acceso REAL (QA-06,
+// V23, arriba en este mismo archivo) — nunca se comparten ni se debilitan
+// entre sí.
 //
-// LIMITACIÓN DOCUMENTADA, igual que `intentosPorCotizacion`: este estado
-// vive solo en memoria del proceso backend — un reinicio lo pierde por
+// LIMITACIÓN DOCUMENTADA: el estado de la RECUPERACIÓN (a diferencia del
+// bloqueo del código de acceso, que ya es persistente) vive solo en memoria del proceso backend — un reinicio lo pierde por
 // completo (todos los contadores, bloqueos y códigos temporales
 // pendientes). No se presenta como persistente entre reinicios. No existe
 // hoy ningún mecanismo automático para levantar un bloqueo una vez
@@ -1237,7 +1215,7 @@ export async function verificarRecuperacionCodigo(token: string, otp: string): P
     // intentos del ACCESO NORMAL (mismo criterio que ya aplica
     // generarEnlaceCotizacion al generar un código nuevo) — un código
     // nuevo siempre empieza con ese contador en cero.
-    limpiarIntentos(cotizacionId);
+    await limpiarIntentos(cotizacionId);
 
     // Éxito completo de la recuperación: el OTP queda consumido y los
     // fallos de esta sesión de recuperación se reinician.

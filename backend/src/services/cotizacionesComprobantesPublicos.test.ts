@@ -14,6 +14,10 @@ const repos = vi.hoisted(() => ({
   lockParaTransferencia: vi.fn(),
   guardarComprobante: vi.fn(),
   guardarComprobanteSaldo: vi.fn(),
+  // QA-06 (V23): el bloqueo del código de acceso vive en la BD; aquí nunca está bloqueado y no hay fallos que sumar.
+  accesoEstaBloqueado: vi.fn(async () => false),
+  registrarFalloAcceso: vi.fn(async () => undefined),
+  limpiarFallosAcceso: vi.fn(async () => undefined),
   registrarHistorial: vi.fn(),
   obtenerVigente: vi.fn(),
   solicitudFindById: vi.fn(),
@@ -31,6 +35,9 @@ vi.mock('../repositories/cotizaciones.repository.js', () => ({
   lockParaTransferencia: repos.lockParaTransferencia,
   guardarComprobante: repos.guardarComprobante,
   guardarComprobanteSaldo: repos.guardarComprobanteSaldo,
+  accesoEstaBloqueado: repos.accesoEstaBloqueado,
+  registrarFalloAcceso: repos.registrarFalloAcceso,
+  limpiarFallosAcceso: repos.limpiarFallosAcceso,
 }));
 vi.mock('../repositories/comprobantesPagoCliente.repository.js', () => ({ registrar: repos.registrarHistorial }));
 vi.mock('../repositories/transferenciasPago.repository.js', () => ({ obtenerVigente: repos.obtenerVigente }));
