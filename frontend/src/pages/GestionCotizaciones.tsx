@@ -4,6 +4,15 @@ import { fetchAutenticado, SesionInvalidaError } from '../lib/authClient';
 import { coincideCodigo } from '../lib/busqueda';
 import { useBusquedaServidor } from '../lib/busquedaServidor';
 import type { Solicitud } from './BandejaSolicitudes';
+import PanelAcreditacionPago, { type DatosConfirmacion, type DatosSeguimiento } from './PanelAcreditacionPago';
+import {
+  etiquetaAccionAcreditacion,
+  evaluarAcreditacion,
+  lineaTrazabilidad,
+  MENSAJE_SALDO_BLOQUEADO,
+  puedeRegistrarSeguimiento,
+  saldoBloqueadoPorAnticipo,
+} from '../lib/dineroAcreditado';
 import {
   estadoSelectorCuentas,
   etiquetaCuentaReceptora,
@@ -66,6 +75,12 @@ interface TransferenciaPago {
   titular_cuenta_snapshot: string | null;
   tipo_cuenta_snapshot: string | null;
   numero_cuenta_snapshot: string | null;
+  // V20: seguimiento de la confirmación. `llamada_en` = hora real de la llamada con ADMIN (solo si se conoce);
+  // `creado_en` = hora del registro en el sistema. Los nombres vienen del historial (quién verificó y quién registró).
+  observaciones: string | null;
+  llamada_en: string | null;
+  verificado_por_nombre?: string | null;
+  registrado_por_nombre?: string | null;
 }
 
 // Catálogo real de motivos de rechazo (backend/src/services/
@@ -83,7 +98,7 @@ const ETIQUETA_MOTIVO_RECHAZO: Record<MotivoRechazoPago, string> = {
 
 const ETIQUETA_MEDIO_CONFIRMACION: Record<string, string> = {
   DIRECTO: 'Confirmación directa (ADMIN)',
-  TELEFONICO: 'Confirmación telefónica',
+  TELEFONICO: 'Confirmación comunicada por teléfono (no es una verificación bancaria automática)',
 };
 
 function claseBadgeEstadoTransferencia(estado: string): string {
@@ -181,6 +196,16 @@ function FilaHistorialTransferencia({ transferencia }: { transferencia: Transfer
           </dd>
         </div>
       </dl>
+      {(lineaTrazabilidad(transferencia) || transferencia.llamada_en || transferencia.observaciones) && (
+        <div className="font-code-sm text-[12px] text-on-surface-variant space-y-0.5">
+          {lineaTrazabilidad(transferencia) && <p className="uppercase">{lineaTrazabilidad(transferencia)}</p>}
+          <p className="uppercase">
+            Registro en el sistema: {new Date(transferencia.creado_en).toLocaleString()}
+            {transferencia.llamada_en ? ` · Llamada con ADMIN: ${new Date(transferencia.llamada_en).toLocaleString()}` : ''}
+          </p>
+          {transferencia.observaciones && <p>Observaciones: {transferencia.observaciones}</p>}
+        </div>
+      )}
       {transferencia.estado === 'RECHAZADO' && (
         <p className="font-code-sm text-[12px] text-error uppercase">
           Motivo: {ETIQUETA_MOTIVO_RECHAZO[transferencia.motivo_rechazo as MotivoRechazoPago] ?? transferencia.motivo_rechazo}
@@ -466,17 +491,14 @@ export default function GestionCotizaciones({
   const [motivoRechazoSaldo, setMotivoRechazoSaldo] = useState<MotivoRechazoPago>('COMPROBANTE_INCORRECTO');
   const [detalleRechazoSaldo, setDetalleRechazoSaldo] = useState('');
 
-  // «Llamada a ADMIN» (accion=CONFIRMAR_TELEFONICA) — GET
-  // /api/usuarios/admins-activos (nuevo, solo id+nombre de ADMIN activos,
-  // nunca el listado completo de usuarios) se carga una sola vez, no por
-  // cada cotización.
+  // «Dinero acreditado» (accion=DINERO_ACREDITADO, alias de CONFIRMAR_TELEFONICA) — GET
+  // /api/usuarios/admins-activos (solo id+nombre de ADMIN activos, nunca el listado completo de usuarios)
+  // se carga una sola vez, no por cada cotización. El formulario vive en PanelAcreditacionPago.
   const [adminsActivos, setAdminsActivos] = useState<{ id: string; nombre: string }[] | null>(null);
   const [cargandoAdmins, setCargandoAdmins] = useState(false);
   const [errorAdmins, setErrorAdmins] = useState<string | null>(null);
   const [mostrandoLlamadaAdminAnticipo, setMostrandoLlamadaAdminAnticipo] = useState(false);
-  const [verificadorAnticipo, setVerificadorAnticipo] = useState('');
   const [mostrandoLlamadaAdminSaldo, setMostrandoLlamadaAdminSaldo] = useState(false);
-  const [verificadorSaldo, setVerificadorSaldo] = useState('');
 
   const historialAnticipo = useMemo(
     () => (historialTransferencias ?? []).filter((t) => t.tipo_pago === 'ANTICIPO'),
@@ -486,6 +508,9 @@ export default function GestionCotizaciones({
     () => (historialTransferencias ?? []).filter((t) => t.tipo_pago === 'SALDO'),
     [historialTransferencias]
   );
+  // Última gestión vigente de cada pago: la revisión previa de COMERCIAL que exige «Dinero acreditado» y base del seguimiento.
+  const gestionVigenteAnticipo = useMemo(() => historialAnticipo.find((t) => t.vigente) ?? null, [historialAnticipo]);
+  const gestionVigenteSaldo = useMemo(() => historialSaldo.find((t) => t.vigente) ?? null, [historialSaldo]);
 
   // Bloque enlace público (autorización explícita — "IMPLEMENTACIÓN
   // AUTORIZADA — SOLICITUDES COMERCIAL", Parte B): expone
@@ -861,9 +886,7 @@ export default function GestionCotizaciones({
     setMotivoRechazoSaldo('COMPROBANTE_INCORRECTO');
     setDetalleRechazoSaldo('');
     setMostrandoLlamadaAdminAnticipo(false);
-    setVerificadorAnticipo('');
     setMostrandoLlamadaAdminSaldo(false);
-    setVerificadorSaldo('');
     try {
       const response = await fetchAutenticado(`/api/cotizaciones/${id}`, token);
       if (!response.ok) return;
@@ -909,7 +932,7 @@ export default function GestionCotizaciones({
 
   // Lista mínima (id+nombre) de ADMIN activos — GET
   // /api/usuarios/admins-activos (nuevo), cargada una sola vez por sesión
-  // de edición, no en cada apertura del panel «Llamada a ADMIN».
+  // de edición, no en cada apertura del panel «Dinero acreditado».
   async function cargarAdminsActivos() {
     if (adminsActivos || cargandoAdmins) return;
     setCargandoAdmins(true);
@@ -1037,28 +1060,29 @@ export default function GestionCotizaciones({
     }
   }
 
-  // «Llamada a ADMIN» (accion=CONFIRMAR_TELEFONICA) — exclusivo de
-  // COMERCIAL en el backend; verificadorId debe ser un ADMIN activo real,
-  // validado server-side (nunca se confía en el valor elegido aquí). metodo
-  // solo se envía para SALDO cuando todavía no tiene uno fijado (mismo
-  // criterio ya usado por el VALIDAR SALDO anterior).
-  async function handleConfirmarTelefonica(tipoPago: 'ANTICIPO' | 'SALDO') {
+  // «Dinero acreditado» (accion=DINERO_ACREDITADO, alias de CONFIRMAR_TELEFONICA) — exclusivo de COMERCIAL en el
+  // backend: ADMIN verifica el dinero por teléfono (no entra al sistema) y COMERCIAL lo registra identificando al
+  // ADMIN que verificó (verificadorId debe ser un ADMIN activo real, validado server-side), con observaciones y, si
+  // se conoce, la hora real de la llamada. `metodo` solo se envía para SALDO cuando todavía no tiene uno fijado.
+  async function handleConfirmarAcreditacion(tipoPago: 'ANTICIPO' | 'SALDO', datos: DatosConfirmacion) {
     if (!cotizacionSeleccionada) return;
-    const verificadorId = tipoPago === 'ANTICIPO' ? verificadorAnticipo : verificadorSaldo;
     const setMensaje = tipoPago === 'ANTICIPO' ? setMensajeAnticipo : setMensajeSaldo;
     const setGestionando = tipoPago === 'ANTICIPO' ? setGestionandoAnticipo : setGestionandoSaldo;
     const setMostrandoLlamada = tipoPago === 'ANTICIPO' ? setMostrandoLlamadaAdminAnticipo : setMostrandoLlamadaAdminSaldo;
     const ruta = tipoPago === 'ANTICIPO' ? 'anticipo' : 'saldo';
-
-    if (!verificadorId) {
-      setMensaje('Debe seleccionar el ADMIN que confirmó telefónicamente.');
-      return;
-    }
+    const efectivo =
+      (tipoPago === 'ANTICIPO' ? cotizacionSeleccionada.metodo_anticipo : (cotizacionSeleccionada.metodo_saldo ?? metodoSaldoElegido)) ===
+      'EFECTIVO';
 
     setGestionando(true);
     setMensaje(null);
     try {
-      const body: Record<string, unknown> = { accion: 'CONFIRMAR_TELEFONICA', verificadorId };
+      const body: Record<string, unknown> = {
+        accion: 'DINERO_ACREDITADO',
+        verificadorId: datos.verificadorId,
+        observaciones: datos.observaciones || undefined,
+        llamadaEn: datos.llamadaEn ?? undefined,
+      };
       if (tipoPago === 'SALDO' && !cotizacionSeleccionada.metodo_saldo) {
         body.metodo = metodoSaldoElegido;
       }
@@ -1068,11 +1092,12 @@ export default function GestionCotizaciones({
       });
       const data = await response.json().catch(() => null);
       if (!response.ok) {
-        setMensaje(data?.message || 'No se pudo registrar la confirmación telefónica.');
+        setMensaje(data?.message || 'No se pudo registrar la confirmación.');
         return;
       }
       setCotizacionSeleccionada(data.cotizacion as Cotizacion);
-      setMensaje(tipoPago === 'ANTICIPO' ? 'Anticipo confirmado por llamada a ADMIN.' : 'Saldo confirmado por llamada a ADMIN.');
+      const que = tipoPago === 'ANTICIPO' ? 'Anticipo' : 'Saldo';
+      setMensaje(efectivo ? `${que}: efectivo recibido registrado.` : `${que}: dinero acreditado registrado.`);
       setMostrandoLlamada(false);
       await cargarHistorialTransferencias(cotizacionSeleccionada.id);
       await cargar();
@@ -1081,7 +1106,53 @@ export default function GestionCotizaciones({
         onSesionInvalida();
         return;
       }
-      setMensaje('No se pudo registrar la confirmación telefónica.');
+      setMensaje('No se pudo registrar la confirmación.');
+    } finally {
+      setGestionando(false);
+    }
+  }
+
+  // Seguimiento (ADMIN sin respuesta / el dinero todavía no aparece): vuelve a registrar la gestión vigente con una
+  // observación obligatoria. No cambia el estado del pago: sigue PENDIENTE. El backend conserva los datos de la
+  // gestión anterior y rechaza un seguimiento que no tenga una revisión previa.
+  async function handleRegistrarSeguimiento(tipoPago: 'ANTICIPO' | 'SALDO', datos: DatosSeguimiento) {
+    if (!cotizacionSeleccionada) return;
+    const setMensaje = tipoPago === 'ANTICIPO' ? setMensajeAnticipo : setMensajeSaldo;
+    const setGestionando = tipoPago === 'ANTICIPO' ? setGestionandoAnticipo : setGestionandoSaldo;
+    const setMostrandoLlamada = tipoPago === 'ANTICIPO' ? setMostrandoLlamadaAdminAnticipo : setMostrandoLlamadaAdminSaldo;
+    const ruta = tipoPago === 'ANTICIPO' ? 'anticipo' : 'saldo';
+    const importe = Number(tipoPago === 'ANTICIPO' ? cotizacionSeleccionada.anticipo_valor : cotizacionSeleccionada.saldo_pendiente);
+
+    setGestionando(true);
+    setMensaje(null);
+    try {
+      const response = await fetchAutenticado(`/api/cotizaciones/${cotizacionSeleccionada.id}/${ruta}`, token, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          accion: 'GESTIONAR',
+          seguimiento: true,
+          observaciones: datos.observaciones,
+          llamadaEn: datos.llamadaEn ?? undefined,
+          // el backend conserva el importe de la gestión anterior; este valor solo satisface la validación (> 0)
+          importeDeclarado: importe > 0 ? importe : 1,
+        }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        setMensaje(data?.message || 'No se pudo registrar el seguimiento.');
+        return;
+      }
+      setCotizacionSeleccionada(data.cotizacion as Cotizacion);
+      setMensaje('Seguimiento registrado: el pago sigue PENDIENTE.');
+      setMostrandoLlamada(false);
+      await cargarHistorialTransferencias(cotizacionSeleccionada.id);
+      await cargar();
+    } catch (err) {
+      if (err instanceof SesionInvalidaError) {
+        onSesionInvalida();
+        return;
+      }
+      setMensaje('No se pudo registrar el seguimiento.');
     } finally {
       setGestionando(false);
     }
@@ -1993,7 +2064,7 @@ export default function GestionCotizaciones({
                         }}
                         className="inline-flex items-center px-4 py-2 border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors font-['Inter'] text-[14px] font-semibold disabled:opacity-50 cursor-pointer"
                       >
-                        LLAMADA A ADMIN
+                        {etiquetaAccionAcreditacion(cotizacionSeleccionada.metodo_anticipo)}
                       </button>
                     </div>
 
@@ -2041,46 +2112,23 @@ export default function GestionCotizaciones({
                     )}
 
                     {mostrandoLlamadaAdminAnticipo && (
-                      <div className="border border-primary-container p-3 space-y-2">
-                        <label className="block font-code-sm text-code-sm text-on-surface-variant uppercase mb-1">
-                          ADMIN que confirmó telefónicamente
-                        </label>
-                        {cargandoAdmins && (
-                          <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">Cargando administradores…</p>
-                        )}
-                        {errorAdmins && <p className="font-['Inter'] text-[13px] font-normal text-error uppercase">{errorAdmins}</p>}
-                        {!cargandoAdmins && !errorAdmins && (
-                          <select
-                            value={verificadorAnticipo}
-                            onChange={(e) => setVerificadorAnticipo(e.target.value)}
-                            className="bg-background border border-outline text-on-surface px-2 py-2 focus:ring-0 focus:border-primary-container transition-colors font-code-sm text-code-sm outline-none cursor-pointer"
-                          >
-                            <option value="">Seleccione un ADMIN…</option>
-                            {(adminsActivos ?? []).map((a) => (
-                              <option key={a.id} value={a.id}>
-                                {a.nombre}
-                              </option>
-                            ))}
-                          </select>
-                        )}
-                        <div className="flex flex-wrap gap-3">
-                          <button
-                            type="button"
-                            disabled={gestionandoAnticipo || !verificadorAnticipo}
-                            onClick={() => handleConfirmarTelefonica('ANTICIPO')}
-                            className="inline-flex items-center px-4 py-2 bg-primary-container text-on-primary-container font-['Inter'] text-[14px] font-semibold disabled:opacity-50 cursor-pointer"
-                          >
-                            {gestionandoAnticipo ? 'ENVIANDO...' : 'CONFIRMAR LLAMADA'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setMostrandoLlamadaAdminAnticipo(false)}
-                            className="inline-flex items-center px-4 py-2 border border-outline text-on-surface-variant hover:bg-surface-container-high transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
-                          >
-                            CANCELAR
-                          </button>
-                        </div>
-                      </div>
+                      <PanelAcreditacionPago
+                        metodo={cotizacionSeleccionada.metodo_anticipo}
+                        admins={adminsActivos}
+                        cargandoAdmins={cargandoAdmins}
+                        errorAdmins={errorAdmins}
+                        ocupado={gestionandoAnticipo}
+                        evaluacion={evaluarAcreditacion({
+                          tipoPago: 'ANTICIPO',
+                          metodo: cotizacionSeleccionada.metodo_anticipo,
+                          comprobanteRecibido: cotizacionSeleccionada.comprobante_recibido,
+                          gestionVigente: gestionVigenteAnticipo,
+                        })}
+                        puedeSeguimiento={puedeRegistrarSeguimiento(gestionVigenteAnticipo)}
+                        onConfirmar={(datos) => handleConfirmarAcreditacion('ANTICIPO', datos)}
+                        onSeguimiento={(datos) => handleRegistrarSeguimiento('ANTICIPO', datos)}
+                        onCancelar={() => setMostrandoLlamadaAdminAnticipo(false)}
+                      />
                     )}
                   </div>
                 )}
@@ -2140,7 +2188,13 @@ export default function GestionCotizaciones({
                 ))}
               </div>
 
-              {cotizacionSeleccionada.estado_saldo === 'PENDIENTE' && (
+              {saldoBloqueadoPorAnticipo(cotizacionSeleccionada.estado_anticipo) && cotizacionSeleccionada.estado_saldo === 'PENDIENTE' && (
+                <p className="font-['Inter'] text-[13px] font-normal text-error uppercase" role="alert">
+                  {MENSAJE_SALDO_BLOQUEADO}
+                </p>
+              )}
+
+              {cotizacionSeleccionada.estado_saldo === 'PENDIENTE' && !saldoBloqueadoPorAnticipo(cotizacionSeleccionada.estado_anticipo) && (
                 <div className="space-y-4">
                   {!cotizacionSeleccionada.metodo_saldo && (
                     <div>
@@ -2239,7 +2293,7 @@ export default function GestionCotizaciones({
                       }}
                       className="inline-flex items-center px-4 py-2 border border-primary-container text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-colors font-['Inter'] text-[14px] font-semibold disabled:opacity-50 cursor-pointer"
                     >
-                      LLAMADA A ADMIN
+                      {etiquetaAccionAcreditacion(cotizacionSeleccionada.metodo_saldo ?? metodoSaldoElegido)}
                     </button>
                   </div>
 
@@ -2287,46 +2341,23 @@ export default function GestionCotizaciones({
                   )}
 
                   {mostrandoLlamadaAdminSaldo && (
-                    <div className="border border-primary-container p-3 space-y-2">
-                      <label className="block font-code-sm text-code-sm text-on-surface-variant uppercase mb-1">
-                        ADMIN que confirmó telefónicamente
-                      </label>
-                      {cargandoAdmins && (
-                        <p className="font-['Inter'] text-[13px] font-normal text-on-surface-variant uppercase">Cargando administradores…</p>
-                      )}
-                      {errorAdmins && <p className="font-['Inter'] text-[13px] font-normal text-error uppercase">{errorAdmins}</p>}
-                      {!cargandoAdmins && !errorAdmins && (
-                        <select
-                          value={verificadorSaldo}
-                          onChange={(e) => setVerificadorSaldo(e.target.value)}
-                          className="bg-background border border-outline text-on-surface px-2 py-2 focus:ring-0 focus:border-primary-container transition-colors font-code-sm text-code-sm outline-none cursor-pointer"
-                        >
-                          <option value="">Seleccione un ADMIN…</option>
-                          {(adminsActivos ?? []).map((a) => (
-                            <option key={a.id} value={a.id}>
-                              {a.nombre}
-                            </option>
-                          ))}
-                        </select>
-                      )}
-                      <div className="flex flex-wrap gap-3">
-                        <button
-                          type="button"
-                          disabled={gestionandoSaldo || !verificadorSaldo}
-                          onClick={() => handleConfirmarTelefonica('SALDO')}
-                          className="inline-flex items-center px-4 py-2 bg-primary-container text-on-primary-container font-['Inter'] text-[14px] font-semibold disabled:opacity-50 cursor-pointer"
-                        >
-                          {gestionandoSaldo ? 'ENVIANDO...' : 'CONFIRMAR LLAMADA'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setMostrandoLlamadaAdminSaldo(false)}
-                          className="inline-flex items-center px-4 py-2 border border-outline text-on-surface-variant hover:bg-surface-container-high transition-colors font-['Inter'] text-[14px] font-semibold cursor-pointer"
-                        >
-                          CANCELAR
-                        </button>
-                      </div>
-                    </div>
+                    <PanelAcreditacionPago
+                      metodo={cotizacionSeleccionada.metodo_saldo ?? metodoSaldoElegido}
+                      admins={adminsActivos}
+                      cargandoAdmins={cargandoAdmins}
+                      errorAdmins={errorAdmins}
+                      ocupado={gestionandoSaldo}
+                      evaluacion={evaluarAcreditacion({
+                        tipoPago: 'SALDO',
+                        metodo: cotizacionSeleccionada.metodo_saldo ?? metodoSaldoElegido,
+                        comprobanteRecibido: cotizacionSeleccionada.saldo_comprobante_recibido,
+                        gestionVigente: gestionVigenteSaldo,
+                      })}
+                      puedeSeguimiento={puedeRegistrarSeguimiento(gestionVigenteSaldo)}
+                      onConfirmar={(datos) => handleConfirmarAcreditacion('SALDO', datos)}
+                      onSeguimiento={(datos) => handleRegistrarSeguimiento('SALDO', datos)}
+                      onCancelar={() => setMostrandoLlamadaAdminSaldo(false)}
+                    />
                   )}
                 </div>
               )}
