@@ -3055,19 +3055,6 @@ export default function GestionCotizaciones({
                             );
                           })}
                       </div>
-                      {/* Respaldo técnico: si por algún motivo no hay datos de
-                          apoyo disponibles, se permite igual pegar el UUID
-                          directo — nunca se bloquea la creación por esto. */}
-                      <details className="font-code-sm text-[11px] text-on-surface-variant">
-                        <summary className="cursor-pointer uppercase">Usar ID de solicitud directamente</summary>
-                        <input
-                          value={solicitudIdNueva}
-                          onChange={(e) => setSolicitudIdNueva(e.target.value)}
-                          className="w-full mt-2 bg-background border-0 border-b border-outline text-on-surface px-0 py-2 focus:ring-0 focus:border-primary-container transition-colors font-body-md text-sm outline-none"
-                          type="text"
-                          placeholder="UUID de la solicitud"
-                        />
-                      </details>
                     </div>
                   )}
                 </div>
