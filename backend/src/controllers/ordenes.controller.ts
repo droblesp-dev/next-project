@@ -159,7 +159,8 @@ export async function cambiarEstadoController(req: Request, res: Response): Prom
     const orden = await cambiarEstadoOrden(
       req.params.id,
       estado.trim(),
-      typeof observaciones === 'string' ? observaciones : undefined
+      typeof observaciones === 'string' ? observaciones : undefined,
+      req.user?.sub
     );
     res.status(200).json({ orden });
   } catch (error) {
@@ -207,7 +208,7 @@ export async function cancelarController(req: Request, res: Response): Promise<v
   }
 
   try {
-    const orden = await cancelarOrden(req.params.id, motivo);
+    const orden = await cancelarOrden(req.params.id, motivo, req.user?.sub);
     res.status(200).json({ orden });
   } catch (error) {
     if (error instanceof OrdenNoEncontradaError) {
@@ -336,7 +337,7 @@ export async function asignarResponsableController(req: Request, res: Response):
 // Bloque saldo/entrega/cierre. Exclusivo ADMIN/COMERCIAL (routes).
 export async function confirmarEntregaController(req: Request, res: Response): Promise<void> {
   try {
-    const orden = await confirmarEntregaOrden(req.params.id);
+    const orden = await confirmarEntregaOrden(req.params.id, req.user?.sub);
     res.status(200).json({ orden });
   } catch (error) {
     if (error instanceof OrdenNoEncontradaError) {
@@ -359,7 +360,7 @@ export async function confirmarEntregaController(req: Request, res: Response): P
 // PATCH /:id/estado ya no acepta este destino. Exclusivo ADMIN/COMERCIAL.
 export async function cerrarController(req: Request, res: Response): Promise<void> {
   try {
-    const orden = await cerrarOrden(req.params.id);
+    const orden = await cerrarOrden(req.params.id, req.user?.sub);
     res.status(200).json({ orden });
   } catch (error) {
     if (error instanceof OrdenNoEncontradaError || error instanceof CotizacionNoEncontradaError) {

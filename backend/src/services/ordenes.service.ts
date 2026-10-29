@@ -202,7 +202,8 @@ export async function crearOrden(input: CrearOrdenInput): Promise<Orden> {
 export async function cambiarEstadoOrden(
   id: string,
   nuevoEstado: string,
-  observaciones?: string
+  observaciones?: string,
+  actorId?: string
 ): Promise<Orden> {
   if (!ESTADOS_VALIDOS.includes(nuevoEstado)) {
     throw new EstadoInvalidoError();
@@ -248,7 +249,7 @@ export async function cambiarEstadoOrden(
   const observacionParaGuardar =
     nuevoEstado !== 'FINALIZADA' && observacionRecortada === '' ? undefined : observacionRecortada;
 
-  const actualizado = await ordenesRepo.updateEstado(id, nuevoEstado, estadosOrigenValidos, observacionParaGuardar);
+  const actualizado = await ordenesRepo.updateEstado(id, nuevoEstado, estadosOrigenValidos, observacionParaGuardar, actorId);
   if (actualizado) {
     if (nuevoEstado === 'EN_PROCESO' && actualizado.fecha_inicio === null) {
       // Bloque 3A: la orden ya inició pero su fecha_inicio no pudo registrarse (fecha_entrega anterior a hoy
@@ -359,8 +360,8 @@ export async function asignarResponsable(id: string, responsableId: string): Pro
 // Bloque 3B: idempotente — una segunda confirmación ya NO sobrescribe la fecha real
 // (`entrega_confirmada_en`) ya registrada (repository). Se distingue "no está FINALIZADA" (mismo
 // error de siempre) de "ya estaba confirmada" (nuevo error, deja la fecha original intacta).
-export async function confirmarEntregaOrden(id: string): Promise<Orden> {
-  const actualizado = await ordenesRepo.confirmarEntrega(id);
+export async function confirmarEntregaOrden(id: string, actorId?: string): Promise<Orden> {
+  const actualizado = await ordenesRepo.confirmarEntrega(id, actorId);
   if (actualizado) {
     return actualizado;
   }
@@ -380,7 +381,7 @@ export async function confirmarEntregaOrden(id: string): Promise<Orden> {
 // ordenesRepo.updateEstado tal cual, pasando el motivo por el parámetro `observaciones` ya
 // existente (misma columna que la observación de finalización; no se crea ninguna columna nueva).
 // Los orígenes válidos son los mismos 3 estados que antes admitían CANCELADA en TRANSICIONES.
-export async function cancelarOrden(id: string, motivo: string): Promise<Orden> {
+export async function cancelarOrden(id: string, motivo: string, actorId?: string): Promise<Orden> {
   const motivoRecortado = motivo.trim();
   if (!motivoRecortado) {
     throw new MotivoCancelacionInvalidoError('motivo es requerido y no puede estar vacío.');
@@ -389,7 +390,7 @@ export async function cancelarOrden(id: string, motivo: string): Promise<Orden> 
     throw new MotivoCancelacionInvalidoError(`motivo no puede superar ${OBSERVACION_MAX_CARACTERES} caracteres.`);
   }
 
-  const actualizado = await ordenesRepo.updateEstado(id, 'CANCELADA', ESTADOS_CANCELABLES, motivoRecortado);
+  const actualizado = await ordenesRepo.updateEstado(id, 'CANCELADA', ESTADOS_CANCELABLES, motivoRecortado, actorId);
   if (actualizado) {
     // ALERTAS-02 (decisión 7A): una orden CANCELADA ya no requiere atención por fecha de entrega —
     // cualquier alerta ENTREGA pendiente de esta orden se resuelve (preserva historial, sin borrar).
@@ -449,7 +450,7 @@ export async function reprogramarFechaEntrega(id: string, fechaEntrega: string):
 // VALIDADO; la orden debe tener entrega_confirmada_en asignado. Si no se
 // cumple alguna condición, la orden permanece FINALIZADA — no existe
 // ningún mecanismo de reintento automático.
-export async function cerrarOrden(id: string): Promise<Orden> {
+export async function cerrarOrden(id: string, actorId?: string): Promise<Orden> {
   const orden = await ordenesRepo.findById(id);
   if (!orden) {
     throw new OrdenNoEncontradaError();
@@ -469,7 +470,7 @@ export async function cerrarOrden(id: string): Promise<Orden> {
     throw new EntregaNoConfirmadaError();
   }
 
-  const actualizado = await ordenesRepo.updateEstado(id, 'CERRADA', ['FINALIZADA']);
+  const actualizado = await ordenesRepo.updateEstado(id, 'CERRADA', ['FINALIZADA'], undefined, actorId);
   if (!actualizado) {
     // Condición de carrera: el estado cambió entre la verificación y el
     // UPDATE (ej. otra pestaña canceló la orden justo antes).

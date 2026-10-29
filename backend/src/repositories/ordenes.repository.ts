@@ -18,6 +18,16 @@ export interface Orden {
   actualizado_en: string;
   avance: number;
   entrega_confirmada_en: string | null;
+  // V22: quién ejecutó cada hito (NULL = autor desconocido, p. ej. órdenes anteriores a V22). Los nombres son
+  // datos DERIVADOS (JOIN a usuarios), no columnas de `ordenes`.
+  estado_cambiado_por: string | null;
+  finalizada_por: string | null;
+  entrega_confirmada_por: string | null;
+  cerrada_por: string | null;
+  estado_cambiado_por_nombre: string | null;
+  finalizada_por_nombre: string | null;
+  entrega_confirmada_por_nombre: string | null;
+  cerrada_por_nombre: string | null;
   // Bloque 2B.1: dato DERIVADO (no es una columna de `ordenes`): solicitud de la
   // cotización de la orden (ordenes.cotizacion_id -> cotizaciones.solicitud_id).
   // Solo identifica la conversación de la solicitud; no concede acceso a ella
@@ -31,6 +41,11 @@ const COLUMNAS = `id, cotizacion_id, responsable_id, estado, codigo, descripcion
                    fecha_inicio, fecha_entrega, fecha_programada, fecha_finalizacion,
                    fecha_cierre, observaciones, creado_en, actualizado_en, avance,
                    entrega_confirmada_en,
+                   estado_cambiado_por, finalizada_por, entrega_confirmada_por, cerrada_por,
+                   (SELECT u.nombre FROM usuarios u WHERE u.id = ordenes.estado_cambiado_por) AS estado_cambiado_por_nombre,
+                   (SELECT u.nombre FROM usuarios u WHERE u.id = ordenes.finalizada_por) AS finalizada_por_nombre,
+                   (SELECT u.nombre FROM usuarios u WHERE u.id = ordenes.entrega_confirmada_por) AS entrega_confirmada_por_nombre,
+                   (SELECT u.nombre FROM usuarios u WHERE u.id = ordenes.cerrada_por) AS cerrada_por_nombre,
                    (SELECT c.solicitud_id FROM cotizaciones c WHERE c.id = ordenes.cotizacion_id) AS solicitud_id`;
 
 export async function listAll(): Promise<Orden[]> {
@@ -82,7 +97,8 @@ export async function updateEstado(
   id: string,
   nuevoEstado: string,
   estadosOrigenValidos: string[],
-  observaciones?: string
+  observaciones?: string,
+  actorId?: string
 ): Promise<Orden | null> {
   let columnaFecha = '';
   let condicionFinalizacion = '';
@@ -118,9 +134,19 @@ export async function updateEstado(
     params.push(observaciones);
   }
 
+  // V22: el actor del cambio queda en el mismo UPDATE atómico (último cambio + hito de FINALIZADA/CERRADA).
+  let columnaActor = '';
+  if (actorId !== undefined) {
+    params.push(actorId);
+    const n = params.length;
+    columnaActor = `, estado_cambiado_por = $${n}::uuid`;
+    if (nuevoEstado === 'FINALIZADA') columnaActor += `, finalizada_por = $${n}::uuid`;
+    if (nuevoEstado === 'CERRADA') columnaActor += `, cerrada_por = $${n}::uuid`;
+  }
+
   const result = await pool.query<Orden>(
     `UPDATE ordenes
-     SET estado = $2, actualizado_en = CURRENT_TIMESTAMP${columnaFecha}${columnaObservaciones}
+     SET estado = $2, actualizado_en = CURRENT_TIMESTAMP${columnaFecha}${columnaObservaciones}${columnaActor}
      WHERE id = $1 AND estado = ANY($3::varchar[])${condicionFinalizacion}
      RETURNING ${COLUMNAS}`,
     params
@@ -176,13 +202,13 @@ export async function findEstadoParaActualizar(
 // registra una vez; una confirmación posterior ya no sobrescribe la fecha original (antes, cada
 // llamada mientras la orden seguía FINALIZADA volvía a fijar CURRENT_TIMESTAMP). 0 filas ahora puede
 // significar "no está FINALIZADA" o "ya estaba confirmada"; el service distingue leyendo la fila.
-export async function confirmarEntrega(id: string): Promise<Orden | null> {
+export async function confirmarEntrega(id: string, actorId?: string): Promise<Orden | null> {
   const result = await pool.query<Orden>(
     `UPDATE ordenes
-     SET entrega_confirmada_en = CURRENT_TIMESTAMP, actualizado_en = CURRENT_TIMESTAMP
+     SET entrega_confirmada_en = CURRENT_TIMESTAMP, entrega_confirmada_por = $2::uuid, actualizado_en = CURRENT_TIMESTAMP
      WHERE id = $1 AND estado = 'FINALIZADA' AND entrega_confirmada_en IS NULL
      RETURNING ${COLUMNAS}`,
-    [id]
+    [id, actorId ?? null]
   );
   return result.rows[0] ?? null;
 }

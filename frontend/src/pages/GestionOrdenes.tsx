@@ -24,6 +24,16 @@ export interface Orden {
   actualizado_en: string;
   avance: number;
   entrega_confirmada_en: string | null;
+  // V22: quién ejecutó cada hito (null = no registrado, p. ej. órdenes anteriores a V22).
+  estado_cambiado_por_nombre?: string | null;
+  finalizada_por_nombre?: string | null;
+  entrega_confirmada_por_nombre?: string | null;
+  cerrada_por_nombre?: string | null;
+}
+
+// V22: ' · por <nombre>' junto a una fecha; si el hito ocurrió pero el autor no se registró, se dice sin inventarlo.
+function textoAutor(nombre: string | null | undefined): string {
+  return nombre ? ` · por ${nombre}` : ' · autor no registrado';
 }
 
 interface OrdenEvidencia {
@@ -1367,15 +1377,22 @@ export default function GestionOrdenes({
                 <dt className="text-on-surface-variant uppercase">Finalizada</dt>
                 <dd className="text-on-surface">
                   {ordenSeleccionada.fecha_finalizacion
-                    ? new Date(ordenSeleccionada.fecha_finalizacion).toLocaleString()
+                    ? new Date(ordenSeleccionada.fecha_finalizacion).toLocaleString() +
+                      textoAutor(ordenSeleccionada.finalizada_por_nombre)
                     : '—'}
                 </dd>
               </div>
               <div>
                 <dt className="text-on-surface-variant uppercase">Cerrada</dt>
                 <dd className="text-on-surface">
-                  {ordenSeleccionada.fecha_cierre ? new Date(ordenSeleccionada.fecha_cierre).toLocaleString() : '—'}
+                  {ordenSeleccionada.fecha_cierre
+                    ? new Date(ordenSeleccionada.fecha_cierre).toLocaleString() + textoAutor(ordenSeleccionada.cerrada_por_nombre)
+                    : '—'}
                 </dd>
+              </div>
+              <div>
+                <dt className="text-on-surface-variant uppercase">Último cambio de estado</dt>
+                <dd className="text-on-surface">{ordenSeleccionada.estado_cambiado_por_nombre ?? 'No registrado'}</dd>
               </div>
             </dl>
           </div>
@@ -1460,7 +1477,8 @@ export default function GestionOrdenes({
                 <dt className="text-on-surface-variant uppercase">Entrega confirmada</dt>
                 <dd className="text-on-surface">
                   {ordenSeleccionada.entrega_confirmada_en
-                    ? new Date(ordenSeleccionada.entrega_confirmada_en).toLocaleString()
+                    ? new Date(ordenSeleccionada.entrega_confirmada_en).toLocaleString() +
+                      textoAutor(ordenSeleccionada.entrega_confirmada_por_nombre)
                     : 'No confirmada'}
                 </dd>
               </div>
@@ -1590,14 +1608,17 @@ export default function GestionOrdenes({
                 <dt className="text-on-surface-variant uppercase">Fecha de finalización</dt>
                 <dd className="text-on-surface">
                   {ordenSeleccionada.fecha_finalizacion
-                    ? new Date(ordenSeleccionada.fecha_finalizacion).toLocaleString()
+                    ? new Date(ordenSeleccionada.fecha_finalizacion).toLocaleString() +
+                      textoAutor(ordenSeleccionada.finalizada_por_nombre)
                     : '—'}
                 </dd>
               </div>
               <div>
                 <dt className="text-on-surface-variant uppercase">Fecha de cierre</dt>
                 <dd className="text-on-surface">
-                  {ordenSeleccionada.fecha_cierre ? new Date(ordenSeleccionada.fecha_cierre).toLocaleString() : '—'}
+                  {ordenSeleccionada.fecha_cierre
+                    ? new Date(ordenSeleccionada.fecha_cierre).toLocaleString() + textoAutor(ordenSeleccionada.cerrada_por_nombre)
+                    : '—'}
                 </dd>
               </div>
             </dl>
@@ -1927,7 +1948,8 @@ export default function GestionOrdenes({
                   <dt className="text-on-surface-variant uppercase">Entrega confirmada</dt>
                   <dd className="text-on-surface">
                     {ordenSeleccionada.entrega_confirmada_en
-                      ? new Date(ordenSeleccionada.entrega_confirmada_en).toLocaleString()
+                      ? new Date(ordenSeleccionada.entrega_confirmada_en).toLocaleString() +
+                        textoAutor(ordenSeleccionada.entrega_confirmada_por_nombre)
                       : 'No confirmada'}
                   </dd>
                 </div>
