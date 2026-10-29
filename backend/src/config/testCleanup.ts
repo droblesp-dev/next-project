@@ -116,6 +116,8 @@ export class RegistroLimpieza {
 
       // Primero las transferencias que registró la prueba (por ID): ninguna FK las
       // referencia, así que su borrado no arrastra nada más.
+      // V21: transferencias_pago es inmutable salvo en nextproject_test con esta marca, local a la transacción.
+      if (transferencias.length > 0) await client.query("SELECT set_config('app.permitir_limpieza_pruebas', 'on', true)");
       const transferenciasBorradas = transferencias.length
         ? await client.query('DELETE FROM transferencias_pago WHERE id = ANY($1::uuid[])', [transferencias])
         : { rowCount: 0 };

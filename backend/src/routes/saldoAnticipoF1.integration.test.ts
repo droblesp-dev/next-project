@@ -241,16 +241,15 @@ describe.each(['PENDIENTE', 'RECHAZADO', 'NULL'] as const)(
       expect(await instantanea(id)).toEqual(antes);
     });
 
-    it('reabrir saldo -> 409 con el motivo del anticipo y sin cambios en BD', async () => {
+    it('V21: la BD rechaza dejar el saldo RECHAZADO con el anticipo sin resolver (ya no se puede forzar por SQL)', async () => {
       const id = await cotizacionConAnticipo(estado);
-      // saldo RECHAZADO con el anticipo sin resolver: dato inconsistente (p. ej. anterior a la regla), forzado por SQL
-      await pool.query(`UPDATE cotizaciones SET estado_saldo = 'RECHAZADO' WHERE id = $1`, [id]);
       const antes = await instantanea(id);
 
-      const res = await pedir(`/${id}/saldo/reabrir`, tokenComercial, { method: 'PATCH', body: {} });
+      await expect(pool.query(`UPDATE cotizaciones SET estado_saldo = 'RECHAZADO' WHERE id = $1`, [id])).rejects.toMatchObject({
+        code: '23514',
+        constraint: 'chk_cotizaciones_saldo_requiere_anticipo',
+      });
 
-      expect(res.status).toBe(409);
-      expect(await mensaje(res)).toMatch(/anticipo/i);
       expect(await instantanea(id)).toEqual(antes);
     });
   }
