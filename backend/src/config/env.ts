@@ -50,9 +50,13 @@ export const env = {
   openRouterApiKey: process.env.OPENROUTER_API_KEY ?? "",
   openRouterModel:
     process.env.OPENROUTER_MODEL ?? "cohere/north-mini-code:free",
-  brevoApiKey: (process.env.BREVO_API_KEY ?? "").trim(),
+  // Salvaguarda contra correos reales accidentales: bajo Vitest (VITEST=true) la clave de Brevo se ignora y el
+  // sandbox queda activo aunque el .env local tenga una clave real y BREVO_SANDBOX=false. Los tests de correo
+  // simulan `env` y `fetch`; ninguna prueba debe llegar a la API real.
+  brevoApiKey: process.env.VITEST === "true" ? "" : (process.env.BREVO_API_KEY ?? "").trim(),
   nextProjectEmail: (process.env.NEXT_PROJECT_EMAIL ?? "").trim(),
   brevoSandbox:
+    process.env.VITEST === "true" ||
     (process.env.BREVO_SANDBOX ?? "").trim().toLowerCase() === "true",
   nextProjectName: (process.env.NEXT_PROJECT_NAME ?? "NextProject").trim(),
   nextProjectWhatsapp: (

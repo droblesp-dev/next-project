@@ -19,6 +19,7 @@ import { dashboardRouter } from './routes/dashboard.routes.js';
 import { asistenteFormularioRouter } from './routes/asistenteFormulario.routes.js';
 import { cuentasBancariasRouter } from './routes/cuentasBancarias.routes.js';
 import { LOGOS_BANCOS_DIR } from './config/uploadsLogosBancos.js';
+import { advertenciaCorreoReal } from './config/advertenciaCorreo.js';
 
 const app = express();
 
@@ -127,6 +128,8 @@ process.on('unhandledRejection', (motivo) => {
 
 const server = app.listen(env.port, () => {
   console.log(`NextProject backend escuchando en el puerto ${env.port}`);
+  const advertenciaCorreo = advertenciaCorreoReal(env);
+  if (advertenciaCorreo) console.warn(advertenciaCorreo);
 });
 
 server.on('error', (error) => {
