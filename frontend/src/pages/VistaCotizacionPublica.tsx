@@ -17,6 +17,7 @@ import ComprobanteUploader from './ComprobanteUploader';
 import { MENSAJE_CLIENTE_COTIZACION_VENCIDA } from '../lib/caducidadCotizacion';
 import PieCotizacionPublica from './PieCotizacionPublica';
 import RecuperarCodigoCotizacion from './RecuperarCodigoCotizacion';
+import BotonImprimirCotizacion from './HojaCotizacionImprimible';
 
 interface VistaCotizacionPublicaProps {
   token: string;
@@ -736,6 +737,34 @@ export default function VistaCotizacionPublica({ token }: VistaCotizacionPublica
 
               <div className="border-t border-outline pt-4">
                 <CondicionesDePago c={cotizacion} />
+              </div>
+
+              {/* #4: el cliente puede imprimir su cotización o guardarla como PDF (sin datos de acceso ni bancarios). */}
+              <div className="border-t border-outline pt-4">
+                <BotonImprimirCotizacion
+                  datos={{
+                    codigoCotizacion: cotizacion.codigo ?? null,
+                    codigoSolicitud: cotizacion.solicitud.codigo ?? null,
+                    estado: cotizacion.estado,
+                    estadoEtiqueta: etiquetaEstadoCotizacion(cotizacion.estado),
+                    emitidaEn: cotizacion.creado_en,
+                    vigenciaHasta: cotizacion.fecha_vigencia,
+                    servicio: cotizacion.solicitud.servicio,
+                    cantidad: cotizacion.solicitud.cantidad,
+                    descripcionSolicitud: cotizacion.solicitud.descripcion,
+                    especificaciones: cotizacion.solicitud.especificaciones,
+                    observaciones: cotizacion.descripcion,
+                    subtotal: cotizacion.subtotal ?? cotizacion.valor,
+                    ivaPorcentaje: cotizacion.iva_porcentaje,
+                    ivaValor: cotizacion.iva_valor,
+                    total: cotizacion.total,
+                    anticipoPorcentaje: cotizacion.anticipo_porcentaje,
+                    anticipoValor: cotizacion.anticipo_valor,
+                    estadoAnticipo: cotizacion.estado_anticipo,
+                    metodoAnticipo: cotizacion.metodo_anticipo,
+                    saldo: cotizacion.saldo_pendiente,
+                  }}
+                />
               </div>
 
               {cotizacion.estado === 'ENVIADA' && (

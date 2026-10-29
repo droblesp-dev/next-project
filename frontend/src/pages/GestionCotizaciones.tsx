@@ -4,6 +4,9 @@ import { fetchAutenticado, SesionInvalidaError } from '../lib/authClient';
 import { coincideCodigo } from '../lib/busqueda';
 import { useBusquedaServidor } from '../lib/busquedaServidor';
 import type { Solicitud } from './BandejaSolicitudes';
+import BotonImprimirCotizacion from './HojaCotizacionImprimible';
+import { etiquetaEstadoCotizacion } from '../lib/cotizacionPublica';
+import type { DatosHojaCotizacion } from '../lib/hojaCotizacion';
 import PanelAcreditacionPago, { type DatosConfirmacion, type DatosSeguimiento } from './PanelAcreditacionPago';
 import {
   avisoCaducidad,
@@ -411,6 +414,37 @@ const TRANSICIONES: Record<string, string[]> = {
   VENCIDA: [],
   CANCELADA: [],
 };
+
+// #4: datos de la hoja imprimible a partir de la cotización y de la solicitud que la pantalla ya conoce (sin recalcular importes).
+function datosHoja(
+  c: Cotizacion,
+  solicitud: { codigo?: string | null; servicio: string; descripcion: string; cantidad: number; especificaciones?: string | null } | null,
+  cliente: string | null
+): DatosHojaCotizacion {
+  return {
+    codigoCotizacion: c.codigo,
+    codigoSolicitud: solicitud?.codigo ?? null,
+    estado: c.estado,
+    estadoEtiqueta: c.estado === 'BORRADOR' ? 'Borrador' : etiquetaEstadoCotizacion(c.estado),
+    emitidaEn: c.creado_en,
+    vigenciaHasta: c.fecha_vigencia,
+    cliente,
+    servicio: solicitud?.servicio ?? 'Servicio no disponible',
+    cantidad: solicitud?.cantidad ?? null,
+    descripcionSolicitud: solicitud?.descripcion ?? null,
+    especificaciones: solicitud?.especificaciones ?? null,
+    observaciones: c.descripcion,
+    subtotal: c.subtotal ?? c.valor,
+    ivaPorcentaje: c.iva_porcentaje,
+    ivaValor: c.iva_valor,
+    total: c.total,
+    anticipoPorcentaje: c.anticipo_porcentaje,
+    anticipoValor: c.anticipo_valor,
+    estadoAnticipo: c.estado_anticipo,
+    metodoAnticipo: c.metodo_anticipo,
+    saldo: c.saldo_pendiente,
+  };
+}
 
 export default function GestionCotizaciones({
   token,
@@ -1496,9 +1530,12 @@ export default function GestionCotizaciones({
                 {solicitud?.servicio ?? 'Servicio no disponible'}
               </p>
             </div>
-            <span className={`inline-flex shrink-0 whitespace-nowrap px-3 py-1 font-code-sm text-xs uppercase ${claseBadgeEstadoCotizacion(cotizacionSeleccionada.estado)}`}>
+            <div className="flex flex-wrap items-center gap-3 shrink-0">
+              <BotonImprimirCotizacion datos={datosHoja(cotizacionSeleccionada, solicitud, infoClienteDetalle.principal)} />
+              <span className={`inline-flex shrink-0 whitespace-nowrap px-3 py-1 font-code-sm text-xs uppercase ${claseBadgeEstadoCotizacion(cotizacionSeleccionada.estado)}`}>
               {cotizacionSeleccionada.estado.replace(/_/g, ' ')}
             </span>
+            </div>
           </div>
 
           <div>
@@ -1653,7 +1690,8 @@ export default function GestionCotizaciones({
                 {solicitudDetalle?.servicio ?? 'Servicio no disponible'}
               </p>
             </div>
-            <div className="flex items-center gap-3 shrink-0">
+            <div className="flex flex-wrap items-center gap-3 shrink-0">
+              <BotonImprimirCotizacion datos={datosHoja(cotizacionSeleccionada, solicitudDetalle, infoClienteDetalle.principal)} />
               {cotizacionSeleccionada.estado === 'BORRADOR' && !editando && (
                 <button
                   type="button"

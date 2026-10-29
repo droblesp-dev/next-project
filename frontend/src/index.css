@@ -196,3 +196,32 @@ section {
     font-size: 16px;
   }
 }
+
+/* #4: impresión / PDF de la cotización. La hoja vive en un portal fuera de #root: en pantalla permanece oculta y, mientras
+   `imprimiendo-cotizacion` está en <body> (ver lib/imprimirHoja.ts), al imprimir se oculta la aplicación y se muestra solo la hoja. */
+.hoja-cotizacion-portal {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 16mm;
+  }
+
+  body.imprimiendo-cotizacion {
+    background: #ffffff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  body.imprimiendo-cotizacion #root {
+    display: none !important;
+  }
+
+  body.imprimiendo-cotizacion .hoja-cotizacion-portal {
+    display: block !important;
+    color: #000000;
+    background: #ffffff;
+  }
+}
