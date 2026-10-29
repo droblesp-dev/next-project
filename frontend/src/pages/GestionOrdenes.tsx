@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Eye } from 'lucide-react';
 import { fetchAutenticado, SesionInvalidaError, type Usuario } from '../lib/authClient';
 import { coincideCodigo } from '../lib/busqueda';
+import { ayudaReferencia, referenciaOrigen } from '../lib/referenciasOrden';
 import { useBusquedaServidor } from '../lib/busquedaServidor';
 import type { Solicitud } from './BandejaSolicitudes';
 
@@ -10,6 +11,9 @@ export interface Orden {
   cotizacion_id: string;
   // Bloque 2B.1: solicitud de la orden (derivada en backend; abre la conversación de esa solicitud).
   solicitud_id?: string;
+  // #11: números de origen que entrega el backend (null en registros anteriores a la numeración).
+  solicitud_codigo?: string | null;
+  cotizacion_codigo?: string | null;
   responsable_id: string | null;
   estado: string;
   codigo: string;
@@ -2166,6 +2170,8 @@ export default function GestionOrdenes({
                 <thead>
                   <tr className="border-b border-outline">
                     <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Código</th>
+                    <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Solicitud</th>
+                    <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Cotización</th>
                     <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Cliente</th>
                     <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Servicio</th>
                     <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Responsable</th>
@@ -2180,7 +2186,7 @@ export default function GestionOrdenes({
                 <tbody>
                   {datosPaginaAdmin.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="py-6 px-4 text-center font-code-sm text-code-sm text-on-surface-variant uppercase">
+                      <td colSpan={10} className="py-6 px-4 text-center font-code-sm text-code-sm text-on-surface-variant uppercase">
                         Ningún resultado coincide con estos filtros.
                       </td>
                     </tr>
@@ -2190,6 +2196,8 @@ export default function GestionOrdenes({
                     return (
                       <tr key={o.id} className="border-b border-outline hover:bg-surface-container-high transition-colors">
                         <td className="py-3 px-4 font-code-sm text-code-sm text-on-surface">{o.codigo}</td>
+                        <td className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant whitespace-nowrap" title={ayudaReferencia(o.solicitud_codigo)}>{referenciaOrigen(o.solicitud_codigo)}</td>
+                        <td className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant whitespace-nowrap" title={ayudaReferencia(o.cotizacion_codigo)}>{referenciaOrigen(o.cotizacion_codigo)}</td>
                         <td className="py-3 px-4 font-['Inter'] text-[14px] font-normal leading-[20px] text-on-surface">{cliente}</td>
                         <td className="py-3 px-4 font-['Inter'] text-[14px] font-normal leading-[20px] text-on-surface break-words">{servicio}</td>
                         <td className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant">
@@ -2264,6 +2272,14 @@ export default function GestionOrdenes({
                     </div>
 
                     <dl className="grid grid-cols-2 gap-2 font-code-sm text-[11px] wrap-anywhere">
+                      <div>
+                        <dt className="text-on-surface-variant uppercase">Solicitud</dt>
+                        <dd className="text-on-surface" title={ayudaReferencia(o.solicitud_codigo)}>{referenciaOrigen(o.solicitud_codigo)}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-on-surface-variant uppercase">Cotización</dt>
+                        <dd className="text-on-surface" title={ayudaReferencia(o.cotizacion_codigo)}>{referenciaOrigen(o.cotizacion_codigo)}</dd>
+                      </div>
                       <div>
                         <dt className="text-on-surface-variant uppercase">Responsable</dt>
                         <dd className="text-on-surface">{nombreResponsableAdmin(o.responsable_id)}</dd>
@@ -2724,6 +2740,8 @@ export default function GestionOrdenes({
                   <thead>
                     <tr className="border-b border-outline">
                       <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Código</th>
+                      <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Solicitud</th>
+                      <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Cotización</th>
                       <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Cliente</th>
                       <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Servicio</th>
                       <th className="py-3 px-4 font-['Inter'] text-[12px] font-semibold text-on-surface-variant uppercase">Estado</th>
@@ -2740,7 +2758,7 @@ export default function GestionOrdenes({
                   <tbody>
                     {datosPaginaAdmin.length === 0 && (
                       <tr>
-                        <td colSpan={8} className="py-6 px-4 text-center font-code-sm text-code-sm text-on-surface-variant uppercase">
+                        <td colSpan={10} className="py-6 px-4 text-center font-code-sm text-code-sm text-on-surface-variant uppercase">
                           Ningún resultado coincide con estos filtros.
                         </td>
                       </tr>
@@ -2750,6 +2768,8 @@ export default function GestionOrdenes({
                       return (
                         <tr key={o.id} className="border-b border-outline hover:bg-surface-container-high transition-colors">
                           <td className="py-3 px-4 font-code-sm text-code-sm text-on-surface">{o.codigo}</td>
+                          <td className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant whitespace-nowrap" title={ayudaReferencia(o.solicitud_codigo)}>{referenciaOrigen(o.solicitud_codigo)}</td>
+                          <td className="py-3 px-4 font-code-sm text-code-sm text-on-surface-variant whitespace-nowrap" title={ayudaReferencia(o.cotizacion_codigo)}>{referenciaOrigen(o.cotizacion_codigo)}</td>
                           <td className="py-3 px-4 font-['Inter'] text-[14px] font-normal leading-[20px] text-on-surface">{cliente}</td>
                           <td className="py-3 px-4 font-['Inter'] text-[14px] font-normal leading-[20px] text-on-surface break-words">{servicio}</td>
                           <td className="py-3 px-4">
@@ -2824,6 +2844,14 @@ export default function GestionOrdenes({
                       </div>
 
                       <dl className="grid grid-cols-2 gap-2 font-code-sm text-[11px] wrap-anywhere">
+                        <div>
+                          <dt className="text-on-surface-variant uppercase">Solicitud</dt>
+                          <dd className="text-on-surface" title={ayudaReferencia(o.solicitud_codigo)}>{referenciaOrigen(o.solicitud_codigo)}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-on-surface-variant uppercase">Cotización</dt>
+                          <dd className="text-on-surface" title={ayudaReferencia(o.cotizacion_codigo)}>{referenciaOrigen(o.cotizacion_codigo)}</dd>
+                        </div>
                         <div>
                           <dt className="text-on-surface-variant uppercase">Fecha de entrega</dt>
                           <dd className="text-on-surface">{formatearFechaEntrega(o.fecha_entrega) ?? '—'}</dd>

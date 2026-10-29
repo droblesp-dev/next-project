@@ -34,6 +34,10 @@ export interface Orden {
   // Solo identifica la conversación de la solicitud; no concede acceso a ella
   // (el chat sigue autorizando en backend según Bloque 2A).
   solicitud_id: string;
+  // #11: números legibles de origen (SOL-… / COT-…), derivados de la cadena orden → cotización → solicitud.
+  // NULL cuando la cotización o la solicitud es anterior a la numeración (V10): nunca se inventan ni se rellenan.
+  solicitud_codigo: string | null;
+  cotizacion_codigo: string | null;
 }
 
 type Executor = Pool | PoolClient;
@@ -48,7 +52,10 @@ const COLUMNAS = `id, cotizacion_id, responsable_id, estado, codigo, descripcion
                    (SELECT u.nombre FROM usuarios u WHERE u.id = ordenes.finalizada_por) AS finalizada_por_nombre,
                    (SELECT u.nombre FROM usuarios u WHERE u.id = ordenes.entrega_confirmada_por) AS entrega_confirmada_por_nombre,
                    (SELECT u.nombre FROM usuarios u WHERE u.id = ordenes.cerrada_por) AS cerrada_por_nombre,
-                   (SELECT c.solicitud_id FROM cotizaciones c WHERE c.id = ordenes.cotizacion_id) AS solicitud_id`;
+                   (SELECT c.solicitud_id FROM cotizaciones c WHERE c.id = ordenes.cotizacion_id) AS solicitud_id,
+                   (SELECT c.codigo FROM cotizaciones c WHERE c.id = ordenes.cotizacion_id) AS cotizacion_codigo,
+                   (SELECT s.codigo FROM cotizaciones c JOIN solicitudes s ON s.id = c.solicitud_id
+                     WHERE c.id = ordenes.cotizacion_id) AS solicitud_codigo`;
 
 export async function listAll(): Promise<Orden[]> {
   const result = await pool.query<Orden>(`SELECT ${COLUMNAS} FROM ordenes ORDER BY creado_en DESC`);
