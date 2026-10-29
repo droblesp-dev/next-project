@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Eye } from 'lucide-react';
+import { Eye, MessageSquare } from 'lucide-react';
 import { fetchAutenticado, SesionInvalidaError } from '../lib/authClient';
 import { coincideCodigo } from '../lib/busqueda';
 import { useBusquedaServidor } from '../lib/busquedaServidor';
@@ -31,6 +31,9 @@ interface BandejaSolicitudesProps {
   // en particular ya tiene mensajes (ese dato no lo expone el listado).
   puedeChatear: boolean;
   onSeleccionar: (id: string) => void;
+  // #7: abre la solicitud directamente en su comunicación técnica (chat entre Comercial y Operativo). El icono
+  // solo se muestra a quien puede chatear (COMERCIAL/OPERATIVO).
+  onAbrirMensajes?: (id: string) => void;
   onSesionInvalida: () => void;
 }
 
@@ -133,7 +136,7 @@ function Kpi({
   );
 }
 
-export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar, onSesionInvalida }: BandejaSolicitudesProps) {
+export default function BandejaSolicitudes({ token, puedeChatear, onAbrirMensajes, onSeleccionar, onSesionInvalida }: BandejaSolicitudesProps) {
   const [solicitudes, setSolicitudes] = useState<Solicitud[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -601,6 +604,17 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
                     >
                       <Eye size={18} aria-hidden="true" />
                     </button>
+                    {puedeChatear && onAbrirMensajes && (
+                      <button
+                        type="button"
+                        onClick={() => onAbrirMensajes(s.id)}
+                        aria-label="Abrir mensajes de la solicitud"
+                        title="Mensajes"
+                        className="inline-flex items-center justify-center w-11 h-11 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container transition-colors cursor-pointer"
+                      >
+                        <MessageSquare size={18} aria-hidden="true" />
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -663,6 +677,17 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
               >
                 <Eye size={18} aria-hidden="true" />
               </button>
+              {puedeChatear && onAbrirMensajes && (
+                <button
+                  type="button"
+                  onClick={() => onAbrirMensajes(s.id)}
+                  aria-label="Abrir mensajes de la solicitud"
+                  title="Mensajes"
+                  className="flex-1 inline-flex items-center justify-center min-h-11 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container transition-colors cursor-pointer"
+                >
+                  <MessageSquare size={18} aria-hidden="true" />
+                </button>
+              )}
             </div>
           </div>
           );
@@ -779,6 +804,17 @@ export default function BandejaSolicitudes({ token, puedeChatear, onSeleccionar,
                 >
                   <Eye size={18} aria-hidden="true" />
                 </button>
+                {puedeChatear && onAbrirMensajes && (
+                  <button
+                    type="button"
+                    onClick={() => onAbrirMensajes(vistaRapida.id)}
+                    aria-label="Abrir mensajes de la solicitud"
+                    title="Mensajes"
+                    className="w-full inline-flex items-center justify-center h-11 mt-2 border border-outline text-on-surface hover:bg-primary-container hover:text-on-primary-container transition-colors cursor-pointer"
+                  >
+                    <MessageSquare size={18} aria-hidden="true" />
+                  </button>
+                )}
               </div>
             </div>
           )}

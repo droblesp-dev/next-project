@@ -362,6 +362,7 @@ export default function AreaPrivada({ usuario, token, onLogout, onSesionInvalida
                 token={token}
                 puedeChatear={puedeChatear}
                 onSeleccionar={handleAbrirSolicitud}
+                onAbrirMensajes={handleVerComunicacionDesdeOrden}
                 onSesionInvalida={onSesionInvalida}
               />
             ) : null}
