@@ -71,6 +71,10 @@ import {
   PagoNoRechazableError,
   PagoNoConfirmableError,
   VerificadorInvalidoError,
+  DatosDeGestionInvalidosError,
+  AnticipoRequiereComprobanteError,
+  AnticipoRequiereRevisionError,
+  type DatosDeGestion,
 } from '../services/transferenciasPago.service.js';
 
 function extraerCodigoValido(body: Record<string, unknown>): string | null {
@@ -652,6 +656,34 @@ async function procesarComprobante(req: Request, res: Response, err: unknown): P
 const ACCIONES_PAGO = ['VALIDAR', 'RECHAZAR', 'GESTIONAR', 'CONFIRMAR_TELEFONICA'] as const;
 type AccionPago = (typeof ACCIONES_PAGO)[number];
 
+// «Dinero acreditado» es el nombre con el que la interfaz presenta la acción CONFIRMAR_TELEFONICA (COMERCIAL registra
+// que ADMIN le confirmó por teléfono que el dinero ingresó). Se acepta como alias: el contrato anterior no cambia.
+function normalizarAccionPago(accion: unknown): unknown {
+  return accion === 'DINERO_ACREDITADO' ? 'CONFIRMAR_TELEFONICA' : accion;
+}
+const MENSAJE_ACCION_PAGO = `accion es requerida y debe ser una de: ${ACCIONES_PAGO.join(', ')} (o DINERO_ACREDITADO, alias de CONFIRMAR_TELEFONICA).`;
+
+// Datos opcionales de trazabilidad de la gestión (V20): observaciones, hora REAL de la llamada con ADMIN (solo si se
+// conoce) y `seguimiento` (ADMIN sin respuesta / el dinero todavía no aparece: exige observación y el pago sigue
+// PENDIENTE). La validación de fondo (largo, fecha futura, observación obligatoria) vive en el servicio.
+function leerDatosDeGestion(body: Record<string, unknown>): DatosDeGestion {
+  const { observaciones, llamadaEn, seguimiento } = body;
+  if (observaciones !== undefined && observaciones !== null && typeof observaciones !== 'string') {
+    throw new DatosDeGestionInvalidosError('observaciones debe ser texto.');
+  }
+  if (seguimiento !== undefined && typeof seguimiento !== 'boolean') {
+    throw new DatosDeGestionInvalidosError('seguimiento debe ser verdadero o falso.');
+  }
+  if (llamadaEn !== undefined && llamadaEn !== null && llamadaEn !== '' && typeof llamadaEn !== 'string') {
+    throw new DatosDeGestionInvalidosError('llamadaEn debe ser una fecha y hora en texto ISO 8601.');
+  }
+  return {
+    observaciones: (observaciones as string | null | undefined) ?? null,
+    llamadaEn: typeof llamadaEn === 'string' && llamadaEn !== '' ? new Date(llamadaEn) : null,
+    seguimiento: seguimiento === true,
+  };
+}
+
 function manejarErrorTransferencia(error: unknown, res: Response): boolean {
   if (error instanceof CotizacionNoEncontradaError) {
     res.status(404).json({ message: 'Cotización no encontrada.' });
@@ -703,6 +735,22 @@ function manejarErrorTransferencia(error: unknown, res: Response): boolean {
     });
     return true;
   }
+  if (error instanceof AnticipoRequiereComprobanteError) {
+    res.status(409).json({
+      message: 'Para registrar «Dinero acreditado» de un anticipo por TRANSFERENCIA el cliente debe haber subido el comprobante.',
+    });
+    return true;
+  }
+  if (error instanceof AnticipoRequiereRevisionError) {
+    res.status(409).json({
+      message: 'Registre primero la revisión (gestión) del comprobante antes de confirmar el dinero acreditado o de anotar un seguimiento.',
+    });
+    return true;
+  }
+  if (error instanceof DatosDeGestionInvalidosError) {
+    res.status(400).json({ message: error.message });
+    return true;
+  }
   if (error instanceof AccionNoPermitidaError) {
     res.status(409).json({ message: 'La acción no está permitida en el estado actual de la cotización.' });
     return true;
@@ -744,10 +792,10 @@ async function notificarCliente(
 
 export async function gestionarAnticipoController(req: Request, res: Response): Promise<void> {
   const body = (req.body ?? {}) as Record<string, unknown>;
-  const accion = body.accion;
+  const accion = normalizarAccionPago(body.accion);
 
   if (typeof accion !== 'string' || !ACCIONES_PAGO.includes(accion as AccionPago)) {
-    res.status(400).json({ message: `accion es requerida y debe ser una de: ${ACCIONES_PAGO.join(', ')}.` });
+    res.status(400).json({ message: MENSAJE_ACCION_PAGO });
     return;
   }
 
@@ -777,11 +825,12 @@ export async function gestionarAnticipoController(req: Request, res: Response): 
   }
 
   try {
+    const datos = leerDatosDeGestion(body);
     if (accion === 'VALIDAR' || accion === 'RECHAZAR') {
       // Mantiene exactamente el contrato de respuesta ya existente —
       // `{ cotizacion }` — para no romper al frontend actual.
       if (accion === 'VALIDAR') {
-        await confirmarAcreditacionDirecta({ cotizacionId: req.params.id, tipoPago: 'ANTICIPO', adminId: usuarioId });
+        await confirmarAcreditacionDirecta({ cotizacionId: req.params.id, tipoPago: 'ANTICIPO', adminId: usuarioId, ...datos });
         await notificarCliente(req.params.id, { tipo: 'ANTICIPO', evento: 'CONFIRMADO' });
       } else {
         const motivoRechazo = body.motivoRechazo;
@@ -796,6 +845,7 @@ export async function gestionarAnticipoController(req: Request, res: Response): 
           motivoRechazo,
           motivoRechazoDetalle: typeof motivoRechazoDetalle === 'string' ? motivoRechazoDetalle : null,
           rechazadoPor: usuarioId,
+          ...datos,
         });
         await notificarCliente(req.params.id, {
           tipo: 'ANTICIPO',
@@ -819,6 +869,7 @@ export async function gestionarAnticipoController(req: Request, res: Response): 
         referenciaBancaria: typeof body.referenciaBancaria === 'string' ? body.referenciaBancaria : null,
         cuentaBancariaId: typeof body.cuentaBancariaId === 'string' ? body.cuentaBancariaId : null,
         gestionadoPor: usuarioId,
+        ...datos,
       });
       const cotizacion = await obtenerCotizacion(req.params.id);
       res.status(200).json({ cotizacion, transferencia });
@@ -836,6 +887,7 @@ export async function gestionarAnticipoController(req: Request, res: Response): 
       tipoPago: 'ANTICIPO',
       verificadorId,
       registradoPor: usuarioId,
+      ...datos,
     });
     await notificarCliente(req.params.id, { tipo: 'ANTICIPO', evento: 'CONFIRMADO' });
     const cotizacion = await obtenerCotizacion(req.params.id);
@@ -966,11 +1018,11 @@ async function procesarComprobanteSaldo(req: Request, res: Response, err: unknow
 // transferencia, se ignora cualquier `metodo` distinto a TRANSFERENCIA.
 export async function gestionarSaldoController(req: Request, res: Response): Promise<void> {
   const body = (req.body ?? {}) as Record<string, unknown>;
-  const accion = body.accion;
+  const accion = normalizarAccionPago(body.accion);
   const metodo = body.metodo;
 
   if (typeof accion !== 'string' || !ACCIONES_PAGO.includes(accion as AccionPago)) {
-    res.status(400).json({ message: `accion es requerida y debe ser una de: ${ACCIONES_PAGO.join(', ')}.` });
+    res.status(400).json({ message: MENSAJE_ACCION_PAGO });
     return;
   }
   if (metodo !== undefined && metodo !== 'TRANSFERENCIA' && metodo !== 'EFECTIVO') {
@@ -999,6 +1051,7 @@ export async function gestionarSaldoController(req: Request, res: Response): Pro
   }
 
   try {
+    const datos = leerDatosDeGestion(body);
     if (accion === 'VALIDAR' || accion === 'RECHAZAR') {
       if (accion === 'VALIDAR') {
         await confirmarAcreditacionDirecta({
@@ -1006,6 +1059,7 @@ export async function gestionarSaldoController(req: Request, res: Response): Pro
           tipoPago: 'SALDO',
           adminId: usuarioId,
           metodoSaldo: metodo as string | undefined,
+          ...datos,
         });
         await notificarCliente(req.params.id, { tipo: 'SALDO', evento: 'CONFIRMADO' });
       } else {
@@ -1021,6 +1075,7 @@ export async function gestionarSaldoController(req: Request, res: Response): Pro
           motivoRechazo,
           motivoRechazoDetalle: typeof motivoRechazoDetalle === 'string' ? motivoRechazoDetalle : null,
           rechazadoPor: usuarioId,
+          ...datos,
         });
         await notificarCliente(req.params.id, {
           tipo: 'SALDO',
@@ -1044,6 +1099,7 @@ export async function gestionarSaldoController(req: Request, res: Response): Pro
         referenciaBancaria: typeof body.referenciaBancaria === 'string' ? body.referenciaBancaria : null,
         cuentaBancariaId: typeof body.cuentaBancariaId === 'string' ? body.cuentaBancariaId : null,
         gestionadoPor: usuarioId,
+        ...datos,
       });
       const cotizacion = await obtenerCotizacion(req.params.id);
       res.status(200).json({ cotizacion, transferencia });
@@ -1062,6 +1118,7 @@ export async function gestionarSaldoController(req: Request, res: Response): Pro
       verificadorId,
       registradoPor: usuarioId,
       metodoSaldo: metodo as string | undefined,
+      ...datos,
     });
     await notificarCliente(req.params.id, { tipo: 'SALDO', evento: 'CONFIRMADO' });
     const cotizacion = await obtenerCotizacion(req.params.id);

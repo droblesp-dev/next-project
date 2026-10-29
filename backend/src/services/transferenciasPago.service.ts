@@ -5,6 +5,8 @@ import * as cuentasBancariasRepo from '../repositories/cuentasBancarias.reposito
 import { findByIdWithRol } from '../repositories/usuarios.repository.js';
 import { crearOrdenAutomatica } from './ordenAutomatica.service.js';
 import {
+  AnticipoRequiereComprobanteError,
+  AnticipoRequiereRevisionError,
   anticipoPermiteSaldo,
   ComprobanteSaldoRequeridoError,
   CotizacionNoEncontradaError,
@@ -31,12 +33,16 @@ import type { TransferenciaPago } from '../repositories/transferenciasPago.repos
 // MetodoSaldoInvalidoError, ComprobanteSaldoRequeridoError) que el controlador no reconocía y que
 // terminaban como HTTP 500; ahora se importan de `cotizaciones.service` y se re-exportan.
 export {
+  AnticipoRequiereComprobanteError,
+  AnticipoRequiereRevisionError,
   ComprobanteSaldoRequeridoError,
   CotizacionNoEncontradaError,
   MetodoSaldoInvalidoError,
   MetodoSaldoRequeridoError,
   SaldoRequiereAnticipoValidadoError,
 };
+// Datos opcionales de la gestión (observaciones, hora real de la llamada) mal formados, o seguimiento sin observación.
+export class DatosDeGestionInvalidosError extends Error {}
 export class TipoPagoInvalidoError extends Error {}
 export class CotizacionNoAceptadaError extends Error {}
 export class PagoNoGestionableError extends Error {}
@@ -56,6 +62,39 @@ function validarTipoPago(tipoPago: string): void {
   if (!TIPOS_PAGO.includes(tipoPago)) {
     throw new TipoPagoInvalidoError(`tipoPago debe ser uno de: ${TIPOS_PAGO.join(', ')}`);
   }
+}
+
+export const OBSERVACIONES_MAX = 1000;
+// Tolerancia para relojes ligeramente desfasados: una llamada no puede ser posterior a «ahora» más este margen.
+const MARGEN_LLAMADA_FUTURA_MS = 5 * 60 * 1000;
+
+export interface DatosDeGestion {
+  observaciones?: string | null;
+  llamadaEn?: Date | null;
+  // Seguimiento (ADMIN sin respuesta, el dinero todavía no aparece…): exige observación; el pago sigue PENDIENTE.
+  seguimiento?: boolean;
+}
+
+// Normaliza y valida los datos opcionales de trazabilidad (V20). Devuelve las observaciones recortadas (null si
+// están vacías) y la hora real de la llamada (null si no se conoce — nunca se sustituye por la hora del registro).
+function normalizarDatosDeGestion(datos: DatosDeGestion): { observaciones: string | null; llamadaEn: Date | null } {
+  const observaciones = datos.observaciones?.trim() ? datos.observaciones.trim() : null;
+  if (observaciones && observaciones.length > OBSERVACIONES_MAX) {
+    throw new DatosDeGestionInvalidosError(`observaciones no puede superar ${OBSERVACIONES_MAX} caracteres.`);
+  }
+  if (datos.seguimiento && !observaciones) {
+    throw new DatosDeGestionInvalidosError('observaciones es requerida al registrar un seguimiento.');
+  }
+  const llamadaEn = datos.llamadaEn ?? null;
+  if (llamadaEn !== null) {
+    if (Number.isNaN(llamadaEn.getTime())) {
+      throw new DatosDeGestionInvalidosError('llamadaEn no es una fecha y hora válida.');
+    }
+    if (llamadaEn.getTime() > Date.now() + MARGEN_LLAMADA_FUTURA_MS) {
+      throw new DatosDeGestionInvalidosError('llamadaEn no puede ser posterior al momento actual.');
+    }
+  }
+  return { observaciones, llamadaEn };
 }
 
 // Regla de negocio: el saldo no puede gestionarse (registrar, rechazar ni validar) mientras el
@@ -94,11 +133,12 @@ export async function registrarGestionPago(input: {
   cuentaBancariaId?: string | null;
   comprobantePath?: string | null;
   gestionadoPor: string;
-}): Promise<TransferenciaPago> {
+} & DatosDeGestion): Promise<TransferenciaPago> {
   validarTipoPago(input.tipoPago);
   if (!(input.importeDeclarado > 0)) {
     throw new ImporteInvalidoError('importeDeclarado debe ser mayor que cero.');
   }
+  const { observaciones, llamadaEn } = normalizarDatosDeGestion(input);
   // Un identificador que ni siquiera tiene formato UUID no puede corresponder a ninguna
   // cuenta: se rechaza con el mismo error que una cuenta inexistente (400), en lugar de
   // dejar que PostgreSQL falle con "invalid input syntax for type uuid" (500).
@@ -144,27 +184,37 @@ export async function registrarGestionPago(input: {
     }
 
     const vigenteAnterior = await transferenciasRepo.obtenerVigente(input.cotizacionId, input.tipoPago, client);
+    // Un seguimiento (ADMIN sin respuesta, el dinero todavía no aparece…) solo anota una observación sobre una
+    // gestión ya registrada: nunca puede ser la primera, porque la revisión del comprobante va antes.
+    if (input.seguimiento && (!vigenteAnterior || vigenteAnterior.estado !== 'PENDIENTE')) {
+      throw new AnticipoRequiereRevisionError();
+    }
     if (vigenteAnterior) {
       await transferenciasRepo.marcarNoVigente(vigenteAnterior.id, client);
     }
+    // En un seguimiento los datos de la gestión (importe, banco, cuenta, referencia, comprobante) se conservan
+    // tal como estaban; lo que cambia es la observación y la hora de la llamada, si se conoce.
+    const base = input.seguimiento ? vigenteAnterior : null;
 
     const creado = await transferenciasRepo.crear(
       {
         cotizacionId: input.cotizacionId,
         tipoPago: input.tipoPago,
-        importeDeclarado: input.importeDeclarado,
-        comprobantePath: input.comprobantePath ?? vigenteAnterior?.comprobante_path ?? null,
+        importeDeclarado: base ? Number(base.importe_declarado) : input.importeDeclarado,
+        comprobantePath: base ? base.comprobante_path : (input.comprobantePath ?? vigenteAnterior?.comprobante_path ?? null),
         estado: 'PENDIENTE',
         gestionadoPor: input.gestionadoPor,
         registradoPor: input.gestionadoPor,
         vigente: true,
-        bancoOrigen: input.bancoOrigen ?? null,
-        cuentaBancariaId: input.cuentaBancariaId ?? null,
-        bancoCuentaSnapshot: snapshot?.banco ?? null,
-        titularCuentaSnapshot: snapshot?.titular ?? null,
-        tipoCuentaSnapshot: snapshot?.tipoCuenta ?? null,
-        numeroCuentaSnapshot: snapshot?.numeroCuenta ?? null,
-        referenciaBancaria: input.referenciaBancaria ?? null,
+        bancoOrigen: base ? base.banco_origen : (input.bancoOrigen ?? null),
+        cuentaBancariaId: base ? base.cuenta_bancaria_id : (input.cuentaBancariaId ?? null),
+        bancoCuentaSnapshot: base ? base.banco_cuenta_snapshot : (snapshot?.banco ?? null),
+        titularCuentaSnapshot: base ? base.titular_cuenta_snapshot : (snapshot?.titular ?? null),
+        tipoCuentaSnapshot: base ? base.tipo_cuenta_snapshot : (snapshot?.tipoCuenta ?? null),
+        numeroCuentaSnapshot: base ? base.numero_cuenta_snapshot : (snapshot?.numeroCuenta ?? null),
+        referenciaBancaria: base ? base.referencia_bancaria : (input.referenciaBancaria ?? null),
+        observaciones,
+        llamadaEn,
       },
       client
     );
@@ -188,7 +238,7 @@ export async function rechazarPago(input: {
   motivoRechazo: string;
   motivoRechazoDetalle?: string | null;
   rechazadoPor: string;
-}): Promise<TransferenciaPago> {
+} & DatosDeGestion): Promise<TransferenciaPago> {
   validarTipoPago(input.tipoPago);
   if (!MOTIVOS_RECHAZO.includes(input.motivoRechazo)) {
     throw new MotivoRechazoInvalidoError(`motivoRechazo debe ser uno de: ${MOTIVOS_RECHAZO.join(', ')}`);
@@ -196,6 +246,7 @@ export async function rechazarPago(input: {
   if (input.motivoRechazo === 'OTRO' && !input.motivoRechazoDetalle?.trim()) {
     throw new MotivoRechazoInvalidoError('motivoRechazoDetalle es requerido cuando motivoRechazo es OTRO.');
   }
+  const { observaciones, llamadaEn } = normalizarDatosDeGestion(input);
 
   const client = await pool.connect();
   try {
@@ -241,6 +292,8 @@ export async function rechazarPago(input: {
         bancoOrigen: vigenteAnterior?.banco_origen ?? null,
         motivoRechazo: input.motivoRechazo,
         motivoRechazoDetalle: input.motivoRechazo === 'OTRO' ? (input.motivoRechazoDetalle ?? null) : null,
+        observaciones,
+        llamadaEn,
       },
       client
     );
@@ -263,7 +316,8 @@ export async function confirmarAcreditacionDirecta(input: {
   tipoPago: string;
   adminId: string;
   metodoSaldo?: string;
-}): Promise<TransferenciaPago> {
+} & DatosDeGestion): Promise<TransferenciaPago> {
+  const datos = normalizarDatosDeGestion(input);
   return confirmarAcreditacion({
     cotizacionId: input.cotizacionId,
     tipoPago: input.tipoPago,
@@ -271,6 +325,7 @@ export async function confirmarAcreditacionDirecta(input: {
     registradoPor: input.adminId,
     medioConfirmacion: 'DIRECTO',
     metodoSaldo: input.metodoSaldo,
+    ...datos,
   });
 }
 
@@ -286,7 +341,8 @@ export async function registrarConfirmacionTelefonica(input: {
   verificadorId: string;
   registradoPor: string;
   metodoSaldo?: string;
-}): Promise<TransferenciaPago> {
+} & DatosDeGestion): Promise<TransferenciaPago> {
+  const datos = normalizarDatosDeGestion(input);
   const verificador = await findByIdWithRol(input.verificadorId);
   if (!verificador || !verificador.activo || verificador.rol !== 'ADMIN') {
     throw new VerificadorInvalidoError('El usuario identificado como verificador debe ser un ADMIN activo.');
@@ -299,6 +355,7 @@ export async function registrarConfirmacionTelefonica(input: {
     registradoPor: input.registradoPor,
     medioConfirmacion: 'TELEFONICO',
     metodoSaldo: input.metodoSaldo,
+    ...datos,
   });
 }
 
@@ -309,6 +366,8 @@ async function confirmarAcreditacion(input: {
   registradoPor: string;
   medioConfirmacion: 'DIRECTO' | 'TELEFONICO';
   metodoSaldo?: string;
+  observaciones: string | null;
+  llamadaEn: Date | null;
 }): Promise<TransferenciaPago> {
   validarTipoPago(input.tipoPago);
 
@@ -324,6 +383,20 @@ async function confirmarAcreditacion(input: {
 
     let actualizada;
     if (input.tipoPago === 'ANTICIPO') {
+      // «Dinero acreditado» de un anticipo por TRANSFERENCIA: COMERCIAL debe haber revisado antes el comprobante
+      // que subió el cliente (una gestión vigente PENDIENTE). Aplica a TODAS las vías que acreditan (telefónica y
+      // VALIDAR directo de ADMIN): ninguna puede saltarse la revisión. Solo cuando el anticipo está PENDIENTE: con
+      // cualquier otro estado el UPDATE condicional de abajo responde con PagoNoConfirmableError (409). El efectivo
+      // conserva su flujo propio (no tiene comprobante que revisar).
+      if (cotizacion.estado_anticipo === 'PENDIENTE' && cotizacion.metodo_anticipo === 'TRANSFERENCIA') {
+        if (!cotizacion.comprobante_anticipo) {
+          throw new AnticipoRequiereComprobanteError();
+        }
+        const revision = await transferenciasRepo.obtenerVigente(input.cotizacionId, 'ANTICIPO', client);
+        if (!revision || revision.estado !== 'PENDIENTE') {
+          throw new AnticipoRequiereRevisionError();
+        }
+      }
       actualizada = await cotizacionesRepo.actualizarEstadoAnticipo(input.cotizacionId, 'VALIDADO', input.verificadoPor, client);
     } else {
       // El saldo exige el anticipo resuelto (VALIDADO o NO_APLICA); se comprueba antes que el
@@ -380,6 +453,8 @@ async function confirmarAcreditacion(input: {
         tipoCuentaSnapshot: vigenteAnterior?.tipo_cuenta_snapshot ?? null,
         numeroCuentaSnapshot: vigenteAnterior?.numero_cuenta_snapshot ?? null,
         referenciaBancaria: vigenteAnterior?.referencia_bancaria ?? null,
+        observaciones: input.observaciones,
+        llamadaEn: input.llamadaEn,
       },
       client
     );

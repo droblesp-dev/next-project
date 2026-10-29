@@ -30,6 +30,13 @@ export interface TransferenciaPago {
   referencia_bancaria: string | null;
   motivo_rechazo: string | null;
   motivo_rechazo_detalle: string | null;
+  // V20: seguimiento de la confirmación («Dinero acreditado»). `llamada_en` es la hora REAL de la llamada con
+  // ADMIN (solo si se conoce); `creado_en` es la hora del registro en el sistema.
+  observaciones: string | null;
+  llamada_en: string | null;
+  // Solo en el historial (listarPorCotizacion): nombres de quien verificó (ADMIN) y de quien registró.
+  verificado_por_nombre?: string | null;
+  registrado_por_nombre?: string | null;
 }
 
 type Executor = Pool | PoolClient;
@@ -38,7 +45,12 @@ const COLUMNAS = `id, cotizacion_id, tipo_pago, importe_declarado, comprobante_p
                    gestionado_por, verificado_por, registrado_por, medio_confirmacion, vigente, creado_en,
                    banco_origen, cuenta_bancaria_id, banco_cuenta_snapshot, titular_cuenta_snapshot,
                    tipo_cuenta_snapshot, numero_cuenta_snapshot, referencia_bancaria,
-                   motivo_rechazo, motivo_rechazo_detalle`;
+                   motivo_rechazo, motivo_rechazo_detalle, observaciones, llamada_en`;
+
+// Las mismas columnas con el alias `t.` (consultas con JOIN a `usuarios`, que también tiene `id`).
+const COLUMNAS_CON_ALIAS = COLUMNAS.split(',')
+  .map((columna) => `t.${columna.trim()}`)
+  .join(', ');
 
 // Crea un nuevo intento. No decide por sí solo si marca `vigente=false` al
 // anterior ni sincroniza las columnas-caché de `cotizaciones` — eso es
@@ -65,6 +77,8 @@ export async function crear(
     referenciaBancaria?: string | null;
     motivoRechazo?: string | null;
     motivoRechazoDetalle?: string | null;
+    observaciones?: string | null;
+    llamadaEn?: Date | null;
   },
   executor: Executor = pool
 ): Promise<TransferenciaPago> {
@@ -74,14 +88,14 @@ export async function crear(
        gestionado_por, verificado_por, registrado_por, medio_confirmacion, vigente,
        banco_origen, cuenta_bancaria_id, banco_cuenta_snapshot, titular_cuenta_snapshot,
        tipo_cuenta_snapshot, numero_cuenta_snapshot, referencia_bancaria,
-       motivo_rechazo, motivo_rechazo_detalle
+       motivo_rechazo, motivo_rechazo_detalle, observaciones, llamada_en
      )
      VALUES (
        gen_random_uuid(), $1, $2, $3, $4, COALESCE($5, 'PENDIENTE'),
        $6, $7, $8, $9, $10,
        $11, $12, $13, $14,
        $15, $16, $17,
-       $18, $19
+       $18, $19, $20, $21
      )
      RETURNING ${COLUMNAS}`,
     [
@@ -104,6 +118,8 @@ export async function crear(
       data.referenciaBancaria ?? null,
       data.motivoRechazo ?? null,
       data.motivoRechazoDetalle ?? null,
+      data.observaciones ?? null,
+      data.llamadaEn ?? null,
     ]
   );
   return result.rows[0];
@@ -116,8 +132,14 @@ export async function listarPorCotizacion(
   cotizacionId: string,
   executor: Executor = pool
 ): Promise<TransferenciaPago[]> {
+  // Incluye los nombres de quien verificó y de quien registró (solo lectura de `usuarios.nombre`).
   const result = await executor.query<TransferenciaPago>(
-    `SELECT ${COLUMNAS} FROM transferencias_pago WHERE cotizacion_id = $1 ORDER BY creado_en DESC`,
+    `SELECT ${COLUMNAS_CON_ALIAS},
+            uv.nombre AS verificado_por_nombre, ur.nombre AS registrado_por_nombre
+     FROM transferencias_pago t
+     LEFT JOIN usuarios uv ON uv.id = t.verificado_por
+     LEFT JOIN usuarios ur ON ur.id = t.registrado_por
+     WHERE t.cotizacion_id = $1 ORDER BY t.creado_en DESC`,
     [cotizacionId]
   );
   return result.rows;

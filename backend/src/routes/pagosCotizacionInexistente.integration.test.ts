@@ -15,6 +15,7 @@ import jwt from 'jsonwebtoken';
 import { randomUUID } from 'crypto';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { pool } from '../config/db.js';
+import { simularComprobanteDelCliente } from '../config/testFixturesPagos.js';
 import { env } from '../config/env.js';
 import { RegistroLimpieza } from '../config/testCleanup.js';
 import { cotizacionesRouter } from './cotizaciones.routes.js';
@@ -261,6 +262,8 @@ describe('Los demás códigos HTTP se conservan', () => {
 
     const aceptada = await crearCotizacionFicticia(true);
     await pedir(`/${aceptada}/anticipo`, tokenComercial, { method: 'PATCH', body: { accion: 'GESTIONAR', importeDeclarado: 5 } });
+    // Fase 2: acreditar un anticipo por TRANSFERENCIA exige el comprobante del cliente (la revisión ya está registrada).
+    await simularComprobanteDelCliente(pool, aceptada);
     expect((await pedir(`/${aceptada}/anticipo`, tokenAdmin, { method: 'PATCH', body: { accion: 'VALIDAR' } })).status).toBe(200);
     expect((await pedir(`/${aceptada}/anticipo`, tokenAdmin, { method: 'PATCH', body: { accion: 'VALIDAR' } })).status).toBe(409);
   });

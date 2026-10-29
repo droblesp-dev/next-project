@@ -17,6 +17,7 @@ import jwt from 'jsonwebtoken';
 import { randomUUID } from 'crypto';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { pool } from '../config/db.js';
+import { simularComprobanteDelCliente } from '../config/testFixturesPagos.js';
 import { env } from '../config/env.js';
 import { RegistroLimpieza } from '../config/testCleanup.js';
 import { cotizacionesRouter } from './cotizaciones.routes.js';
@@ -309,6 +310,8 @@ describe('Permisos y confirmación de la acreditación (sin cambios)', () => {
     await gestionar(id, tokenComercial, { bancoOrigen: 'Banco A' });
     await gestionar(id, tokenComercial, { bancoOrigen: 'Banco B' });
     expect(await estadoAnticipo(id)).toBe('PENDIENTE');
+    // Fase 2: acreditar un anticipo por TRANSFERENCIA exige el comprobante del cliente (la revisión ya está registrada).
+    await simularComprobanteDelCliente(pool, id);
 
     const validar = await pedir(`/${id}/anticipo`, tokenAdmin, { method: 'PATCH', body: { accion: 'VALIDAR' } });
     expect(validar.status).toBe(200);

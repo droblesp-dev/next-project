@@ -33,6 +33,11 @@ export class DiasVigenciaInvalidoError extends Error {}
 export class AccionNoPermitidaError extends Error {}
 // Subclases con mensaje propio para el cliente (el controlador las atiende antes que la genérica).
 export class SaldoRequiereAnticipoValidadoError extends AccionNoPermitidaError {}
+// Acreditar («Dinero acreditado») un anticipo por TRANSFERENCIA exige el comprobante del cliente y la revisión
+// previa de COMERCIAL (una gestión vigente PENDIENTE). Se definen aquí, junto a las demás, porque
+// cotizaciones.controller traduce a HTTP los errores de este módulo y de transferenciasPago.service.
+export class AnticipoRequiereComprobanteError extends AccionNoPermitidaError {}
+export class AnticipoRequiereRevisionError extends AccionNoPermitidaError {}
 export class ComprobanteYaRecibidoError extends AccionNoPermitidaError {}
 export class AnticipoNoGestionableError extends Error {}
 export class SaldoNoGestionableError extends Error {}

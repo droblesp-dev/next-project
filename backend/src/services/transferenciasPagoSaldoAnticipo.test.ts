@@ -235,6 +235,9 @@ describe('errores funcionales del saldo (mismas clases que reconoce el controlad
 describe('el anticipo no cambia su comportamiento', () => {
   it('confirmar el anticipo PENDIENTE sigue funcionando y crea la orden automática después del COMMIT', async () => {
     repos.lockParaTransferencia.mockResolvedValue(bloqueo({ estado_anticipo: 'PENDIENTE' }));
+    // Anticipo por TRANSFERENCIA: acreditarlo exige la revisión previa de COMERCIAL (gestión vigente PENDIENTE);
+    // el bloqueo ya trae el comprobante del cliente.
+    repos.obtenerVigente.mockResolvedValue({ estado: 'PENDIENTE', importe_declarado: '100.00' });
     await confirmarAcreditacionDirecta({ cotizacionId: COT_ID, tipoPago: 'ANTICIPO', adminId: ADMIN_ID });
     expect(repos.actualizarEstadoAnticipo).toHaveBeenCalledWith(COT_ID, 'VALIDADO', ADMIN_ID, client);
     expect(consultasSql()).toContain('COMMIT');

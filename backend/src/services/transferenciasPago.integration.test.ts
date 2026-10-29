@@ -11,6 +11,7 @@ import { randomUUID } from 'crypto';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Request, Response } from 'express';
 import { pool } from '../config/db.js';
+import { simularComprobanteDelCliente } from '../config/testFixturesPagos.js';
 import * as transferenciasRepo from '../repositories/transferenciasPago.repository.js';
 import { listarCuentasActivasPublico } from './cuentasBancarias.service.js';
 import {
@@ -112,6 +113,13 @@ async function crearCotizacionAceptadaConAnticipo(etiqueta: string) {
   return enviada.id;
 }
 
+// Fase 2: acreditar un anticipo por TRANSFERENCIA exige el comprobante del cliente y la revisión previa de COMERCIAL
+// (una gestión vigente PENDIENTE). Las cotizaciones ficticias nacen sin ellos: se deja la cotización lista para acreditar.
+async function prepararAnticipoParaAcreditar(cotizacionId: string): Promise<void> {
+  await simularComprobanteDelCliente(pool, cotizacionId);
+  await registrarGestionPago({ cotizacionId, tipoPago: 'ANTICIPO', importeDeclarado: 500, gestionadoPor: comercialId });
+}
+
 describe('transferenciasPago.service — integración con gestionarAnticipo/gestionarSaldo, nextproject_test, real', () => {
   it('registrarGestionPago crea un intento PENDIENTE vigente y queda en el historial', async () => {
     const cotizacionId = await crearCotizacionAceptadaConAnticipo('A-gestionar');
@@ -156,6 +164,7 @@ describe('transferenciasPago.service — integración con gestionarAnticipo/gest
 
   it('confirmarAcreditacionDirecta (ADMIN) valida el anticipo y nunca lanza por la creación de la orden', async () => {
     const cotizacionId = await crearCotizacionAceptadaConAnticipo('C-confirmar-directo');
+    await prepararAnticipoParaAcreditar(cotizacionId);
 
     const confirmado = await confirmarAcreditacionDirecta({ cotizacionId, tipoPago: 'ANTICIPO', adminId });
 
@@ -186,6 +195,7 @@ describe('transferenciasPago.service — integración con gestionarAnticipo/gest
 
   it('registrarConfirmacionTelefonica identifica correctamente al ADMIN verificador, distinto del COMERCIAL que registra', async () => {
     const cotizacionId = await crearCotizacionAceptadaConAnticipo('E-telefonica-valida');
+    await prepararAnticipoParaAcreditar(cotizacionId);
 
     const confirmado = await registrarConfirmacionTelefonica({
       cotizacionId,
@@ -237,6 +247,7 @@ describe('transferenciasPago.service — integración con gestionarAnticipo/gest
 
   it('dos confirmaciones directas concurrentes del mismo anticipo: solo una tiene éxito', async () => {
     const cotizacionId = await crearCotizacionAceptadaConAnticipo('G-concurrencia');
+    await prepararAnticipoParaAcreditar(cotizacionId);
 
     const resultados = await Promise.allSettled([
       confirmarAcreditacionDirecta({ cotizacionId, tipoPago: 'ANTICIPO', adminId }),

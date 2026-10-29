@@ -19,6 +19,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { pool } from '../config/db.js';
 import { env } from '../config/env.js';
 import { RegistroLimpieza } from '../config/testCleanup.js';
+import { simularComprobanteDelCliente } from '../config/testFixturesPagos.js';
 import { cotizacionesRouter } from './cotizaciones.routes.js';
 import * as cotizacionesRepo from '../repositories/cotizaciones.repository.js';
 import { crearSolicitud, cambiarEstadoSolicitud } from '../services/solicitudes.service.js';
@@ -132,6 +133,9 @@ async function crearCotizacionAceptada(aceptar = true): Promise<string> {
 // transferencias_pago se registra para limpieza igual que las demás (vía `cotizacionesCreadas`).
 async function crearCotizacionConAnticipoValidado(): Promise<string> {
   const id = await crearCotizacionAceptada();
+  // Fase 2: el anticipo por TRANSFERENCIA exige el comprobante del cliente y la revisión previa de COMERCIAL.
+  await simularComprobanteDelCliente(pool, id);
+  await registrarGestionPago({ cotizacionId: id, tipoPago: 'ANTICIPO', importeDeclarado: 500, gestionadoPor: comercialId });
   await confirmarAcreditacionDirecta({ cotizacionId: id, tipoPago: 'ANTICIPO', adminId });
   return id;
 }
