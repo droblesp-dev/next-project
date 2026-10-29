@@ -3,6 +3,7 @@ import { Eye } from 'lucide-react';
 import { fetchAutenticado, SesionInvalidaError, type Usuario } from '../lib/authClient';
 import { coincideCodigo } from '../lib/busqueda';
 import { ayudaReferencia, referenciaOrigen } from '../lib/referenciasOrden';
+import { gestionOperativo } from '../lib/estadoOperativo';
 import { useBusquedaServidor } from '../lib/busquedaServidor';
 import type { Solicitud } from './BandejaSolicitudes';
 
@@ -1369,6 +1370,13 @@ export default function GestionOrdenes({
                 <dt className="text-on-surface-variant uppercase">Responsable</dt>
                 <dd className="text-on-surface">{nombreResponsableAdmin(ordenSeleccionada.responsable_id)}</dd>
               </div>
+              <div className="col-span-2 sm:col-span-3">
+                <dt className="text-on-surface-variant uppercase">Estado a gestionar por Operativo</dt>
+                <dd className="text-on-surface" data-testid="estado-operativo">
+                  {gestionOperativo(ordenSeleccionada.estado, ordenSeleccionada.avance).estado} —{' '}
+                  {gestionOperativo(ordenSeleccionada.estado, ordenSeleccionada.avance).accion}
+                </dd>
+              </div>
               <div>
                 <dt className="text-on-surface-variant uppercase">Creada</dt>
                 <dd className="text-on-surface">{new Date(ordenSeleccionada.creado_en).toLocaleString()}</dd>
@@ -1658,6 +1666,11 @@ export default function GestionOrdenes({
             <p className="font-label-caps text-[10px] text-primary-container uppercase mb-2">Responsable</p>
             <p className="font-body-md text-body-md text-on-surface">
               {responsableMostrable(ordenSeleccionada.responsable_id, ordenSeleccionada.responsable_nombre)}
+            </p>
+            <p className="font-label-caps text-[10px] text-primary-container uppercase mt-3 mb-2">Estado a gestionar por Operativo</p>
+            <p className="font-body-md text-body-md text-on-surface" data-testid="estado-operativo">
+              <span className="font-semibold">{gestionOperativo(ordenSeleccionada.estado, ordenSeleccionada.avance).estado}</span> —{' '}
+              {gestionOperativo(ordenSeleccionada.estado, ordenSeleccionada.avance).accion}
             </p>
           </div>
 
