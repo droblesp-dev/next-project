@@ -21,19 +21,19 @@ Orden obligatorio: **V25a → código nuevo → V25b → V26 → V27**. El esque
 
 ## 1. Decisiones que deben estar tomadas antes de la ventana
 
-| Id | Decisión | Recomendación |
+| Id | Decisión | Estado |
 |---|---|---|
-| D1 | Respuestas históricas de NexIA (texto en `contenido`, sin destinatario) | Dejarlas ocultas por código (H1); no modificarlas |
-| D2 | Fichas técnicas ya generadas | Revisión manual dirigida (F2); no regenerar ni sobrescribir |
-| D3 | Contadores de COMERCIAL | C3: hilos donde creó una cotización o escribió. **No implementado todavía** |
-| D4 | Fecha de corte de los contadores y duración del periodo en sombra | Corte al activar; sombra de 14 días |
-| D5 | Barrera en la base de datos contra instancias antiguas | Cuenta de base de datos dedicada (requiere autorización aparte) |
-| D6 | Datos sintéticos en producción para verificar | No: se ensaya en copia restaurada |
+| D1 | Respuestas históricas de NexIA (texto en `contenido`, sin destinatario) | **Aprobada H1**: intactas y ocultas por el código |
+| D2 | Fichas técnicas ya generadas | **Aprobada F2**: revisión manual dirigida, sin modificar ni regenerar (`docs/REVISION-FICHAS-HISTORICAS.md`) |
+| D3 | Contadores de COMERCIAL | **Aprobada C3** e implementada en local (hilos donde creó una cotización o escribió). Siguen inactivos |
+| D4 | Salida de sombra a estricto | **Aprobada**: 14 días en sombra, ventana de actividad de 30 días y tolerancia cero a accesos legítimos denegados sin explicar en los últimos 7 días. Controles en §8 |
+| D5 | Barrera de credenciales contra instancias antiguas | **Alternativa A ensayada** solo en `nextproject_ensayo` (`docs/BARRERA-CREDENCIALES-ENSAYO.md`). En producción pendiente |
+| D6 a D8 | Sin consultas ni operaciones en producción, sin despliegues ni cierres de servicio, sin datos sintéticos en producción | **Vigentes** |
 
 **Regla de activación (hallazgo del ensayo):** con `CHAT_PARTICIPANTES_MODO` en sombra y los contadores activos, un
 OPERATIVO acumula pendientes de **todos** los hilos sin orden donde COMERCIAL escribió tras la fecha de corte (en la base de
 pruebas: 109 hilos). Por eso **los contadores no deben activarse mientras el modo sea sombra**: se activan después de pasar a
-estricto (y, para COMERCIAL, con la regla C3 aprobada e implementada).
+estricto. Con C3 (implementada) el contador de COMERCIAL ya solo se enciende en los hilos donde creó una cotización o escribió.
 
 ## 2. Requisitos previos (todos deben cumplirse)
 
@@ -173,17 +173,47 @@ mensajes quedaron intactos y las columnas de V25a se conservaron.
   persistentes): 94–173 ms. El plan usa un barrido paralelo de `solicitud_mensajes`; si el volumen real fuera mucho mayor
   convendría un índice por fecha de creación (decisión futura, no incluida).
 
-## 8. Después del despliegue
+## 8. Después del despliegue (y controles de la salida de sombra, D4)
 
 1. **Periodo en sombra** (propuesta: 14 días). Se vigila el registro `CHAT_ACCESO_SOMBRA_DENEGADO` (usuario, solicitud,
    operación y fecha; nunca contenido) y la comprobación 3.6.
+   - **Control 3 (accesos denegados sin explicar):** `cd backend && npx tsx scripts/chat-sombra-resumen.ts <registro.log> --dias 7 [--explicados <archivo>]`
+     lee el registro del servidor (solo usuario, solicitud, operación y fecha), no usa la base de datos y sale con código 1 si
+     queda algún par usuario-solicitud sin explicar en la ventana. `--explicados` recibe un par «usuarioId solicitudId» por línea ya
+     aceptado (por ejemplo, un OPERATIVO que todavía no fue incorporado). Lógica con pruebas unitarias (`resumenSombra.test.ts`).
+   - **Control 2 (cobertura):** consulta 3.6 del guion con la ventana de 30 días; debe devolver cero.
+   - **Control 1 (duración):** 14 días corridos desde el arranque en sombra (fecha del primer evento del registro o de la
+     activación de V26).
 2. **Condición de salida a estricto**: duración cumplida; 3.6 en cero salvo excepciones aprobadas; sin accesos denegados
    legítimos sin explicar en los últimos 7 días; reclamo e incorporación comprobados; interruptor para volver a sombra
    probado; aprobación expresa por escrito. Las conversaciones sin reclamar quedan **inactivas** (sin acceso) con sus mensajes
    intactos y siguen siendo reclamables por cualquier COMERCIAL.
 3. **Contadores**: se activan definiendo `CHAT_PENDIENTES_DESDE` (fecha de corte = momento de activación) **después** de pasar
-   a estricto y, para COMERCIAL, con la regla C3 aprobada e implementada. Los mensajes anteriores a la fecha de corte quedan
-   sin estado de lectura.
+   a estricto. Para COMERCIAL rige C3 (hilos donde creó una cotización o escribió); el acceso a las conversaciones no cambia.
+   Los mensajes anteriores a la fecha de corte quedan sin estado de lectura. No se activan sin aprobación expresa.
 4. **Fichas técnicas ya generadas**: revisión manual dirigida con la lista de 3.5; no se regeneran ni se sobrescriben.
 5. **Respuestas históricas de NexIA**: permanecen sin modificar (ocultas por código). Riesgo residual: una instancia anterior
    que lea la base puede mostrar su texto; se cubre con 3.2 y, si se aprueba, con la barrera D5.
+
+## 9. Condiciones de aceptación para producción
+
+Todas deben ser verdaderas, con evidencia registrada y autorización expresa en cada paso de producción:
+
+1. Commit de control probado: `tsc` limpio, pruebas unitarias del backend, integración en la base de pruebas y frontend en verde.
+2. Decisiones D1 a D8 vigentes por escrito.
+3. Respaldo de producción verificado con restauración de prueba exitosa en una base de ensayo.
+4. Ensayo completo repetido sobre una copia reciente, sin errores y con tiempos aceptables.
+5. Huella limpia (solo `nextproject-api-r0` o posterior), medida con una cuenta de vigilancia, antes de V25a, de V25b y de reabrir.
+6. V25a, V25b, V26 y V27 aplicadas en ese orden, con las restricciones sin validar y sin errores.
+7. Una respuesta nueva de NexIA tiene su texto solo en `contenido_privado`, un marcador en `contenido` y es visible solo para su
+   destinatario (evidencia del ensayo; no se crean datos sintéticos en producción).
+8. ADMIN: 403 en todo el chat y acceso intacto a las fichas técnicas (matriz automática en verde).
+9. Registros del servidor sin contenido de mensajes.
+10. Barrera de credenciales aplicada y verificada si se aprueba su paso a producción (`docs/BARRERA-CREDENCIALES-ENSAYO.md`).
+11. Modo sombra durante 14 días y condiciones de §8 cumplidas antes de pasar a estricto.
+12. Contadores activados solo tras estricto, con la fecha de corte aprobada.
+13. Revisión manual de fichas completada o aceptada por escrito como riesgo (`docs/REVISION-FICHAS-HISTORICAS.md`).
+14. Ninguna instancia anterior detectada durante la primera semana.
+
+Riesgos que persisten aun cumpliéndolo todo: el texto de las respuestas históricas sigue en la base (H1); el contenido de fichas
+antiguas depende de la revisión humana; y la privacidad frente a instancias antiguas es técnica solo si se aplica la barrera.
