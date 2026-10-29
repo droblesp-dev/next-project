@@ -11,7 +11,8 @@
     "seed:initial": "tsx scripts/seed-initial-data.ts",
     "seed:usuarios-roles": "tsx scripts/seed-usuarios-roles.ts",
     "seed:bancos-catalogo": "tsx scripts/seed-bancos-catalogo.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:integration": "node scripts/test-integration.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.21.0",
