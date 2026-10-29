@@ -1,3 +1,4 @@
+import type { PoolClient } from 'pg';
 import { pool } from '../config/db.js';
 import { obtenerEsquemaChat } from './chatEsquema.js';
 import * as participantesRepo from './solicitudMensajesParticipantes.repository.js';
@@ -51,32 +52,6 @@ export async function listarVisiblesPara(solicitudId: string, usuarioId: string)
   return result.rows;
 }
 
-// Mensaje de una respuesta de NexIA. Si el esquema aún no puede guardarla de forma privada (sin las columnas de V25) se
-// guarda como antes —oculta para todos por el filtro—; con el esquema completo el texto va a `contenido_privado`.
-export async function crearRespuestaNexia(data: {
-  solicitudId: string;
-  contenido: string;
-  destinatarioId: string;
-}): Promise<SolicitudMensaje> {
-  const { destinatario } = await obtenerEsquemaChat();
-  if (destinatario) {
-    const result = await pool.query<SolicitudMensaje>(
-      `INSERT INTO solicitud_mensajes (id, solicitud_id, autor_id, autor_tipo, contenido, destinatario_id, contenido_privado)
-       VALUES (gen_random_uuid(), $1, NULL, 'NEXIA', $2, $3, $4)
-       RETURNING ${columnas(true, 'solicitud_mensajes')}`,
-      [data.solicitudId, CONTENIDO_MARCADOR_RESPUESTA_PRIVADA, data.destinatarioId, data.contenido]
-    );
-    return result.rows[0];
-  }
-  const result = await pool.query<SolicitudMensaje>(
-    `INSERT INTO solicitud_mensajes (id, solicitud_id, autor_id, autor_tipo, contenido)
-     VALUES (gen_random_uuid(), $1, NULL, 'NEXIA', $2)
-     RETURNING ${columnas(false, 'solicitud_mensajes')}`,
-    [data.solicitudId, data.contenido]
-  );
-  return result.rows[0];
-}
-
 export interface PoliticaEnvio {
   usuarioId: string;
   rol: 'COMERCIAL' | 'OPERATIVO';
@@ -89,13 +64,72 @@ export type ResultadoEnvio =
   | { ok: true; mensaje: SolicitudMensaje; participanteNuevo: boolean }
   | { ok: false; motivo: 'SIN_ACCESO' | 'SOLO_LECTURA' };
 
-// Guarda un mensaje de COMERCIAL/OPERATIVO VOLVIENDO A COMPROBAR el acceso dentro de la misma transacción, con las
-// filas que lo deciden bloqueadas en modo compartido (usuario, solicitud, orden más reciente y participante). Así:
+// Comprobación de acceso DENTRO de una transacción abierta, con las filas que lo deciden bloqueadas en modo compartido
+// (usuario, solicitud, orden más reciente y participante). Así:
 //   - una reasignación de orden, un cambio de rol, una desactivación, la cancelación de la solicitud o el retiro de un
-//     participante que se confirmen antes del bloqueo se ven aquí y el envío se rechaza;
-//   - los que llegan durante el envío esperan a que este termine y se aplican después.
-// Un usuario que perdió el acceso antes de que su envío tome el bloqueo no puede guardar el mensaje. No se llama a la
-// IA dentro de esta transacción.
+//     participante que se confirmen antes del bloqueo se ven aquí y la operación se rechaza;
+//   - los que llegan durante la operación esperan a que esta termine y se aplican después;
+//   - la creación de una orden bloquea la solicitud en modo de modificación (ver ordenes.service.ts), así que no puede
+//     colarse entre esta comprobación y el guardado.
+// `iniciarHilo`: solo el envío de un mensaje puede convertir al primer COMERCIAL de un hilo sin COMERCIAL participante
+// en participante; guardar la respuesta de NexIA nunca incorpora a nadie.
+async function verificarAcceso(
+  client: PoolClient,
+  solicitudId: string,
+  politica: PoliticaEnvio,
+  iniciarHilo: boolean
+): Promise<{ ok: true; participanteNuevo: boolean } | { ok: false; motivo: 'SIN_ACCESO' | 'SOLO_LECTURA' }> {
+  const usuario = await client.query<{ activo: boolean; rol: string }>(
+    `SELECT u.activo, r.nombre AS rol FROM usuarios u JOIN roles r ON r.id = u.rol_id WHERE u.id = $1 FOR SHARE OF u`,
+    [politica.usuarioId]
+  );
+  if (!usuario.rows[0] || !usuario.rows[0].activo || usuario.rows[0].rol !== politica.rol) {
+    return { ok: false, motivo: 'SIN_ACCESO' };
+  }
+
+  const solicitud = await client.query<{ estado: string }>(`SELECT estado FROM solicitudes WHERE id = $1 FOR SHARE`, [solicitudId]);
+  if (!solicitud.rows[0] || solicitud.rows[0].estado === 'CANCELADA') {
+    return { ok: false, motivo: 'SOLO_LECTURA' };
+  }
+
+  const orden = await client.query<{ estado: string; responsable_id: string | null }>(
+    `SELECT o.estado, o.responsable_id FROM ordenes o
+     JOIN cotizaciones c ON c.id = o.cotizacion_id
+     WHERE c.solicitud_id = $1
+     ORDER BY o.creado_en DESC LIMIT 1
+     FOR SHARE OF o`,
+    [solicitudId]
+  );
+
+  let participanteNuevo = false;
+  if (orden.rows[0]) {
+    const o = orden.rows[0];
+    if (politica.rol === 'OPERATIVO' && o.responsable_id !== politica.usuarioId) {
+      return { ok: false, motivo: 'SIN_ACCESO' };
+    }
+    if (politica.estadosOrdenSoloLectura.includes(o.estado)) {
+      return { ok: false, motivo: 'SOLO_LECTURA' };
+    }
+  } else if (politica.participantes !== 'NO') {
+    const participa = await participantesRepo.esParticipanteActivo(solicitudId, politica.usuarioId, client, true);
+    if (!participa) {
+      const puedeIniciar = iniciarHilo && politica.rol === 'COMERCIAL' && !(await participantesRepo.hayComercialParticipante(solicitudId, client));
+      if (puedeIniciar) {
+        participanteNuevo = await participantesRepo.insertar(
+          { solicitudId, usuarioId: politica.usuarioId, agregadoPor: politica.usuarioId, origen: 'PRIMER_MENSAJE' },
+          client
+        );
+      } else if (politica.participantes === 'ESTRICTO') {
+        return { ok: false, motivo: 'SIN_ACCESO' };
+      }
+    }
+  }
+  return { ok: true, participanteNuevo };
+}
+
+// Guarda un mensaje de COMERCIAL/OPERATIVO VOLVIENDO A COMPROBAR el acceso en la misma transacción (ver
+// verificarAcceso). Un usuario que perdió el acceso antes de que su envío tome el bloqueo no puede guardar el mensaje.
+// No se llama a la IA dentro de esta transacción.
 export async function crearAutorizado(
   data: { solicitudId: string; contenido: string },
   politica: PoliticaEnvio
@@ -104,59 +138,11 @@ export async function crearAutorizado(
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-
-    const usuario = await client.query<{ activo: boolean; rol: string }>(
-      `SELECT u.activo, r.nombre AS rol FROM usuarios u JOIN roles r ON r.id = u.rol_id WHERE u.id = $1 FOR SHARE OF u`,
-      [politica.usuarioId]
-    );
-    if (!usuario.rows[0] || !usuario.rows[0].activo || usuario.rows[0].rol !== politica.rol) {
+    const acceso = await verificarAcceso(client, data.solicitudId, politica, true);
+    if (!acceso.ok) {
       await client.query('ROLLBACK');
-      return { ok: false, motivo: 'SIN_ACCESO' };
+      return { ok: false, motivo: acceso.motivo };
     }
-
-    const solicitud = await client.query<{ estado: string }>(`SELECT estado FROM solicitudes WHERE id = $1 FOR SHARE`, [data.solicitudId]);
-    if (!solicitud.rows[0] || solicitud.rows[0].estado === 'CANCELADA') {
-      await client.query('ROLLBACK');
-      return { ok: false, motivo: 'SOLO_LECTURA' };
-    }
-
-    const orden = await client.query<{ estado: string; responsable_id: string | null }>(
-      `SELECT o.estado, o.responsable_id FROM ordenes o
-       JOIN cotizaciones c ON c.id = o.cotizacion_id
-       WHERE c.solicitud_id = $1
-       ORDER BY o.creado_en DESC LIMIT 1
-       FOR SHARE OF o`,
-      [data.solicitudId]
-    );
-
-    let participanteNuevo = false;
-    if (orden.rows[0]) {
-      const o = orden.rows[0];
-      if (politica.rol === 'OPERATIVO' && o.responsable_id !== politica.usuarioId) {
-        await client.query('ROLLBACK');
-        return { ok: false, motivo: 'SIN_ACCESO' };
-      }
-      if (politica.estadosOrdenSoloLectura.includes(o.estado)) {
-        await client.query('ROLLBACK');
-        return { ok: false, motivo: 'SOLO_LECTURA' };
-      }
-    } else if (politica.participantes !== 'NO') {
-      const participa = await participantesRepo.esParticipanteActivo(data.solicitudId, politica.usuarioId, client, true);
-      if (!participa) {
-        // El primer COMERCIAL que escribe en un hilo sin COMERCIAL participante queda como participante.
-        const puedeIniciar = politica.rol === 'COMERCIAL' && !(await participantesRepo.hayComercialParticipante(data.solicitudId, client));
-        if (puedeIniciar) {
-          participanteNuevo = await participantesRepo.insertar(
-            { solicitudId: data.solicitudId, usuarioId: politica.usuarioId, agregadoPor: politica.usuarioId, origen: 'PRIMER_MENSAJE' },
-            client
-          );
-        } else if (politica.participantes === 'ESTRICTO') {
-          await client.query('ROLLBACK');
-          return { ok: false, motivo: 'SIN_ACCESO' };
-        }
-      }
-    }
-
     const insertado = await client.query<SolicitudMensaje>(
       `INSERT INTO solicitud_mensajes (id, solicitud_id, autor_id, autor_tipo, contenido)
        VALUES (gen_random_uuid(), $1, $2, $3, $4)
@@ -164,7 +150,50 @@ export async function crearAutorizado(
       [data.solicitudId, politica.usuarioId, politica.rol, data.contenido]
     );
     await client.query('COMMIT');
-    return { ok: true, mensaje: insertado.rows[0], participanteNuevo };
+    return { ok: true, mensaje: insertado.rows[0], participanteNuevo: acceso.participanteNuevo };
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export type ResultadoRespuestaNexia = { ok: true; mensaje: SolicitudMensaje } | { ok: false; motivo: 'SIN_ACCESO' | 'SOLO_LECTURA' };
+
+// Guarda la respuesta de NexIA para `politica.usuarioId` (su destinatario) VOLVIENDO A COMPROBAR su acceso: la llamada
+// a la IA puede durar decenas de segundos y el usuario pudo perder el acceso entretanto (reasignación de la orden,
+// cambio de rol, desactivación, retiro, cancelación). Si lo perdió, la respuesta no se guarda. Si el esquema aún no
+// puede guardarla de forma privada (sin las columnas de V25) se guarda como antes —oculta para todos por el filtro—;
+// con el esquema completo el texto va a `contenido_privado` y en `contenido` queda un marcador neutro.
+export async function crearRespuestaNexiaAutorizada(
+  data: { solicitudId: string; contenido: string },
+  politica: PoliticaEnvio
+): Promise<ResultadoRespuestaNexia> {
+  const { destinatario } = await obtenerEsquemaChat();
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const acceso = await verificarAcceso(client, data.solicitudId, politica, false);
+    if (!acceso.ok) {
+      await client.query('ROLLBACK');
+      return { ok: false, motivo: acceso.motivo };
+    }
+    const insertado = destinatario
+      ? await client.query<SolicitudMensaje>(
+          `INSERT INTO solicitud_mensajes (id, solicitud_id, autor_id, autor_tipo, contenido, destinatario_id, contenido_privado)
+           VALUES (gen_random_uuid(), $1, NULL, 'NEXIA', $2, $3, $4)
+           RETURNING ${columnas(true, 'solicitud_mensajes')}`,
+          [data.solicitudId, CONTENIDO_MARCADOR_RESPUESTA_PRIVADA, politica.usuarioId, data.contenido]
+        )
+      : await client.query<SolicitudMensaje>(
+          `INSERT INTO solicitud_mensajes (id, solicitud_id, autor_id, autor_tipo, contenido)
+           VALUES (gen_random_uuid(), $1, NULL, 'NEXIA', $2)
+           RETURNING ${columnas(false, 'solicitud_mensajes')}`,
+          [data.solicitudId, data.contenido]
+        );
+    await client.query('COMMIT');
+    return { ok: true, mensaje: insertado.rows[0] };
   } catch (error) {
     await client.query('ROLLBACK').catch(() => undefined);
     throw error;

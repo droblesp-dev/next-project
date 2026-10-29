@@ -74,6 +74,20 @@ export async function findById(id: string): Promise<Orden | null> {
 // `fechaEntrega` (Fase 11, ajuste mínimo autorizado de Fase 8) es opcional
 // y viaja parametrizada; `fecha_entrega` ya existe en el esquema sin
 // requerir ALTER TABLE.
+// Bloquea la solicitud de una cotización en modo de modificación hasta el final de la transacción. El chat toma esa misma
+// fila en modo compartido al guardar un mensaje (solicitudMensajes.repository.ts), así que crear una orden y enviar un
+// mensaje se serializan: el mensaje que empieza antes se guarda antes de que exista la orden, y el posterior ya ve la
+// orden y su regla de acceso (responsable). Sin este bloqueo un mensaje podía guardarse con la autorización anterior.
+export async function bloquearSolicitudDeCotizacion(executor: Executor, cotizacionId: string): Promise<void> {
+  await executor.query(
+    `SELECT s.id FROM solicitudes s
+     JOIN cotizaciones c ON c.solicitud_id = s.id
+     WHERE c.id = $1
+     FOR NO KEY UPDATE OF s`,
+    [cotizacionId]
+  );
+}
+
 export async function create(
   executor: Executor,
   data: {

@@ -7,11 +7,20 @@ import jwt from 'jsonwebtoken';
 import { randomUUID } from 'crypto';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+// Puerta para simular una respuesta lenta de la IA: mientras `esperar` exista, la IA no responde.
+const puertaIa = vi.hoisted(() => ({ esperar: null as Promise<void> | null, entro: null as (() => void) | null }));
+
 vi.mock('./ia/index.js', async (importOriginal) => {
   const original = await importOriginal<typeof import('./ia/index.js')>();
   return {
     ...original,
-    obtenerProveedorIa: () => ({ generar: async () => ({ texto: 'Respuesta ficticia de NexIA' }) }),
+    obtenerProveedorIa: () => ({
+      generar: async () => {
+        puertaIa.entro?.();
+        if (puertaIa.esperar) await puertaIa.esperar;
+        return { texto: 'Respuesta ficticia de NexIA' };
+      },
+    }),
     asegurarProveedorConfigurado: () => undefined,
   };
 });
@@ -22,7 +31,8 @@ import { solicitudesRouter } from '../routes/solicitudes.routes.js';
 import { reiniciarCacheEsquemaChat } from '../repositories/chatEsquema.js';
 import { crearSolicitud, cambiarEstadoSolicitud } from './solicitudes.service.js';
 import { crearCotizacion } from './cotizaciones.service.js';
-import { asignarResponsable } from './ordenes.service.js';
+import { asignarResponsable, crearOrden } from './ordenes.service.js';
+import * as ordenesRepo from '../repositories/ordenes.repository.js';
 import { crearMensaje, listarMensajes, SinAccesoChatError } from './solicitudMensajes.service.js';
 import { incorporarParticipante, retirarParticipante, reclamarHilo, verParticipantes, HiloConComercialError, UltimoParticipanteError } from './chatParticipantes.service.js';
 import { marcarLeido, obtenerPendientes, MensajeNoValidoError } from './chatLecturas.service.js';
@@ -316,11 +326,14 @@ describe('contadores y marcadores de lectura', () => {
 // Carrera entre un cambio de acceso y el envío: el cambio se mantiene SIN confirmar en otra transacción mientras el envío
 // intenta guardar; el envío debe esperar y, una vez confirmado el cambio, rechazarse. Nunca se guarda un mensaje de quien
 // ya perdió el acceso.
-async function conCambioPendiente(sql: string, parametros: unknown[], envio: () => Promise<unknown>): Promise<'RECHAZADO' | 'GUARDADO'> {
+async function conTransaccionPendiente(
+  accion: (client: import('pg').PoolClient) => Promise<void>,
+  envio: () => Promise<unknown>
+): Promise<'RECHAZADO' | 'GUARDADO'> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    await client.query(sql, parametros);
+    await accion(client);
     let terminado = false;
     const promesa = envio().then(
       () => {
@@ -343,6 +356,12 @@ async function conCambioPendiente(sql: string, parametros: unknown[], envio: () 
   } finally {
     client.release();
   }
+}
+
+async function conCambioPendiente(sql: string, parametros: unknown[], envio: () => Promise<unknown>): Promise<'RECHAZADO' | 'GUARDADO'> {
+  return conTransaccionPendiente(async (client) => {
+    await client.query(sql, parametros);
+  }, envio);
 }
 
 describe('carrera entre un cambio de acceso y el envío de mensajes', () => {
@@ -404,6 +423,112 @@ describe('carrera entre un cambio de acceso y el envío de mensajes', () => {
     expect(mensaje.mensaje.contenido).toBe('primero el mensaje');
     await asignarResponsable(ordenId, ids.OPE_2);
     await expect(crearMensaje(sol, U('OPE_1'), 'después de reasignar')).rejects.toBeInstanceOf(SinAccesoChatError);
+  });
+});
+
+describe('carreras residuales: creación de la orden y respuesta de NexIA', () => {
+  async function cotizacionAceptada(sol: string): Promise<string> {
+    const cot = await crearCotizacion({ solicitudId: sol, valor: 100, descripcion: null, creadoPor: ids.COM_A, anticipoPorcentaje: 0 });
+    await pool.query(`UPDATE cotizaciones SET estado = 'ACEPTADA' WHERE id = $1`, [cot.id]);
+    return cot.id;
+  }
+
+  it('un mensaje en vuelo se guarda ANTES de que exista la orden: crear la orden espera a que el envío termine', async () => {
+    const sol = await solicitudNueva();
+    await crearMensaje(sol, U('COM_A'), 'abre el hilo');
+    const cot = await cotizacionAceptada(sol);
+    const emailOriginal = env.operativoPorDefectoEmail;
+    const ope = await pool.query<{ email: string }>('SELECT email FROM usuarios WHERE id = $1', [ids.OPE_2]);
+    env.operativoPorDefectoEmail = ope.rows[0].email;
+    try {
+      // Simula un envío en vuelo: toma sobre la solicitud el mismo bloqueo compartido que toma el envío.
+      const enVuelo = await pool.connect();
+      await enVuelo.query('BEGIN');
+      await enVuelo.query('SELECT estado FROM solicitudes WHERE id = $1 FOR SHARE', [sol]);
+      let creada = false;
+      const promesa = crearOrden({ cotizacionId: cot, descripcion: null }).then((o) => {
+        creada = true;
+        return o;
+      });
+      await new Promise((r) => setTimeout(r, 400));
+      expect(creada).toBe(false); // crear la orden espera al envío en vuelo
+      await enVuelo.query('COMMIT');
+      enVuelo.release();
+      const orden = await promesa;
+      expect(orden.responsable_id).toBe(ids.OPE_2);
+    } finally {
+      env.operativoPorDefectoEmail = emailOriginal;
+    }
+  });
+
+  it('un mensaje que llega MIENTRAS se crea la orden espera y se rige por la orden: el operativo participante deja de poder escribir', async () => {
+    const sol = await solicitudNueva();
+    await crearMensaje(sol, U('COM_A'), 'abre el hilo');
+    await incorporarParticipante(sol, U('COM_A'), ids.OPE_1);
+    await crearMensaje(sol, U('OPE_1'), 'mensaje previo a la orden');
+    const cot = await cotizacionAceptada(sol);
+
+    const resultado = await conTransaccionPendiente(
+      async (client) => {
+        // Lo que hace crearOrden: bloquear la solicitud y crear la orden, todavía sin confirmar.
+        await ordenesRepo.bloquearSolicitudDeCotizacion(client, cot);
+        await ordenesRepo.create(client, { cotizacionId: cot, descripcion: null, fechaEntrega: null, responsableId: ids.OPE_2 });
+      },
+      () => crearMensaje(sol, U('OPE_1'), 'enviado durante la creación de la orden')
+    );
+    expect(resultado).toBe('RECHAZADO'); // OPE_1 ya no es el responsable
+    const guardados = await pool.query(`SELECT contenido FROM solicitud_mensajes WHERE solicitud_id = $1 ORDER BY creado_en`, [sol]);
+    expect(guardados.rows.map((r) => r.contenido)).toEqual(['abre el hilo', 'mensaje previo a la orden']);
+    await crearMensaje(sol, U('OPE_2'), 'el responsable sí escribe');
+  });
+
+  async function invocarNexiaLenta(sol: string, usuario: { id: string; rol: string }, perderAcceso: () => Promise<void>) {
+    let liberar: () => void = () => undefined;
+    let avisar: () => void = () => undefined;
+    const llegoALaIa = new Promise<void>((r) => (avisar = r));
+    puertaIa.esperar = new Promise<void>((r) => (liberar = r));
+    puertaIa.entro = avisar;
+    try {
+      const envio = crearMensaje(sol, usuario, 'nexia tarda en responder').then(
+        () => 'GUARDADA',
+        (error: unknown) => (error instanceof SinAccesoChatError ? 'RECHAZADA' : Promise.reject(error))
+      );
+      await llegoALaIa; // la pregunta ya se guardó y la IA está «pensando»
+      await perderAcceso();
+      liberar();
+      return await envio;
+    } finally {
+      puertaIa.esperar = null;
+      puertaIa.entro = null;
+    }
+  }
+
+  it('si el usuario pierde el acceso mientras la IA responde, la respuesta de NexIA no se guarda ni se entrega (reasignación)', async () => {
+    const sol = await solicitudNueva();
+    const ordenId = await conOrden(sol, 'OPE_1');
+    const resultado = await invocarNexiaLenta(sol, U('OPE_1'), async () => {
+      await asignarResponsable(ordenId, ids.OPE_2);
+    });
+    expect(resultado).toBe('RECHAZADA');
+    const filas = await pool.query(`SELECT autor_tipo FROM solicitud_mensajes WHERE solicitud_id = $1 ORDER BY creado_en`, [sol]);
+    expect(filas.rows.map((r) => r.autor_tipo)).toEqual(['OPERATIVO']); // solo la pregunta; ninguna respuesta de NexIA
+  });
+
+  it('desactivación durante la respuesta de la IA: tampoco se guarda; con el acceso intacto la respuesta se guarda normalmente', async () => {
+    const sol = await solicitudNueva();
+    await crearMensaje(sol, U('COM_A'), 'abre el hilo');
+    const resultado = await invocarNexiaLenta(sol, U('COM_A'), async () => {
+      await pool.query('UPDATE usuarios SET activo = FALSE WHERE id = $1', [ids.COM_A]);
+    });
+    await pool.query('UPDATE usuarios SET activo = TRUE WHERE id = $1', [ids.COM_A]);
+    expect(resultado).toBe('RECHAZADA');
+    const tras = await pool.query(`SELECT count(*)::int AS n FROM solicitud_mensajes WHERE solicitud_id = $1 AND autor_tipo = 'NEXIA'`, [sol]);
+    expect(tras.rows[0].n).toBe(0);
+
+    const normal = await invocarNexiaLenta(sol, U('COM_A'), async () => undefined);
+    expect(normal).toBe('GUARDADA');
+    const respuestas = await pool.query(`SELECT destinatario_id FROM solicitud_mensajes WHERE solicitud_id = $1 AND autor_tipo = 'NEXIA'`, [sol]);
+    expect(respuestas.rows).toEqual([{ destinatario_id: ids.COM_A }]);
   });
 });
 

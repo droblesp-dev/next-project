@@ -179,18 +179,28 @@ export async function crearOrden(input: CrearOrdenInput): Promise<Orden> {
 
   const responsableId = await resolverOperativoPorDefecto();
 
+  // La solicitud se bloquea mientras se crea la orden para serializarla con el envío de mensajes del chat (el régimen de
+  // acceso cambia de «participantes» a «responsable de la orden» al existir la orden).
+  const client = await pool.connect();
   try {
-    return await ordenesRepo.create(pool, {
+    await client.query('BEGIN');
+    await ordenesRepo.bloquearSolicitudDeCotizacion(client, input.cotizacionId);
+    const orden = await ordenesRepo.create(client, {
       cotizacionId: input.cotizacionId,
       descripcion: input.descripcion,
       fechaEntrega,
       responsableId,
     });
+    await client.query('COMMIT');
+    return orden;
   } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
     if (isUniqueViolation(error)) {
       throw new OrdenYaExisteError();
     }
     throw error;
+  } finally {
+    client.release();
   }
 }
 

@@ -58,6 +58,18 @@ const REGEX_INVOCACION_NEXIA = /^\s*nexia\b/i;
 //     ni por sus endpoints (conserva el acceso a las fichas técnicas, que es otra ruta).
 // La existencia de la orden decide el régimen; no se asume que la solicitud
 // haya cambiado a COTIZADA (hay datos históricos con orden y otro estado).
+// Política con la que el repositorio vuelve a comprobar el acceso dentro de la transacción que guarda (mensaje o respuesta).
+async function politicaDeEnvio(usuario: { id: string; rol: 'COMERCIAL' | 'OPERATIVO' }): Promise<mensajesRepo.PoliticaEnvio> {
+  const esquema = await obtenerEsquemaChat();
+  const modo = env.chat.participantesModo;
+  return {
+    usuarioId: usuario.id,
+    rol: usuario.rol,
+    estadosOrdenSoloLectura: ESTADOS_ORDEN_SOLO_LECTURA,
+    participantes: modo === 'OFF' || !esquema.participantes ? 'NO' : modo,
+  };
+}
+
 export type OperacionChat = 'LEER' | 'ESCRIBIR' | 'MARCAR_LEIDO' | 'PARTICIPANTES';
 
 export interface ContextoChat {
@@ -199,17 +211,8 @@ export async function crearMensaje(
   // mensaje (usuario, solicitud, orden más reciente y participante). Si el usuario perdió el acceso antes de ese punto
   // —reasignación de la orden, cambio de rol, desactivación, retiro como participante, solicitud cancelada—, el envío se
   // rechaza y no se guarda nada. El primer COMERCIAL de un hilo sin COMERCIAL participante queda como participante.
-  const esquema = await obtenerEsquemaChat();
-  const modo = env.chat.participantesModo;
-  const resultado = await mensajesRepo.crearAutorizado(
-    { solicitudId, contenido: contenidoLimpio },
-    {
-      usuarioId: usuario.id,
-      rol: usuario.rol,
-      estadosOrdenSoloLectura: ESTADOS_ORDEN_SOLO_LECTURA,
-      participantes: modo === 'OFF' || !esquema.participantes ? 'NO' : modo,
-    }
-  );
+  const politica = await politicaDeEnvio(usuario as UsuarioChat & { rol: 'COMERCIAL' | 'OPERATIVO' });
+  const resultado = await mensajesRepo.crearAutorizado({ solicitudId, contenido: contenidoLimpio }, politica);
   if (!resultado.ok) {
     if (resultado.motivo === 'SOLO_LECTURA') {
       throw new ChatSoloLecturaError();
@@ -225,7 +228,7 @@ export async function crearMensaje(
     return { mensaje, respuestaNexia: null };
   }
 
-  const respuestaNexia = await generarRespuestaNexia(solicitud, solicitudId, contenidoLimpio, usuario.id);
+  const respuestaNexia = await generarRespuestaNexia(solicitud, solicitudId, contenidoLimpio, usuario as UsuarioChat & { rol: 'COMERCIAL' | 'OPERATIVO' });
   return { mensaje, respuestaNexia };
 }
 
@@ -235,10 +238,22 @@ async function generarRespuestaNexia(
   solicitud: Solicitud,
   solicitudId: string,
   pregunta: string,
-  destinatarioId: string
+  usuario: { id: string; rol: 'COMERCIAL' | 'OPERATIVO' }
 ): Promise<SolicitudMensaje> {
-  const textoRespuesta = await consultarIa(solicitud, solicitudId, pregunta, destinatarioId);
-  return mensajesRepo.crearRespuestaNexia({ solicitudId, contenido: textoRespuesta, destinatarioId });
+  const textoRespuesta = await consultarIa(solicitud, solicitudId, pregunta, usuario.id);
+  // La llamada a la IA pudo tardar: el acceso del usuario se vuelve a comprobar al guardar. Si lo perdió (reasignación,
+  // cambio de rol, desactivación, retiro, cancelación), la respuesta no se guarda ni se entrega.
+  const guardada = await mensajesRepo.crearRespuestaNexiaAutorizada(
+    { solicitudId, contenido: textoRespuesta },
+    await politicaDeEnvio(usuario)
+  );
+  if (!guardada.ok) {
+    if (guardada.motivo === 'SOLO_LECTURA') {
+      throw new ChatSoloLecturaError();
+    }
+    throw new SinAccesoChatError();
+  }
+  return guardada.mensaje;
 }
 
 // Igual que generarAnalisis() en analisisIa.service.ts: el try/catch
