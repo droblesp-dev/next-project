@@ -15,6 +15,7 @@ import {
 } from '../lib/cotizacionPublica';
 import ComprobanteUploader from './ComprobanteUploader';
 import PieCotizacionPublica from './PieCotizacionPublica';
+import RecuperarCodigoCotizacion from './RecuperarCodigoCotizacion';
 
 interface VistaCotizacionPublicaProps {
   token: string;
@@ -652,6 +653,8 @@ export default function VistaCotizacionPublica({ token }: VistaCotizacionPublica
                   {paso === 'verificando' ? 'VERIFICANDO...' : 'VER COTIZACIÓN'}
                 </button>
               </form>
+
+              <RecuperarCodigoCotizacion token={token} />
             </>
           )}
 
