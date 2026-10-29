@@ -38,12 +38,14 @@ describe('PieCotizacionPublica — redes sociales (mejora 7)', () => {
     expect((h.match(/target="_blank"/g) ?? []).length).toBe(5); // 4 redes + WhatsApp
   });
 
-  it('WhatsApp se conserva una sola vez, con su enlace wa.me y el número visible', () => {
+  it('WhatsApp se conserva una sola vez, con su enlace wa.me; el número ya no se muestra como texto (#10)', () => {
     const h = html();
     expect((h.match(/href="https:\/\/wa\.me\//g) ?? []).length).toBe(1);
     expect(h).toContain('HABLAR CON UN ASESOR');
     expect(h).toContain('COT-000006');
-    expect((h.match(/href="tel:/g) ?? []).length).toBe(1);
+    expect(h).not.toContain('href="tel:');
+    expect(h).not.toContain('WhatsApp:');
+    expect(h).not.toMatch(/\+593\d+/);
     expect(h).toContain('VOLVER A LA PÁGINA PRINCIPAL');
   });
 });

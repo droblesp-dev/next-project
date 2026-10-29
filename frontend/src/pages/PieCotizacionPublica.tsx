@@ -2,7 +2,6 @@ import {
   construirEnlaceWhatsApp,
   NEXT_PROJECT_NAME,
   NEXT_PROJECT_REDES,
-  NEXT_PROJECT_WHATSAPP,
   type RedSocial,
 } from '../lib/config';
 import { IconoFacebook, IconoInstagram, IconoTikTok, IconoYouTube } from './IconosRedesSociales';
@@ -25,7 +24,7 @@ const CLASE_ICONO_RED =
   'inline-flex h-11 w-11 items-center justify-center border border-outline text-on-surface-variant';
 
 // Pie de la cotización pública: contacto con un asesor por el número oficial de WhatsApp (el mismo de
-// la web principal, configurado en lib/config.ts) y regreso al sitio. Las redes sociales (Facebook, Instagram,
+// la web principal, configurado en lib/config.ts; el número ya no se muestra como texto, solo el botón) y regreso al sitio. Las redes sociales (Facebook, Instagram,
 // TikTok y YouTube) se enlazan solo si su URL está configurada; si no, se muestra el ícono sin navegación.
 export default function PieCotizacionPublica({ codigoCotizacion, redes = NEXT_PROJECT_REDES }: PieCotizacionPublicaProps) {
   const mensaje = codigoCotizacion
@@ -90,12 +89,6 @@ export default function PieCotizacionPublica({ codigoCotizacion, redes = NEXT_PR
         })}
       </ul>
 
-      <p className="font-['Inter'] text-[12px] text-on-surface-variant">
-        WhatsApp:{' '}
-        <a href={`tel:+${NEXT_PROJECT_WHATSAPP}`} className="underline hover:text-on-surface">
-          +{NEXT_PROJECT_WHATSAPP}
-        </a>
-      </p>
     </footer>
   );
 }
