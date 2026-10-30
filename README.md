@@ -40,7 +40,6 @@ Las reglas de desarrollo, las decisiones arquitectónicas y el plan de fases est
 | Correo | Brevo (API transaccional por HTTP) |
 | API docs | Swagger/OpenAPI en `/api-docs` (solo fuera de producción) |
 | Seguridad | `helmet`, límite de intentos de login, bitácora de eventos |
-| CI/CD | Azure Pipelines → Harbor (imágenes) → despliegue por SSH con Docker |
 
 ## Estructura
 
@@ -56,7 +55,6 @@ Las reglas de desarrollo, las decisiones arquitectónicas y el plan de fases est
 │   ├── nginx.conf.template    # Sirve la SPA y reenvía /api/ al backend
 │   └── Dockerfile
 ├── docs/                      # Fases y changelog de seguridad
-├── azure-pipelines.yml        # Pipeline único (backend + frontend)
 └── CLAUDE.md
 ```
 
@@ -126,25 +124,16 @@ cd backend  && npm test && npx tsc --noEmit
 cd frontend && npm test && npm run lint
 ```
 
-Las pruebas de integración que escriben en la base de datos no forman parte del flujo de pruebas ni del pipeline.
+Las pruebas de integración que escriben en la base de datos no forman parte del flujo de pruebas ni de ningún flujo automatizado.
 
 ## Despliegue
 
-El pipeline [`azure-pipelines.yml`](./azure-pipelines.yml) se dispara con cambios en `backend/`, `frontend/` o el propio pipeline, en las ramas `develop` (→ **staging**) y `main` (→ **producción**). Etapas, en orden; cada una exige que la anterior termine bien:
-
-1. **UnitTests**: typecheck y pruebas unitarias de backend y frontend.
-2. **Build**: construye y sube a Harbor las imágenes `nextproject-backend` y `nextproject-frontend`.
-3. **RunMigrations**: aplica las migraciones pendientes en orden numérico y las registra en la tabla `schema_migrations` (las ya aplicadas se omiten; un error detiene el despliegue). Después ejecuta los seeders de usuarios/roles y del catálogo de bancos.
-4. **DeployStaging** / **DeployProduction**: por SSH, generan un archivo de entorno temporal con las variables del grupo, descargan la imagen y recrean el contenedor; el del backend espera (hasta 10 intentos) a que `/api/health` responda.
+[PENDIENTE] Este repositorio no incluye pipeline de CI/CD ni automatización de despliegue.
 
 **Cómo corre en el servidor**
 - Backend: contenedor `node:20-alpine` en el puerto 3000 interno, con el volumen `~/nextproject-uploads-<entorno>` montado en `/app/uploads` (`comprobantes`, `evidencias`, `logos-bancos`). Los archivos subidos persisten entre despliegues.
 - Frontend: contenedor `nginx` que sirve la SPA y reenvía `/api/` y `/uploads/logos-bancos/` al backend (`BACKEND_HOST`, `BACKEND_PORT`). La imagen se construye con `VITE_API_BASE_URL` vacío para usar rutas relativas.
 - El backend recibe `TRUST_PROXY=1` porque va detrás de ese nginx; así el límite de intentos usa la IP real del visitante.
-
-**Configuración que debe existir en Azure DevOps**
-- Grupo de variables `next-project-secrets` con los secretos de Harbor y, por entorno (`DEV_*` y `PROD_*`): conexión a la BD, `JWT_SECRET`, `COTIZACION_LINK_SECRET`, `LEAD_LINK_SECRET`, `CORS_ORIGINS`, `GEMINI_*`, `OPENROUTER_*`, `BREVO_*`, `NEXT_PROJECT_*`, `OPERATIVO_POR_DEFECTO_EMAIL`, `BANCO_*` y las credenciales de los usuarios iniciales (`SEED_*`).
-- Conexiones SSH `deploy-ssh-dev` y `deploy-ssh-prod`, y el agente `Zyntra Agent Pool` con Docker.
 
 **Antes de la primera ejecución sobre una base ya existente:** si esa base se creó a mano y no tiene la tabla `schema_migrations`, el motor intentaría aplicar V0 de nuevo y fallaría. Hay que sembrar primero las versiones ya aplicadas.
 

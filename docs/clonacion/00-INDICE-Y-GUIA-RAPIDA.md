@@ -20,7 +20,7 @@ El proceso es genérico para **cualquier negocio que cotiza y ejecuta trabajos p
 | `06-ia-y-correo.md` | Integración con IA (Gemini) y correo (Brevo): qué hace, límites, prompts |
 | `07-frontend.md` | Estructura del frontend, navegación, vistas por rol, sistema de diseño |
 | `08-seguridad.md` | Controles implementados (OWASP), límites conocidos y deuda |
-| `09-infraestructura-y-despliegue.md` | Docker, nginx, pipeline Azure, variables de entorno, migraciones y seeders |
+| `09-infraestructura-y-despliegue.md` | Docker, nginx, variables de entorno, migraciones y seeders |
 | `10-guia-de-adaptacion.md` | **Qué cambiar para tu negocio**, plan paso a paso, checklist y prompt de arranque |
 
 Documentos del repo que complementan esto: [`README.md`](../../README.md), [`CLAUDE.md`](../../CLAUDE.md) (reglas de desarrollo), [`docs/CHANGELOG-SEGURIDAD.md`](../CHANGELOG-SEGURIDAD.md), [`docs/fases/`](../fases/).
@@ -34,7 +34,7 @@ Documentos del repo que complementan esto: [`README.md`](../../README.md), [`CLA
 6. **Adaptar lo específico del negocio**: lista de servicios, textos de landing/formulario, prompts de IA, plantilla de ficha técnica, correos (`10`).
 7. **Crear la cuenta de IA y de correo** (Gemini, Brevo) y verificar el remitente.
 8. **Probar en local** (`npm test` en backend y frontend; recorrido manual del flujo completo).
-9. **Montar el pipeline** (Azure DevOps, Harbor, servidores con Docker) o equivalente (`09`).
+9. **Montar el despliegue** (servidores con Docker) (`09`).
 10. **Congelar las reglas del proyecto** con un `CLAUDE.md` propio derivado del actual (`10` §6) y trabajar por fases.
 
 ## Qué obtienes tal cual (sin tocar)

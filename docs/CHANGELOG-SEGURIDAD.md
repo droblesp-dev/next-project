@@ -1,6 +1,6 @@
 # Changelog de seguridad (revisión OWASP Top 10:2021)
 
-Fecha: 2026-10-23. Alcance: backend (`backend/`), pipeline (`azure-pipelines.yml`).
+Fecha: 2026-10-23. Alcance: backend (`backend/`).
 Origen: revisión estática de código + `npm audit`. Estado de cada punto verificado
 con compilación (`tsc`), `npm test` (82 pruebas unitarias) y prueba en navegador (ver §Verificación).
 

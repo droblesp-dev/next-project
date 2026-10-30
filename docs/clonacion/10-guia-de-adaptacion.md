@@ -19,7 +19,7 @@ Objetivo: reutilizar **el motor** (roles, flujo solicitud→cotización→cobro�
 
 ## 1. Rebranding (30–60 min)
 Buscar y reemplazar (los términos aparecen en ~45 archivos, mayormente comentarios y textos):
-`NextProject` / `NEXTPROJECT` / `nextproject` / `NEXT_PROJECT_*` / `nextproject-backend|frontend` (imágenes y contenedores) / `Zyntra` (proyecto Harbor) / `593939067666` (WhatsApp) / `Shushufindi` (ubicación).
+`NextProject` / `NEXTPROJECT` / `nextproject` / `NEXT_PROJECT_*` / `nextproject-backend|frontend` (imágenes y contenedores) / `593939067666` (WhatsApp) / `Shushufindi` (ubicación).
 - Variables `NEXT_PROJECT_NAME`, `NEXT_PROJECT_EMAIL`, `NEXT_PROJECT_WHATSAPP` pueden conservarse como nombre técnico y solo cambiar su valor.
 - Paquetes: `backend/package.json` (`nextproject-backend`), `frontend/package.json` (`react-example`).
 - Base de datos: el nombre `nextproject` está en `.env.example`, el pipeline (`DEV_DB_NAME`) y los comentarios; **no es obligatorio renombrarla**.
@@ -68,7 +68,7 @@ Si renombras tablas/estados, hazlo **antes** de escribir datos y con migraciones
 - `App.tsx` (landing, servicios, formulario), `index.html`, `public/`, `assets/images`, `index.css` (tokens `@theme`), `lib/config.ts`.
 - `AreaPrivada.tsx` si cambian los roles o secciones.
 **Infra**
-- `azure-pipelines.yml` (nombres de imagen, proyecto Harbor, hosts, puertos), `docker`/`nginx` (nombres), grupo de variables.
+- `docker`/`nginx` (nombres), grupo de variables.
 
 ## 5. Dependencias entre módulos (para no romper el flujo al quitar piezas)
 - `ordenes` depende de `cotizaciones` (1:1) y estas de `solicitudes`. `fichas_tecnicas`, `ordenes_evidencias`, `alertas` cuelgan de `ordenes`.
@@ -108,7 +108,7 @@ Conservar el espíritu: **no inventar datos**, etiquetar `[VERIFICADO]/[DECISIÓ
 - [ ] `npm test` y `tsc` en verde en backend y frontend; recorrido manual del flujo completo con los 3 roles.
 - [ ] Revisión de seguridad (`08-seguridad.md`).
 **Despliegue**
-- [ ] Azure DevOps / Harbor / SSH configurados (o equivalente); grupo de variables cargado.
+- [ ] Despliegue (servidores con Docker) y variables de entorno configurados.
 - [ ] `schema_migrations` sembrada si la BD no es nueva.
 - [ ] Backups de BD y volumen `uploads/`.
 
@@ -136,6 +136,6 @@ Entrega el informe y detente.
 ## 10. Riesgos y consideraciones al clonar
 - **Licencias y contenido**: imágenes, textos y marca del original no deben reutilizarse sin permiso; reemplázalos.
 - **Datos reales**: no copies la base de datos de producción; usa solo el esquema y los seeders.
-- **Credenciales**: nunca copies `.env`, `.local-secrets/` ni variables del grupo de Azure del proyecto original.
+- **Credenciales**: nunca copies `.env`, `.local-secrets/` ni variables de entorno del proyecto original.
 - **Deuda conocida** heredada (`08-seguridad.md` §límites y `07-frontend.md`): componentes muy grandes, limitadores en memoria, pruebas de integración retiradas.
 - **Escalado**: el diseño asume **una instancia** del backend; para varias réplicas hay que externalizar los contadores y el almacenamiento de archivos.

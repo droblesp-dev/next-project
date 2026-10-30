@@ -3,9 +3,7 @@
 ## Infraestructura usada **[VERIFICADO]** (pipeline y Dockerfiles)
 | Pieza | Detalle |
 |---|---|
-| Control de código y CI/CD | **Azure DevOps** (repo + `azure-pipelines.yml`), agente propio `Zyntra Agent Pool` con Docker |
-| Registro de imágenes | **Harbor** (`HARBOR_REGISTRY`, proyecto `zyntra`); imágenes `nextproject-backend` y `nextproject-frontend`, etiquetadas con `Build.BuildId` y el nombre de la rama |
-| Servidores | Uno de **staging** y otro de **producción**, accesibles por **SSH** (conexiones de servicio `deploy-ssh-dev` y `deploy-ssh-prod`), ambos con Docker |
+| Servidores | Uno de **staging** y otro de **producción**, accesibles por **SSH**, ambos con Docker |
 | Base de datos | **PostgreSQL** gestionado/externo con SSL (`DB_SSL=true`); migraciones con la imagen `postgres:18-alpine` |
 | Red de contenedores | red Docker `nextproject-net` |
 | Puertos en el host | backend `5000→3000`, frontend `4000→80` (variables `backend*HostPort`, `frontend*HostPort`) |
@@ -21,7 +19,8 @@
 | `main` | migraciones + despliegue a **producción** |
 | otras (p. ej. `feat/*`) | no despliegan (el *trigger* solo observa `main` y `develop`) |
 
-## Pipeline (`azure-pipelines.yml`)
+## Pipeline [PENDIENTE]
+El repositorio ya no incluye archivo de pipeline. Las etapas siguientes describen el flujo que tenía y sirven de referencia para reconstruirlo:
 Disparo: cambios en `backend/*`, `frontend/*` o el propio pipeline en `main`/`develop`. Etapas encadenadas (cada una exige la anterior):
 
 1. **UnitTests** — dos trabajos en `node:20-alpine`: backend (`npm ci`, `tsc --noEmit`, `npm test`) y frontend (`npm ci`, `npm run lint`, `npm test`). Usan secretos ficticios solo para pruebas.
@@ -30,11 +29,6 @@ Disparo: cambios en `backend/*`, `frontend/*` o el propio pipeline en `main`/`de
    - Motor de migraciones: crea `schema_migrations(version, applied_at)` si no existe, recorre `backend/database/migrations/*.sql` **en orden numérico**, salta las ya registradas, aplica con `psql -v ON_ERROR_STOP=1` y registra. Un error detiene el despliegue.
    - Seeders: `seed-usuarios-roles.js` (roles + un usuario por rol) y `seed-bancos-catalogo.js` (catálogo de bancos), ambos idempotentes.
 4. **DeployStaging / DeployProduction** — por SSH: escribe un archivo de entorno temporal con las variables del grupo, `docker login`, `pull` de la imagen, recrea el contenedor, monta el volumen de `uploads`, y el backend espera hasta 10 intentos a que `/api/health` responda.
-
-### Requisitos previos en Azure DevOps para el clon
-- Proyecto + repositorio, agente con Docker, conexiones de servicio SSH, cuenta en Harbor (o cambia el registro).
-- Grupo de variables `next-project-secrets` con **todas** las variables `DEV_*` y `PROD_*` (lista abajo) más `HARBOR_REGISTRY/USERNAME/PASSWORD`.
-- Variables de pipeline: `harborProject`, `backendImageName`, `frontendImageName`, puertos, `dbSsl`, `nextProjectName`, `nextProjectWhatsapp`.
 
 ## Contenedores
 **Backend** (`backend/Dockerfile`, multi-stage): compila TypeScript en un stage, la imagen final instala solo dependencias de producción, `NODE_ENV=production`, crea `uploads/{comprobantes,evidencias,logos-bancos}`, declara `VOLUME ["/app/uploads"]`, `EXPOSE 3000`, `CMD node dist/server.js`.
@@ -99,7 +93,7 @@ Referencias comentadas: `backend/.env.example` y `frontend/.env.example`. **El s
 
 ## Procedimiento de despliegue desde cero (entorno nuevo)
 1. Crear la BD y el usuario; permitir conexiones SSL desde el servidor.
-2. Cargar variables en Azure DevOps; crear conexiones SSH y Harbor.
+2. Cargar las variables de entorno en el servidor; configurar el acceso SSH.
 3. Empujar a `develop`: el pipeline aplica V0…V18, siembra roles/usuarios/bancos y despliega.
 4. Entrar con el ADMIN sembrado, **cambiar su contraseña** y crear los usuarios reales; desactivar los de prueba.
 5. Configurar cuentas bancarias receptoras (ADMIN → Cuentas bancarias) y el correo del operativo por defecto.

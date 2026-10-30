@@ -14,7 +14,6 @@
 | Seguridad HTTP | `helmet` |
 | Pruebas | Vitest (unitarias) |
 | Contenedores | Docker (backend `node:20-alpine`, frontend `nginx:alpine`) |
-| CI/CD | Azure Pipelines → Harbor → SSH + Docker en servidores |
 
 ## Diagrama lógico
 ```
@@ -61,7 +60,7 @@ Patrones que se repiten y conviene conservar:
 │   ├── src/{pages,lib,assets}  App.tsx  AppRoot.tsx  main.tsx  index.css
 │   ├── nginx.conf.template  Dockerfile
 │   └── vite.config.ts  vitest.config.ts
-├── docs/  azure-pipelines.yml  CLAUDE.md  README.md
+├── docs/  CLAUDE.md  README.md
 ```
 
 ## Convenciones del proyecto
