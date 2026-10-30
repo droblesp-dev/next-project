@@ -70,12 +70,12 @@ export default function LineasCotizacionEditor({ token, lineas, onCambio, ivaPor
   }
 
   const resumen = resumirLineas(lineas, ivaPorcentaje, anticipoPorcentaje);
-  const entrada = 'w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm';
+  const entrada = 'w-full bg-background border-0 border-b border-outline text-on-surface px-1 py-2 text-sm focus:ring-0 focus:border-primary-container outline-none placeholder:text-on-surface-variant';
 
   return (
     <div className="md:col-span-3 space-y-2" data-testid="editor-lineas">
-      <p className="text-sm font-medium text-slate-700">Detalle de la cotización</p>
-      {nota ? <p className="text-xs rounded-md bg-amber-50 border border-amber-200 text-amber-800 px-2 py-1">{nota}</p> : null}
+      <p className="font-code-sm text-code-sm text-on-surface-variant uppercase">Detalle de la cotización</p>
+      {nota ? <p className="text-xs border border-primary-container text-primary-container px-2 py-1">{nota}</p> : null}
       <div className="space-y-2">
         {lineas.map((l, i) => (
           <div key={l.clave} className="grid grid-cols-12 gap-2 items-start">
@@ -91,12 +91,12 @@ export default function LineasCotizacionEditor({ token, lineas, onCambio, ivaPor
                 onBlur={() => setTimeout(() => setActiva((a) => (a === l.clave ? null : a)), 150)}
               />
               {activa === l.clave && sugerencias.length > 0 ? (
-                <ul className="absolute z-10 mt-1 w-full rounded-md border border-slate-200 bg-white shadow text-sm max-h-48 overflow-auto" role="listbox">
+                <ul className="absolute z-10 mt-1 w-full border border-outline bg-surface-container text-on-surface shadow text-sm max-h-48 overflow-auto" role="listbox">
                   {sugerencias.map((s) => (
                     <li key={s.descripcion}>
-                      <button type="button" className="w-full text-left px-2 py-1 hover:bg-slate-100" onMouseDown={(e) => e.preventDefault()} onClick={() => elegir(l, s)}>
+                      <button type="button" className="w-full text-left px-2 py-1 hover:bg-surface-container-high" onMouseDown={(e) => e.preventDefault()} onClick={() => elegir(l, s)}>
                         {s.descripcion}
-                        {s.ultimo_precio_unitario ? <span className="text-slate-500"> · {s.ultimo_precio_unitario}</span> : null}
+                        {s.ultimo_precio_unitario ? <span className="text-on-surface-variant"> · {s.ultimo_precio_unitario}</span> : null}
                       </button>
                     </li>
                   ))}
@@ -124,7 +124,7 @@ export default function LineasCotizacionEditor({ token, lineas, onCambio, ivaPor
             <button
               type="button"
               aria-label={`Quitar línea ${i + 1}`}
-              className="col-span-1 text-slate-500 hover:text-red-600 disabled:opacity-30"
+              className="col-span-1 text-on-surface-variant hover:text-error disabled:opacity-30"
               disabled={lineas.length <= 1}
               onClick={() => onCambio(lineas.filter((x) => x.clave !== l.clave))}
             >
@@ -135,7 +135,7 @@ export default function LineasCotizacionEditor({ token, lineas, onCambio, ivaPor
       </div>
       <button
         type="button"
-        className="text-sm text-blue-700 hover:underline disabled:opacity-40"
+        className="text-sm text-primary-container hover:underline disabled:opacity-40"
         disabled={lineas.length >= MAX_LINEAS}
         onClick={() => onCambio([...lineas, lineaVacia()])}
       >

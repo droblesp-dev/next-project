@@ -156,7 +156,7 @@ describe.skipIf(!disponible)('líneas de detalle: creación y edición (HTTP y b
     const creada = await http_('COMERCIAL', 'POST', '/api/cotizaciones', { solicitud_id: sol, items: LINEAS, anticipo_porcentaje: 0 });
     const id = creada.json.cotizacion.id;
     await cambiarEstadoCotizacion(id, 'ENVIADA');
-    const e = await http_('COMERCIAL', 'PATCH', `/api/cotizaciones/${id}`, { items: LINEAS });
+    const e = await http_('COMERCIAL', 'PATCH', `/api/cotizaciones/${id}`, { items: LINEAS, anticipo_porcentaje: 0 });
     expect(e.status).toBe(409);
     await expect(pool.query(`UPDATE cotizacion_items SET cantidad = 99, subtotal = 1237.50 WHERE cotizacion_id = $1`, [id])).rejects.toThrow(/BORRADOR/);
     await expect(pool.query(`DELETE FROM cotizacion_items WHERE cotizacion_id = $1`, [id])).rejects.toThrow(/BORRADOR/);

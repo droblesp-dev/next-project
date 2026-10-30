@@ -1385,7 +1385,7 @@ export default function GestionCotizaciones({
       setLineasEdicion(lineasDesdeDetalle(itemsSeleccionada));
       setNotaLineaDerivada(null);
     } else {
-      setLineasEdicion([lineaDerivada(null, cotizacionSeleccionada.subtotal ?? cotizacionSeleccionada.valor)]);
+      setLineasEdicion([lineaDerivada(solicitudesPorId.get(cotizacionSeleccionada.solicitud_id)?.servicio, cotizacionSeleccionada.subtotal ?? cotizacionSeleccionada.valor)]);
       setNotaLineaDerivada('Esta cotización se creó sin detalle: se muestra una línea derivada con su subtotal actual. Edítela y guarde para convertirla; hasta entonces no se modifica nada.');
     }
     setDescripcionEdicion(cotizacionSeleccionada.descripcion ?? '');
@@ -1647,6 +1647,7 @@ export default function GestionCotizaciones({
 
           <div className="border-t border-outline pt-4">
             <p className="font-label-caps text-[10px] text-primary-container uppercase mb-2">Condiciones comerciales</p>
+            <div className="mb-4"><TablaLineasCotizacion items={itemsSeleccionada} /></div>
             <dl className="grid grid-cols-2 sm:grid-cols-3 gap-4 font-code-sm text-code-sm wrap-anywhere">
               <div>
                 <dt className="text-on-surface-variant uppercase">Valor</dt>
