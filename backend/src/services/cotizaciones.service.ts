@@ -13,6 +13,12 @@ import { crearOrdenAutomatica } from './ordenAutomatica.service.js';
 import { convertirLeadPorAceptacion } from './leads.service.js';
 import { enviarCodigoTemporalCotizacion, enviarCodigoAccesoRegenerado } from './email.service.js';
 import type { Cotizacion } from '../repositories/cotizaciones.repository.js';
+import * as itemsRepo from '../repositories/cotizacionItems.repository.js';
+import type { CotizacionItem, SugerenciaConcepto } from '../repositories/cotizacionItems.repository.js';
+import { obtenerEsquemaCotizaciones } from '../repositories/cotizacionesEsquema.js';
+import { LineasInvalidasError, normalizarLineas } from './cotizacionItems.js';
+import { normalizarTermino, patronParcial, terminoValido } from './busquedaPatron.js';
+import type { PoolClient } from 'pg';
 
 export class SolicitudNoEncontradaError extends Error {}
 export class SolicitudNoEnRevisionError extends Error {}
@@ -51,6 +57,12 @@ export class MetodoSaldoInvalidoError extends Error {}
 export class ComprobanteSaldoRequeridoError extends Error {}
 export class SaldoNoRechazadoError extends Error {}
 export class CotizacionNoEditableError extends Error {}
+// Líneas de detalle (V28). Sin la tabla en la base no se pueden guardar líneas; no se mezclan `valor` manual y líneas; y un borrador que
+// ya tiene líneas no admite un valor manual.
+export class LineasNoDisponiblesError extends Error {}
+export class LineasYValorError extends Error {}
+export class LineasRequeridasError extends Error {}
+export { LineasInvalidasError };
 
 const ESTADOS_VALIDOS = ['BORRADOR', 'ENVIADA', 'ACEPTADA', 'RECHAZADA', 'VENCIDA', 'CANCELADA'];
 
@@ -195,7 +207,10 @@ function calcularCondicionesComerciales(input: CondicionesComercialesInput): Con
 
 export interface CrearCotizacionInput {
   solicitudId: string;
-  valor: number;
+  // Camino anterior a V28 (y de pruebas/procesos internos): un único subtotal manual. Excluyente con `lineas`.
+  valor?: number;
+  // Líneas de detalle ({descripcion, cantidad, precio_unitario}[]): el subtotal y los importes derivados se calculan en el backend.
+  lineas?: unknown;
   descripcion: string | null;
   creadoPor: string;
   ivaPorcentaje?: number;
@@ -211,6 +226,10 @@ export interface CrearCotizacionInput {
 // saldo/vigencia — todo se calcula aquí, nunca se confía en un valor
 // derivado enviado por el cliente (solo se reciben los 3 parámetros de
 // entrada: porcentajes y días).
+//
+// Requerimiento 4 (V28): con `lineas`, el subtotal es la suma de los subtotales de línea (aritmética exacta, ver
+// cotizacionItems.ts) y la cotización y sus líneas se guardan en UNA transacción. Las reglas de IVA, anticipo, saldo y
+// vigencia son exactamente las mismas de siempre.
 export async function crearCotizacion(input: CrearCotizacionInput): Promise<Cotizacion> {
   const solicitud = await solicitudesRepo.findById(input.solicitudId);
   if (!solicitud) {
@@ -220,24 +239,84 @@ export async function crearCotizacion(input: CrearCotizacionInput): Promise<Coti
     throw new SolicitudNoEnRevisionError();
   }
 
-  const condiciones = calcularCondicionesComerciales(input);
+  if (input.lineas === undefined) {
+    if (input.valor === undefined) {
+      throw new LineasInvalidasError(['La cotización necesita al menos una línea de detalle.']);
+    }
+    const condiciones = calcularCondicionesComerciales({ ...input, valor: input.valor });
+    return cotizacionesRepo.create(pool, {
+      solicitudId: input.solicitudId,
+      valor: input.valor,
+      descripcion: input.descripcion,
+      creadoPor: input.creadoPor,
+      ...condiciones,
+    });
+  }
 
-  return cotizacionesRepo.create(pool, {
-    solicitudId: input.solicitudId,
-    valor: input.valor,
-    descripcion: input.descripcion,
-    creadoPor: input.creadoPor,
-    ...condiciones,
-  });
+  if (input.valor !== undefined) {
+    throw new LineasYValorError();
+  }
+  if (!(await obtenerEsquemaCotizaciones()).items) {
+    throw new LineasNoDisponiblesError();
+  }
+  const { lineas, subtotal } = normalizarLineas(input.lineas);
+  const condiciones = calcularCondicionesComerciales({ ...input, valor: subtotal });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const creada = await cotizacionesRepo.create(client, {
+      solicitudId: input.solicitudId,
+      valor: subtotal,
+      descripcion: input.descripcion,
+      creadoPor: input.creadoPor,
+      ...condiciones,
+    });
+    await itemsRepo.reemplazar(client, creada.id, lineas);
+    await client.query('COMMIT');
+    return creada;
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export interface EditarCotizacionBorradorInput {
-  valor: number;
+  valor?: number;
+  lineas?: unknown;
   descripcion: string | null;
   ivaPorcentaje?: number;
   anticipoPorcentaje?: number;
   diasVigencia?: number;
   metodoAnticipo?: string | null;
+}
+
+// Bloquea la fila de la cotización (FOR UPDATE) y comprueba que sigue en BORRADOR DENTRO de la misma transacción que escribe las
+// líneas y actualiza los importes. Enviar la cotización (ENVIADA) toma el mismo bloqueo con su UPDATE condicional, de modo que
+// editar y enviar se serializan: si el envío gana, la edición se rechaza; si la edición gana, el envío espera y ve el borrador
+// ya actualizado. Nunca se pierde ni se mezcla una edición con un envío.
+async function conBorradorBloqueado<T>(id: string, accion: (client: PoolClient) => Promise<T>): Promise<T> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const fila = await client.query<{ estado: string }>('SELECT estado FROM cotizaciones WHERE id = $1 FOR UPDATE', [id]);
+    if (!fila.rows[0]) {
+      throw new CotizacionNoEncontradaError();
+    }
+    if (fila.rows[0].estado !== 'BORRADOR') {
+      throw new CotizacionNoEditableError();
+    }
+    const resultado = await accion(client);
+    await client.query('COMMIT');
+    return resultado;
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 // Edición de condiciones comerciales — EXCLUSIVA de BORRADOR (autorización
@@ -248,14 +327,63 @@ export interface EditarCotizacionBorradorInput {
 // durante todo el ciclo de vida de un BORRADOR). Reutiliza exactamente las
 // mismas reglas/cálculos que crearCotizacion() vía
 // calcularCondicionesComerciales() — ninguna regla duplicada.
+//
+// Requerimiento 4 (V28): con `lineas` se reemplaza el conjunto de líneas y se recalculan los importes (la vigencia se reinicia,
+// como siempre). Un borrador anterior a V28 (sin líneas) se convierte en un borrador con líneas SOLO cuando el usuario confirma
+// la edición con líneas; hasta entonces no se guarda nada.
 export async function editarCotizacionBorrador(
   id: string,
   input: EditarCotizacionBorradorInput
 ): Promise<Cotizacion> {
-  const condiciones = calcularCondicionesComerciales(input);
+  if (input.lineas !== undefined) {
+    if (input.valor !== undefined) {
+      throw new LineasYValorError();
+    }
+    if (!(await obtenerEsquemaCotizaciones()).items) {
+      throw new LineasNoDisponiblesError();
+    }
+    const { lineas, subtotal } = normalizarLineas(input.lineas);
+    const condiciones = calcularCondicionesComerciales({ ...input, valor: subtotal });
+    return conBorradorBloqueado(id, async (client) => {
+      const actualizada = await cotizacionesRepo.updateCondiciones(
+        id,
+        { valor: subtotal, descripcion: input.descripcion, ...condiciones },
+        client
+      );
+      if (!actualizada) {
+        throw new CotizacionNoEditableError();
+      }
+      await itemsRepo.reemplazar(client, id, lineas);
+      return actualizada;
+    });
+  }
+
+  if (input.valor === undefined) {
+    throw new LineasInvalidasError(['La cotización necesita al menos una línea de detalle.']);
+  }
+  const valorManual = input.valor;
+  const condiciones = calcularCondicionesComerciales({ ...input, valor: valorManual });
+
+  // Con la tabla de líneas creada, un borrador que YA tiene líneas no admite un valor manual (descuadraría líneas e importes).
+  if ((await obtenerEsquemaCotizaciones()).items) {
+    return conBorradorBloqueado(id, async (client) => {
+      if ((await itemsRepo.listarPorCotizacion(id, client)).length > 0) {
+        throw new LineasRequeridasError();
+      }
+      const actualizada = await cotizacionesRepo.updateCondiciones(
+        id,
+        { valor: valorManual, descripcion: input.descripcion, ...condiciones },
+        client
+      );
+      if (!actualizada) {
+        throw new CotizacionNoEditableError();
+      }
+      return actualizada;
+    });
+  }
 
   const actualizada = await cotizacionesRepo.updateCondiciones(id, {
-    valor: input.valor,
+    valor: valorManual,
     descripcion: input.descripcion,
     ...condiciones,
   });
@@ -270,6 +398,28 @@ export async function editarCotizacionBorrador(
     throw new CotizacionNoEncontradaError();
   }
   throw new CotizacionNoEditableError();
+}
+
+// Líneas de detalle de una cotización; vacío para las cotizaciones sin líneas (históricas) o mientras V28 no esté aplicada.
+export async function obtenerLineasDeCotizacion(id: string): Promise<CotizacionItem[]> {
+  if (!(await obtenerEsquemaCotizaciones()).items) {
+    return [];
+  }
+  return itemsRepo.listarPorCotizacion(id);
+}
+
+// Buscador de conceptos reutilizables (sin catálogo): descripciones ya usadas en cotizaciones ENVIADA, ACEPTADA, RECHAZADA o VENCIDA,
+// compartidas entre ADMIN y COMERCIAL. Es solo una sugerencia: el precio devuelto se puede editar. `disponible` indica si la
+// base ya tiene las líneas de detalle (el frontend usa el formulario anterior mientras no).
+export async function sugerirConceptosUsados(q: unknown): Promise<{ disponible: boolean; sugerencias: SugerenciaConcepto[] }> {
+  if (!(await obtenerEsquemaCotizaciones()).items) {
+    return { disponible: false, sugerencias: [] };
+  }
+  const termino = terminoValido(q);
+  if (termino === null || normalizarTermino(termino).length < 2) {
+    return { disponible: true, sugerencias: [] };
+  }
+  return { disponible: true, sugerencias: await itemsRepo.sugerirConceptos(patronParcial(termino), 10) };
 }
 
 export async function cambiarEstadoCotizacion(id: string, nuevoEstado: string): Promise<Cotizacion> {
@@ -518,6 +668,8 @@ export interface CotizacionPublica {
   // una etapa de frontend independiente, fuera del alcance de esta tarea).
   // Solo cuentas activas, solo campos públicos (ver cuentasBancarias.repository.ts).
   cuentas_bancarias_activas: CuentaBancariaPublica[];
+  // Líneas de detalle (V28) que ve el cliente: descripción, cantidad, precio unitario y subtotal. Vacío en cotizaciones sin líneas.
+  items: Array<{ descripcion: string; cantidad: string; precio_unitario: string; subtotal: string }>;
   solicitud: {
     // Número de la solicitud (SOL-…) para que el cliente pueda referenciarla; NULL en solicitudes anteriores a V10.
     codigo: string | null;
@@ -663,6 +815,12 @@ async function construirCotizacionPublica(cotizacionId: string): Promise<Cotizac
     rechazo_saldo: rechazoSaldo,
     datos_bancarios: puedeTransferir ? obtenerDatosBancariosSiConfigurados() : null,
     cuentas_bancarias_activas: puedeTransferir ? await listarCuentasActivasPublico() : [],
+    items: (await obtenerLineasDeCotizacion(cotizacion.id)).map((i) => ({
+      descripcion: i.descripcion,
+      cantidad: i.cantidad,
+      precio_unitario: i.precio_unitario,
+      subtotal: i.subtotal,
+    })),
     solicitud: {
       codigo: solicitud.codigo,
       servicio: solicitud.servicio,

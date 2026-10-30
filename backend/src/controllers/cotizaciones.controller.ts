@@ -5,6 +5,8 @@ import multer from 'multer';
 import {
   listarCotizaciones,
   obtenerCotizacion,
+  obtenerLineasDeCotizacion,
+  sugerirConceptosUsados,
   crearCotizacion,
   editarCotizacionBorrador,
   cambiarEstadoCotizacion,
@@ -49,7 +51,12 @@ import {
   ComprobanteSaldoRequeridoError,
   SaldoNoRechazadoError,
   CotizacionNoEditableError,
+  LineasInvalidasError,
+  LineasNoDisponiblesError,
+  LineasYValorError,
+  LineasRequeridasError,
 } from '../services/cotizaciones.service.js';
+import { obtenerEsquemaCotizaciones } from '../repositories/cotizacionesEsquema.js';
 import {
   uploadComprobante,
   generarNombreComprobante,
@@ -116,7 +123,33 @@ export async function obtenerController(req: Request, res: Response): Promise<vo
     res.status(404).json({ message: 'Cotización no encontrada.' });
     return;
   }
-  res.status(200).json({ cotizacion });
+  res.status(200).json({ cotizacion, items: await obtenerLineasDeCotizacion(cotizacion.id) });
+}
+
+// Líneas de detalle (V28): traduce los errores propios de las líneas. Devuelve true si respondió.
+function responderErrorLineas(error: unknown, res: Response): boolean {
+  if (error instanceof LineasInvalidasError) {
+    res.status(400).json({ message: error.detalles[0], detalles: error.detalles });
+    return true;
+  }
+  if (error instanceof LineasYValorError) {
+    res.status(400).json({ message: 'No envíe valor junto con items: el subtotal se calcula a partir de las líneas.' });
+    return true;
+  }
+  if (error instanceof LineasNoDisponiblesError) {
+    res.status(503).json({ message: 'Las líneas de detalle todavía no están disponibles en esta instalación.' });
+    return true;
+  }
+  if (error instanceof LineasRequeridasError) {
+    res.status(409).json({ message: 'Esta cotización ya tiene líneas de detalle: edítela enviando items.' });
+    return true;
+  }
+  return false;
+}
+
+// Buscador de conceptos ya usados en cotizaciones formalizadas (ADMIN y COMERCIAL). GET /api/cotizaciones/items/sugerencias?q=…
+export async function sugerenciasController(req: Request, res: Response): Promise<void> {
+  res.status(200).json(await sugerirConceptosUsados(req.query.q));
 }
 
 export async function crearController(req: Request, res: Response): Promise<void> {
@@ -128,8 +161,17 @@ export async function crearController(req: Request, res: Response): Promise<void
     return;
   }
 
+  // Requerimiento 4: con las líneas de detalle disponibles en la base, toda cotización NUEVA por HTTP se crea con `items` y el
+  // subtotal lo calcula el backend (no se acepta un valor manual). Mientras V28 no esté aplicada, el contrato anterior no cambia.
+  const { items } = body;
+  const lineasDisponibles = (await obtenerEsquemaCotizaciones()).items;
+  if (items === undefined && lineasDisponibles) {
+    res.status(400).json({ message: 'items es requerido: la cotización se compone de líneas de detalle (descripcion, cantidad, precio_unitario).' });
+    return;
+  }
+
   const valorNum = typeof valor === 'number' ? valor : Number(valor);
-  if (valor === undefined || valor === null || valor === '' || Number.isNaN(valorNum) || valorNum < 0) {
+  if (items === undefined && (valor === undefined || valor === null || valor === '' || Number.isNaN(valorNum) || valorNum < 0)) {
     res.status(400).json({ message: 'valor es requerido y debe ser un número mayor o igual a 0.' });
     return;
   }
@@ -168,7 +210,8 @@ export async function crearController(req: Request, res: Response): Promise<void
   try {
     const cotizacion = await crearCotizacion({
       solicitudId: solicitud_id,
-      valor: valorNum,
+      valor: items === undefined ? valorNum : valor === undefined ? undefined : valorNum,
+      lineas: items,
       descripcion: typeof descripcion === 'string' ? descripcion : null,
       creadoPor,
       ivaPorcentaje: iva_porcentaje as number | undefined,
@@ -176,8 +219,9 @@ export async function crearController(req: Request, res: Response): Promise<void
       diasVigencia: dias_vigencia as number | undefined,
       metodoAnticipo: metodo_anticipo as string | null | undefined,
     });
-    res.status(201).json({ cotizacion });
+    res.status(201).json({ cotizacion, items: await obtenerLineasDeCotizacion(cotizacion.id) });
   } catch (error) {
+    if (responderErrorLineas(error, res)) return;
     if (error instanceof SolicitudNoEncontradaError) {
       res.status(404).json({ message: 'Solicitud no encontrada.' });
       return;
@@ -222,10 +266,16 @@ export async function crearController(req: Request, res: Response): Promise<void
 // mediante el UPDATE condicional del repositorio, nunca aquí.
 export async function editarController(req: Request, res: Response): Promise<void> {
   const body = (req.body ?? {}) as Record<string, unknown>;
-  const { valor, descripcion, iva_porcentaje, anticipo_porcentaje, dias_vigencia, metodo_anticipo } = body;
+  const { valor, items, descripcion, iva_porcentaje, anticipo_porcentaje, dias_vigencia, metodo_anticipo } = body;
+
+  // Requerimiento 4: igual que al crear, con las líneas disponibles la edición se hace con `items` (el valor manual no se acepta).
+  if (items === undefined && (await obtenerEsquemaCotizaciones()).items) {
+    res.status(400).json({ message: 'items es requerido: la cotización se compone de líneas de detalle (descripcion, cantidad, precio_unitario).' });
+    return;
+  }
 
   const valorNum = typeof valor === 'number' ? valor : Number(valor);
-  if (valor === undefined || valor === null || valor === '' || Number.isNaN(valorNum) || valorNum < 0) {
+  if (items === undefined && (valor === undefined || valor === null || valor === '' || Number.isNaN(valorNum) || valorNum < 0)) {
     res.status(400).json({ message: 'valor es requerido y debe ser un número mayor o igual a 0.' });
     return;
   }
@@ -254,15 +304,17 @@ export async function editarController(req: Request, res: Response): Promise<voi
 
   try {
     const cotizacion = await editarCotizacionBorrador(req.params.id, {
-      valor: valorNum,
+      valor: items === undefined ? valorNum : valor === undefined ? undefined : valorNum,
+      lineas: items,
       descripcion: typeof descripcion === 'string' ? descripcion : null,
       ivaPorcentaje: iva_porcentaje as number | undefined,
       anticipoPorcentaje: anticipo_porcentaje as number | undefined,
       diasVigencia: dias_vigencia as number | undefined,
       metodoAnticipo: metodo_anticipo as string | null | undefined,
     });
-    res.status(200).json({ cotizacion });
+    res.status(200).json({ cotizacion, items: await obtenerLineasDeCotizacion(cotizacion.id) });
   } catch (error) {
+    if (responderErrorLineas(error, res)) return;
     if (error instanceof CotizacionNoEncontradaError) {
       res.status(404).json({ message: 'Cotización no encontrada.' });
       return;

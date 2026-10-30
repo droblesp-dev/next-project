@@ -1,5 +1,7 @@
 import * as busquedaRepo from '../repositories/busqueda.repository.js';
 import { listarAlertas } from './alertas.service.js';
+import * as itemsRepo from '../repositories/cotizacionItems.repository.js';
+import { obtenerEsquemaCotizaciones } from '../repositories/cotizacionesEsquema.js';
 import { patronCodigo, patronParcial } from './busquedaPatron.js';
 
 export type EntidadBusqueda = 'solicitudes' | 'cotizaciones' | 'ordenes' | 'alertas' | 'leads' | 'usuarios';
@@ -47,8 +49,15 @@ export async function buscarIds(entidad: EntidadBusqueda, termino: string, usuar
   switch (entidad) {
     case 'solicitudes':
       return busquedaRepo.buscarSolicitudes(parcial, codigo, cliente);
-    case 'cotizaciones':
-      return busquedaRepo.buscarCotizaciones(parcial, codigo, cliente);
+    case 'cotizaciones': {
+      const base = await busquedaRepo.buscarCotizaciones(parcial, codigo, cliente);
+      // Requerimiento 4: también coincide con las descripciones de las líneas de detalle (cuando V28 está aplicada).
+      if (!(await obtenerEsquemaCotizaciones()).items) {
+        return base;
+      }
+      const porLinea = await itemsRepo.buscarCotizacionesPorLineas(parcial);
+      return [...new Set([...base, ...porLinea])];
+    }
     case 'ordenes':
       return busquedaRepo.buscarOrdenes(parcial, codigo, cliente);
     case 'alertas': {

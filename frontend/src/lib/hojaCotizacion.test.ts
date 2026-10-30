@@ -35,7 +35,23 @@ describe('hoja imprimible de la cotización (#4)', () => {
       { etiqueta: 'Total (con IVA)', valor: '$345,00', destacado: true },
       { etiqueta: 'Saldo', valor: '$345,00' },
     ]);
-    expect(h.filas).toEqual([{ concepto: 'Torneado industrial', detalle: 'Piezas en acero 1045 — Tolerancia ±0,05 mm', cantidad: '10', subtotal: '$300,00' }]);
+    expect(h.filas).toEqual([{ concepto: 'Torneado industrial', detalle: 'Piezas en acero 1045 — Tolerancia ±0,05 mm', cantidad: '10', precioUnitario: '—', subtotal: '$300,00' }]);
+  });
+
+  it('con líneas de detalle imprime una fila por línea con descripción, cantidad, precio unitario y subtotal guardados (#4)', () => {
+    const h = construirHojaCotizacion(
+      { ...BASE, lineas: [
+        { descripcion: 'Torneado', cantidad: '10.000', precio_unitario: '12.50', subtotal: '125.00' },
+        { descripcion: 'Acabado', cantidad: '2.500', precio_unitario: '10.00', subtotal: '25.00' },
+      ] },
+      AHORA
+    );
+    expect(h.filas.map((f) => [f.concepto, f.cantidad, f.precioUnitario, f.subtotal])).toEqual([
+      ['Torneado', '10', '$12,50', '$125,00'],
+      ['Acabado', '2,5', '$10,00', '$25,00'],
+    ]);
+    // sin líneas se conserva la fila única histórica
+    expect(construirHojaCotizacion({ ...BASE, lineas: [] }, AHORA).filas).toHaveLength(1);
   });
 
   it('incluye los números de cotización y solicitud, el estado y la observación', () => {

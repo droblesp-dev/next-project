@@ -23,6 +23,7 @@ import {
   reabrirSaldoController,
   historialTransferenciasController,
   listarCuentasReceptorasController,
+  sugerenciasController,
 } from '../controllers/cotizaciones.controller.js';
 
 function asyncRoute(handler: (req: Request, res: Response) => Promise<void>): RequestHandler {
@@ -76,6 +77,8 @@ cotizacionesRouter.get('/', asyncRoute(listarController));
 // un :id y el guard de formato UUID respondería 404). Mismos roles del router
 // (ADMIN/COMERCIAL); solo lectura.
 cotizacionesRouter.get('/cuentas-receptoras', asyncRoute(listarCuentasReceptorasController));
+// Requerimiento 4: buscador de conceptos ya usados (ADMIN y COMERCIAL, solo lectura). Va ANTES de GET /:id por la misma razón.
+cotizacionesRouter.get('/items/sugerencias', asyncRoute(sugerenciasController));
 cotizacionesRouter.post('/', asyncRoute(crearController));
 cotizacionesRouter.get('/:id', asyncRoute(obtenerController));
 // Edición de condiciones comerciales — EXCLUSIVA de BORRADOR (autorización

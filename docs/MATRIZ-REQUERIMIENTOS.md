@@ -13,7 +13,7 @@ aparecían con otro número (columna «Etiqueta en commits»); se conserva esa e
 | 1 | Icono de mensajes COMERCIAL ↔ OPERATIVO en solicitudes | #7 (`8c4fcab`) y #7/#8 (`9a86543`, `090da4b`, `c437a33`) | **Completado** (en local) | Icono que abre la conversación; ahora solo aparece con mensajes pendientes y muestra su cantidad; ADMIN sin icono ni chat; participantes, lecturas independientes y contadores (C3 para COMERCIAL) | `mensajesPendientes.test.ts` (4), `chatAcceso.test.ts` (1), `chatParticipantesLecturas.integration.test.ts` (22), `chatMatrizEndpoints.integration.test.ts` (12) | COMERCIAL, OPERATIVO (escritorio y 375 px) y ADMIN | Producción: aplicar migraciones, fecha de corte y estricto (requieren autorización) |
 | 2 | Privacidad de las respuestas de NexIA | #8 (`9a86543`, `090da4b`) | **Completado** (en local) | Respuesta privada para su destinatario, texto en `contenido_privado`, históricas ocultas, contexto de NexIA y ficha sin respuestas privadas, carreras corregidas | `chatPrivacidad.integration.test.ts` (10), `chatEsquema.test.ts` (4), carreras en `chatParticipantesLecturas...` y matriz de endpoints | COMERCIAL A/B, OPERATIVO y ADMIN | Producción (migraciones V25a/b, barrera de credenciales); revisión manual de fichas antiguas |
 | 3 | Eliminar «Usar ID de solicitud directamente» | #9 (`12d1c1c`) | **Completado** | Texto y opción retirados de la creación de cotizaciones | Sin prueba automática (retiro de texto); búsqueda sin coincidencias en el código | Formulario «Nueva cotización» sin esa opción (hoy) | — |
-| 4 | Cotizaciones: tabla de productos, buscador y PDF | #3 | **Parcial** | **Ahora:** impresión / PDF de la cotización (hoja formal con importes oficiales, botón en la pantalla pública del cliente y en el detalle interno de COMERCIAL y ADMIN). Sin dependencias ni cambios de esquema | `hojaCotizacion.test.ts` (8), `HojaCotizacionImprimible.test.tsx` (2) | Botón y hoja en cliente, COMERCIAL y ADMIN; diseño de impresión; 375 px | **Tabla de productos y buscador**: requieren modelo de datos nuevo (ver §2) y tu autorización |
+| 4 | Cotizaciones: tabla de productos, buscador y PDF | #3 | **Implementado en código; integración con la tabla nueva SIN VERIFICAR** | Alternativa A aprobada: líneas de detalle (`cotizacion_items`), importes calculados en el backend, buscador de conceptos ya usados, búsqueda global por descripción de línea, hoja/PDF y pantalla pública con líneas. Migración **V28 preparada, NO ejecutada** | Backend `cotizacionItems.test.ts` (11), `cotizacionesLineas.service.test.ts` (18), `busqueda.service.test.ts` (+3); frontend `lineasCotizacion.test.ts` (7), `LineasCotizacion.test.tsx` (3), `hojaCotizacion.test.ts`. `cotizacionItems.integration.test.ts` (14) **OMITIDA: no se ejecutó** | Solo la rama anterior (campo «Valor») en navegador; la rama con líneas no se pudo ver sin V28 | **Aplicar V28 en una base de pruebas autorizada y ejecutar `cotizacionItems.integration.test.ts`** (SQL de V28 y del repositorio nunca ejecutado); después verificar en navegador. No dar por terminado hasta entonces |
 | 5 | Fecha de vencimiento de la cotización y aviso de enlace caducado | #4/#5 (`a4b6036`) | **Completado** | «Fecha de caducidad» en el detalle interno; el enlace caducado responde «Esta cotización caducó. Consulte con su asesor comercial.»; aviso interno en VENCIDA | `caducidadCotizacion.test.ts` (4), `enlacePublicoEstados.integration.test.ts` (2), `cotizacionesComprobantesPublicos.test.ts` | Cliente: vigencia y mensaje de caducidad (HTTP 410); interno: aviso en VENCIDA | — |
 | 6 | Vencimiento automático; botones «Marcar vencida» y «Cancelar»; estado correspondiente | #4/#5 (`a4b6036`) | **Completado** | Una cotización ENVIADA vence sola al cumplirse su fecha (se marca VENCIDA al consultarla); se retira «Marcar vencida»; «Cancelar» disponible en ENVIADA y ausente en VENCIDA y CANCELADA; explicación por estado | `caducidadCotizacion.test.ts`, `enlacePublicoEstados.integration.test.ts` | Una ENVIADA con vigencia pasada pasó a VENCIDA al abrir su enlace; sin «Marcar vencida»; «Cancelar» presente en ENVIADA y ausente en VENCIDA y CANCELADA | — |
 | 7 | Quitar el WhatsApp fijo de la pantalla pública del cliente | #10 (`97fc02b`) | **Completado** | Se retira «WhatsApp: +593…»; se conserva el botón «Hablar con un asesor» | `PieCotizacionPublica.test.tsx` (4) | Pantalla pública sin el número y con el botón | — |
@@ -25,34 +25,32 @@ aparecían con otro número (columna «Etiqueta en commits»); se conserva esa e
 Los requerimientos 8 y 11 comparten las columnas de órdenes: la columna SOL/COT (8) se construyó una sola vez y la búsqueda (11)
 la consulta; no se duplicó trabajo en esta fase.
 
-## 2. Requerimiento 4: lo que falta y su propuesta
+## 2. Requerimiento 4: estado tras aprobar la alternativa A
 
-**Hecho (impresión / PDF):** hoja de cotización generada con el navegador («Guardar como PDF»), sin dependencias nuevas ni cambios
-de esquema. Usa solo importes ya calculados por el backend; no incluye código de acceso, enlaces, datos bancarios ni teléfonos.
-Tiene una tabla de conceptos de una fila (la cotización actual es un único concepto), lista para admitir varias.
+**Implementado en código (sin migrar):** `cotizacion_items` (V28, preparada), cálculo exacto en el backend (cantidad hasta 3 decimales,
+precio >= 0, subtotal = redondeo a 2 decimales mitad hacia arriba igual que PostgreSQL), IVA global 0/15 sin cambios, escritura de
+líneas e importes en una sola transacción con bloqueo de la fila y validación de BORRADOR, trigger que impide tocar líneas fuera de
+BORRADOR, buscador compartido COMERCIAL/ADMIN solo sobre cotizaciones ENVIADA/ACEPTADA/RECHAZADA/VENCIDA, búsqueda global por
+descripción de línea, límites 50 líneas / 200 caracteres, hoja/PDF y pantalla pública con descripción, cantidad, precio unitario
+y subtotal.
 
-**Pendiente (requiere autorización: cambia el modelo de datos y las reglas de creación de cotizaciones):** la tabla de productos y
-el buscador. Hoy una cotización guarda un único `valor` (subtotal), IVA, total y una nota de texto; no existe un catálogo ni
-líneas de detalle.
+**Compatibilidad:** mientras V28 no exista, la API y el formulario se comportan como antes (campo `valor`). Una vez aplicada, el
+POST/PATCH por HTTP exige `items`; el único consumidor real en el repositorio es `GestionCotizaciones.tsx` (no se detectaron
+integraciones externas). Las cotizaciones históricas no se modifican; un borrador histórico se muestra con una línea derivada y
+editable, y no se guarda nada hasta que el usuario confirma.
 
-| Alternativa | Qué implica | Riesgos |
-|---|---|---|
-| **A (recomendada): líneas de detalle por cotización** (`cotizacion_items`: concepto, cantidad, precio unitario y subtotal como fotografía del momento) y subtotal = suma de líneas | Una tabla nueva (CLAUDE.md §9 exige aprobación) y cambio de la creación/edición de cotizaciones; la hoja imprimible ya admite varias filas. El «buscador» sería sobre los conceptos ya usados (sin catálogo) | Cambia cómo se calcula el subtotal (regla de negocio): hay que decidir si el valor manual sigue permitido y qué pasa con las cotizaciones históricas (sin líneas) |
-| B: líneas de detalle más catálogo de productos (`productos`) con buscador | Dos tablas nuevas, administración del catálogo, permisos y precios de referencia | Mayor alcance y decisiones de negocio (quién mantiene precios, impuestos por producto, unidades) |
-| C: texto libre en la nota de la cotización | Sin cambios de esquema | No cumple «tabla» ni «buscador»; los datos no son estructurados |
-
-**Decisiones funcionales que necesito de ti:** alternativa (A, B o C); si el subtotal pasa a calcularse siempre desde las líneas;
-tratamiento de cotizaciones históricas sin líneas (mostrar una sola línea con el `valor` actual); quién puede editar líneas y
-hasta qué estado; y si el catálogo (B) es necesario ahora.
+**Bloqueo:** el SQL de V28 y del repositorio nunca se ejecutó contra PostgreSQL. Hasta aplicar V28 en una base de pruebas autorizada
+(p. ej. `nextproject_test`) y correr `cotizacionItems.integration.test.ts` (creación/edición, redondeo, CHECK, trigger, concurrencia
+editar-vs-enviar, permisos, buscador, históricas, pagos), el requerimiento NO se considera terminado.
 
 ## 3. Resultados de las pruebas (29/10/2026, localhost)
 
 | Conjunto | Resultado |
 |---|---|
 | `tsc` backend y frontend | Limpio |
-| Backend unitarias | 280 de 280 |
-| Backend integración (`nextproject_test`) | 271 de 271 |
-| Frontend | 192 de 192 |
+| Backend unitarias | 312 de 312 |
+| Backend integración (`nextproject_test`, sin V28) | 271 de 271 + 14 omitidas (tabla nueva) |
+| Frontend | 203 de 203 |
 | Build de Vite | Correcto |
 
 Límites de las verificaciones: el diálogo de impresión del navegador no se puede automatizar; se comprobó la lógica de impresión

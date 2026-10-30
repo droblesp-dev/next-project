@@ -30,6 +30,7 @@ export function HojaCotizacionImprimible({ hoja }: { hoja: HojaCotizacion }) {
           <tr className="border-b border-black text-left text-xs uppercase">
             <th className="py-2 pr-3">Concepto</th>
             <th className="py-2 px-3 w-20 text-right">Cantidad</th>
+            <th className="py-2 px-3 w-28 text-right">Precio unitario</th>
             <th className="py-2 pl-3 w-32 text-right">Subtotal</th>
           </tr>
         </thead>
@@ -41,6 +42,7 @@ export function HojaCotizacionImprimible({ hoja }: { hoja: HojaCotizacion }) {
                 {f.detalle && <span className="block text-xs text-neutral-700 whitespace-pre-wrap break-words">{f.detalle}</span>}
               </td>
               <td className="py-2 px-3 text-right">{f.cantidad}</td>
+              <td className="py-2 px-3 text-right">{f.precioUnitario}</td>
               <td className="py-2 pl-3 text-right">{f.subtotal}</td>
             </tr>
           ))}

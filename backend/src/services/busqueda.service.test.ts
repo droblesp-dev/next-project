@@ -9,8 +9,13 @@ const repo = vi.hoisted(() => ({
   buscarUsuarios: vi.fn(),
 }));
 const listarAlertas = vi.hoisted(() => vi.fn());
+// Líneas de detalle (V28): por defecto la tabla no existe (comportamiento anterior); las pruebas de líneas la «activan».
+const esquema = vi.hoisted(() => ({ items: false }));
+const itemsRepo = vi.hoisted(() => ({ buscarCotizacionesPorLineas: vi.fn() }));
 
 vi.mock('../repositories/busqueda.repository.js', () => repo);
+vi.mock('../repositories/cotizacionesEsquema.js', () => ({ obtenerEsquemaCotizaciones: async () => ({ items: esquema.items }) }));
+vi.mock('../repositories/cotizacionItems.repository.js', () => itemsRepo);
 vi.mock('./alertas.service.js', () => ({ listarAlertas }));
 
 import { buscarIds, esEntidadBusqueda, SinAccesoBusquedaError } from './busqueda.service.js';
@@ -21,6 +26,8 @@ const operativo = { sub: 'u-op', rol: 'OPERATIVO' };
 
 beforeEach(() => {
   vi.clearAllMocks();
+  esquema.items = false;
+  itemsRepo.buscarCotizacionesPorLineas.mockResolvedValue([]);
   for (const fn of Object.values(repo)) fn.mockResolvedValue(['id-1', 'id-2']);
 });
 
@@ -82,5 +89,25 @@ describe('buscarIds: alertas', () => {
 
     await expect(buscarIds('alertas', 'orden', operativo)).resolves.toEqual(['a2', 'a3']);
     expect(listarAlertas).toHaveBeenCalledWith({ sub: 'u-op', rol: 'OPERATIVO' });
+  });
+});
+
+describe('buscarIds: cotizaciones por descripción de línea (requerimiento 4)', () => {
+  it('sin la tabla de líneas se comporta como antes y no consulta las líneas', async () => {
+    expect(await buscarIds('cotizaciones', 'torneado', comercial)).toEqual(['id-1', 'id-2']);
+    expect(itemsRepo.buscarCotizacionesPorLineas).not.toHaveBeenCalled();
+  });
+
+  it('con la tabla de líneas agrega las cotizaciones cuyas líneas coinciden, sin duplicar', async () => {
+    esquema.items = true;
+    itemsRepo.buscarCotizacionesPorLineas.mockResolvedValue(['id-2', 'id-9']);
+    expect(await buscarIds('cotizaciones', 'torneado', comercial)).toEqual(['id-1', 'id-2', 'id-9']);
+    expect(itemsRepo.buscarCotizacionesPorLineas).toHaveBeenCalledWith('%torneado%');
+  });
+
+  it('la búsqueda en líneas respeta los roles de la entidad (OPERATIVO sigue sin acceso)', async () => {
+    esquema.items = true;
+    await expect(buscarIds('cotizaciones', 'x', operativo)).rejects.toBeInstanceOf(SinAccesoBusquedaError);
+    expect(itemsRepo.buscarCotizacionesPorLineas).not.toHaveBeenCalled();
   });
 });

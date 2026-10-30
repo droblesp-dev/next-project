@@ -18,6 +18,8 @@ import { MENSAJE_CLIENTE_COTIZACION_VENCIDA } from '../lib/caducidadCotizacion';
 import PieCotizacionPublica from './PieCotizacionPublica';
 import RecuperarCodigoCotizacion from './RecuperarCodigoCotizacion';
 import BotonImprimirCotizacion from './HojaCotizacionImprimible';
+import TablaLineasCotizacion from './TablaLineasCotizacion';
+import type { LineaDetalle } from '../lib/lineasCotizacion';
 
 interface VistaCotizacionPublicaProps {
   token: string;
@@ -31,6 +33,8 @@ interface RechazoPago {
 
 interface CotizacionPublica {
   id: string;
+  // Líneas de detalle (requerimiento 4); vacío o ausente en cotizaciones históricas.
+  items?: LineaDetalle[];
   codigo?: string | null;
   valor: string;
   // Desglose oficial calculado por el backend; `valor` es el subtotal (sin IVA).
@@ -117,6 +121,7 @@ function CondicionesDePago({ c }: { c: CotizacionPublica }) {
       <h4 id="titulo-condiciones" className="font-label-caps text-label-caps text-primary-container tracking-widest uppercase">
         VALOR Y CONDICIONES DE PAGO
       </h4>
+      <TablaLineasCotizacion items={c.items ?? []} />
       <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 font-code-sm text-code-sm">
         <div className="min-w-0">
           <dt className="text-on-surface-variant uppercase">Subtotal (sin IVA)</dt>
@@ -754,6 +759,7 @@ export default function VistaCotizacionPublica({ token }: VistaCotizacionPublica
                     descripcionSolicitud: cotizacion.solicitud.descripcion,
                     especificaciones: cotizacion.solicitud.especificaciones,
                     observaciones: cotizacion.descripcion,
+                    lineas: cotizacion.items,
                     subtotal: cotizacion.subtotal ?? cotizacion.valor,
                     ivaPorcentaje: cotizacion.iva_porcentaje,
                     ivaValor: cotizacion.iva_valor,

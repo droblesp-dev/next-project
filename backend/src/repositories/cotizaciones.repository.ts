@@ -246,9 +246,11 @@ export async function updateCondiciones(
     metodoAnticipo: string | null;
     estadoAnticipo: string;
     diasVigencia: number;
-  }
+  },
+  // Opcional: permite ejecutarlo dentro de la transacción que bloquea la fila y escribe las líneas de detalle (V28).
+  executor: Executor = pool
 ): Promise<Cotizacion | null> {
-  const result = await pool.query<Cotizacion>(
+  const result = await executor.query<Cotizacion>(
     `UPDATE cotizaciones
      SET valor = $2, descripcion = $3,
          subtotal = $4, iva_porcentaje = $5, iva_valor = $6, total = $7,

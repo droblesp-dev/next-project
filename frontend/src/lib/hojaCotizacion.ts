@@ -2,6 +2,7 @@
 // calculó el backend (subtotal, IVA, total, anticipo, saldo) y con los datos que la pantalla ya muestra; nunca recalcula ni
 // inventa importes. No incluye el código de acceso, el enlace, datos bancarios ni teléfonos: el cliente consulta el pago en el
 // enlace de la cotización. El PDF lo produce el propio navegador («Guardar como PDF» del diálogo de impresión), sin dependencias.
+import { formatearCantidad } from './lineasCotizacion';
 import { etiquetaMetodoPago, formatearFechaHora, formatearMoneda, formatearPorcentaje } from './cotizacionPublica';
 
 export const NOMBRE_EMPRESA_HOJA = 'NEXTPROJECT';
@@ -22,6 +23,8 @@ export interface DatosHojaCotizacion {
   descripcionSolicitud?: string | null;
   especificaciones?: string | null;
   observaciones?: string | null;
+  // Líneas de detalle guardadas (requerimiento 4). Sin líneas (cotización histórica) la hoja muestra la fila única de siempre.
+  lineas?: Array<{ descripcion: string; cantidad: string; precio_unitario: string; subtotal: string }>;
   subtotal: string | null;
   ivaPorcentaje: string | null;
   ivaValor: string | null;
@@ -38,7 +41,7 @@ export interface HojaCotizacion {
   subtitulo: string;
   titulo: string;
   referencias: Array<{ etiqueta: string; valor: string }>;
-  filas: Array<{ concepto: string; detalle: string | null; cantidad: string; subtotal: string }>;
+  filas: Array<{ concepto: string; detalle: string | null; cantidad: string; precioUnitario: string; subtotal: string }>;
   totales: Array<{ etiqueta: string; valor: string; destacado?: boolean }>;
   condiciones: string[];
   observaciones: string | null;
@@ -68,15 +71,26 @@ export function construirHojaCotizacion(datos: DatosHojaCotizacion, ahora: Date 
   if (datos.emitidaEn) referencias.push({ etiqueta: 'Fecha de emisión', valor: formatearFechaHora(datos.emitidaEn) });
 
   const detalle = [textoOpcional(datos.descripcionSolicitud), textoOpcional(datos.especificaciones)].filter(Boolean).join(' — ');
-  // Una sola línea (la cotización actual es un único concepto): el formato en columnas ya admite varias filas.
-  const filas: HojaCotizacion['filas'] = [
-    {
-      concepto: datos.servicio,
-      detalle: detalle || null,
-      cantidad: datos.cantidad === null ? '—' : String(datos.cantidad),
-      subtotal: formatearMoneda(datos.subtotal),
-    },
-  ];
+  // Con líneas de detalle: una fila por línea con sus importes tal como los guardó el backend. Sin ellas (cotización histórica):
+  // la fila única de siempre, sin precio unitario.
+  const filas: HojaCotizacion['filas'] =
+    datos.lineas && datos.lineas.length > 0
+      ? datos.lineas.map((l) => ({
+          concepto: l.descripcion,
+          detalle: null,
+          cantidad: formatearCantidad(l.cantidad),
+          precioUnitario: formatearMoneda(l.precio_unitario),
+          subtotal: formatearMoneda(l.subtotal),
+        }))
+      : [
+          {
+            concepto: datos.servicio,
+            detalle: detalle || null,
+            cantidad: datos.cantidad === null ? '—' : String(datos.cantidad),
+            precioUnitario: '—',
+            subtotal: formatearMoneda(datos.subtotal),
+          },
+        ];
 
   const totales: HojaCotizacion['totales'] = [
     { etiqueta: 'Subtotal (sin IVA)', valor: formatearMoneda(datos.subtotal) },

@@ -5,6 +5,18 @@ import { coincideCodigo } from '../lib/busqueda';
 import { useBusquedaServidor } from '../lib/busquedaServidor';
 import type { Solicitud } from './BandejaSolicitudes';
 import BotonImprimirCotizacion from './HojaCotizacionImprimible';
+import LineasCotizacionEditor from './LineasCotizacionEditor';
+import TablaLineasCotizacion from './TablaLineasCotizacion';
+import {
+  formatearCantidad,
+  lineaDerivada,
+  lineasDesdeDetalle,
+  lineasParaEnviar,
+  lineaVacia,
+  validarLineas,
+  type LineaDetalle,
+  type LineaFormulario,
+} from '../lib/lineasCotizacion';
 import { etiquetaEstadoCotizacion } from '../lib/cotizacionPublica';
 import type { DatosHojaCotizacion } from '../lib/hojaCotizacion';
 import PanelAcreditacionPago, { type DatosConfirmacion, type DatosSeguimiento } from './PanelAcreditacionPago';
@@ -419,9 +431,11 @@ const TRANSICIONES: Record<string, string[]> = {
 function datosHoja(
   c: Cotizacion,
   solicitud: { codigo?: string | null; servicio: string; descripcion: string; cantidad: number; especificaciones?: string | null } | null,
-  cliente: string | null
+  cliente: string | null,
+  lineas?: LineaDetalle[]
 ): DatosHojaCotizacion {
   return {
+    lineas,
     codigoCotizacion: c.codigo,
     codigoSolicitud: solicitud?.codigo ?? null,
     estado: c.estado,
@@ -486,6 +500,13 @@ export default function GestionCotizaciones({
 
   const [solicitudIdNueva, setSolicitudIdNueva] = useState('');
   const [valorNuevo, setValorNuevo] = useState('');
+  // Requerimiento 4: líneas de detalle. `lineasDisponibles` se detecta con el backend (la tabla puede no estar aplicada todavía);
+  // mientras sea false se conserva el campo «Valor» anterior sin ningún cambio.
+  const [lineasDisponibles, setLineasDisponibles] = useState(false);
+  const [lineasNuevas, setLineasNuevas] = useState<LineaFormulario[]>(() => [lineaVacia()]);
+  const [lineasEdicion, setLineasEdicion] = useState<LineaFormulario[]>([]);
+  const [notaLineaDerivada, setNotaLineaDerivada] = useState<string | null>(null);
+  const [itemsSeleccionada, setItemsSeleccionada] = useState<LineaDetalle[]>([]);
   const [descripcionNueva, setDescripcionNueva] = useState('');
   // Fase D.8: valores por defecto iguales a los que ya usa el backend
   // (crearCotizacion() en cotizaciones.service.ts) cuando estos campos no
@@ -863,16 +884,39 @@ export default function GestionCotizaciones({
     setBusquedaSolicitudNueva('');
   }
 
+  useEffect(() => {
+    if (esAdmin) return;
+    let activo = true;
+    fetchAutenticado('/api/cotizaciones/items/sugerencias?q=', token)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (activo) setLineasDisponibles(d?.disponible === true);
+      })
+      .catch(() => {
+        if (activo) setLineasDisponibles(false);
+      });
+    return () => {
+      activo = false;
+    };
+  }, [token, esAdmin]);
+
   async function handleCrear(e: FormEvent) {
     e.preventDefault();
     setMensajeCrear(null);
+    if (lineasDisponibles) {
+      const errores = validarLineas(lineasNuevas);
+      if (errores.length > 0) {
+        setMensajeCrear(errores[0]);
+        return;
+      }
+    }
     setCreando(true);
 
     try {
       const anticipoPorcentajeNum = Number(anticipoPorcentajeNuevo);
       const body: Record<string, unknown> = {
         solicitud_id: solicitudIdNueva.trim(),
-        valor: Number(valorNuevo),
+        ...(lineasDisponibles ? { items: lineasParaEnviar(lineasNuevas) } : { valor: Number(valorNuevo) }),
         descripcion: descripcionNueva.trim() || undefined,
         iva_porcentaje: Number(ivaPorcentajeNuevo),
         anticipo_porcentaje: anticipoPorcentajeNum,
@@ -908,6 +952,7 @@ export default function GestionCotizaciones({
       );
       setSolicitudIdNueva('');
       setValorNuevo('');
+      setLineasNuevas([lineaVacia()]);
       setDescripcionNueva('');
       setIvaPorcentajeNuevo('15');
       setAnticipoPorcentajeNuevo('50');
@@ -962,8 +1007,9 @@ export default function GestionCotizaciones({
     try {
       const response = await fetchAutenticado(`/api/cotizaciones/${id}`, token);
       if (!response.ok) return;
-      const data = (await response.json()) as { cotizacion: Cotizacion };
+      const data = (await response.json()) as { cotizacion: Cotizacion; items?: LineaDetalle[] };
       setCotizacionSeleccionada(data.cotizacion);
+      setItemsSeleccionada(Array.isArray(data.items) ? data.items : []);
       setImporteAnticipoGestion(data.cotizacion.anticipo_valor ?? '');
       setImporteSaldoGestion(data.cotizacion.saldo_pendiente ?? '');
       if (!esAdmin) {
@@ -1333,6 +1379,15 @@ export default function GestionCotizaciones({
   function handleAbrirEdicion() {
     if (!cotizacionSeleccionada) return;
     setValorEdicion(cotizacionSeleccionada.valor);
+    // Borrador con líneas: se editan tal cual. Borrador histórico sin líneas: una línea DERIVADA y editable; no se guarda nada
+    // hasta que el usuario confirma con «Guardar».
+    if (itemsSeleccionada.length > 0) {
+      setLineasEdicion(lineasDesdeDetalle(itemsSeleccionada));
+      setNotaLineaDerivada(null);
+    } else {
+      setLineasEdicion([lineaDerivada(null, cotizacionSeleccionada.subtotal ?? cotizacionSeleccionada.valor)]);
+      setNotaLineaDerivada('Esta cotización se creó sin detalle: se muestra una línea derivada con su subtotal actual. Edítela y guarde para convertirla; hasta entonces no se modifica nada.');
+    }
     setDescripcionEdicion(cotizacionSeleccionada.descripcion ?? '');
     setIvaPorcentajeEdicion(cotizacionSeleccionada.iva_porcentaje ?? '15');
     setAnticipoPorcentajeEdicion(cotizacionSeleccionada.anticipo_porcentaje ?? '0');
@@ -1350,13 +1405,20 @@ export default function GestionCotizaciones({
   async function handleGuardarEdicion(e: FormEvent) {
     e.preventDefault();
     if (!cotizacionSeleccionada) return;
-    setGuardandoEdicion(true);
     setMensajeEdicion(null);
+    if (lineasDisponibles) {
+      const errores = validarLineas(lineasEdicion);
+      if (errores.length > 0) {
+        setMensajeEdicion(errores[0]);
+        return;
+      }
+    }
+    setGuardandoEdicion(true);
 
     try {
       const anticipoPorcentajeNum = Number(anticipoPorcentajeEdicion);
       const body: Record<string, unknown> = {
-        valor: Number(valorEdicion),
+        ...(lineasDisponibles ? { items: lineasParaEnviar(lineasEdicion) } : { valor: Number(valorEdicion) }),
         descripcion: descripcionEdicion.trim() || undefined,
         iva_porcentaje: Number(ivaPorcentajeEdicion),
         anticipo_porcentaje: anticipoPorcentajeNum,
@@ -1390,6 +1452,7 @@ export default function GestionCotizaciones({
       // exactamente los que devuelve el backend recalculados — el frontend
       // no repite ningún cálculo, igual que en la creación.
       setCotizacionSeleccionada(data.cotizacion as Cotizacion);
+      setItemsSeleccionada(Array.isArray(data.items) ? data.items : []);
       setEditando(false);
       setMensajeCambio('Cotización actualizada correctamente.');
       await cargar();
@@ -1531,7 +1594,7 @@ export default function GestionCotizaciones({
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-3 shrink-0">
-              <BotonImprimirCotizacion datos={datosHoja(cotizacionSeleccionada, solicitud, infoClienteDetalle.principal)} />
+              <BotonImprimirCotizacion datos={datosHoja(cotizacionSeleccionada, solicitud, infoClienteDetalle.principal, itemsSeleccionada)} />
               <span className={`inline-flex shrink-0 whitespace-nowrap px-3 py-1 font-code-sm text-xs uppercase ${claseBadgeEstadoCotizacion(cotizacionSeleccionada.estado)}`}>
               {cotizacionSeleccionada.estado.replace(/_/g, ' ')}
             </span>
@@ -1691,7 +1754,7 @@ export default function GestionCotizaciones({
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-3 shrink-0">
-              <BotonImprimirCotizacion datos={datosHoja(cotizacionSeleccionada, solicitudDetalle, infoClienteDetalle.principal)} />
+              <BotonImprimirCotizacion datos={datosHoja(cotizacionSeleccionada, solicitudDetalle, infoClienteDetalle.principal, itemsSeleccionada)} />
               {cotizacionSeleccionada.estado === 'BORRADOR' && !editando && (
                 <button
                   type="button"
@@ -1761,6 +1824,16 @@ export default function GestionCotizaciones({
             {editando ? (
             <form className="space-y-4" onSubmit={handleGuardarEdicion}>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {lineasDisponibles ? (
+                  <LineasCotizacionEditor
+                    token={token}
+                    lineas={lineasEdicion}
+                    onCambio={setLineasEdicion}
+                    ivaPorcentaje={Number(ivaPorcentajeEdicion)}
+                    anticipoPorcentaje={Number(anticipoPorcentajeEdicion)}
+                    nota={notaLineaDerivada}
+                  />
+                ) : (
                 <div>
                   <label className="block font-code-sm text-code-sm text-on-surface-variant uppercase mb-2">Valor</label>
                   <input
@@ -1773,6 +1846,7 @@ export default function GestionCotizaciones({
                     step="0.01"
                   />
                 </div>
+                )}
                 <div>
                   <label className="block font-code-sm text-code-sm text-on-surface-variant uppercase mb-2">
                     Descripción (opcional)
@@ -1863,6 +1937,7 @@ export default function GestionCotizaciones({
             </form>
           ) : (
             <>
+              <div className="mb-4"><TablaLineasCotizacion items={itemsSeleccionada} /></div>
               <dl className="grid grid-cols-2 sm:grid-cols-3 gap-4 font-code-sm text-code-sm wrap-anywhere">
                 <div>
                   <dt className="text-on-surface-variant uppercase">Subtotal</dt>
@@ -3098,6 +3173,15 @@ export default function GestionCotizaciones({
                 </div>
 
                 <form className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end" onSubmit={handleCrear}>
+                  {lineasDisponibles ? (
+                    <LineasCotizacionEditor
+                      token={token}
+                      lineas={lineasNuevas}
+                      onCambio={setLineasNuevas}
+                      ivaPorcentaje={Number(ivaPorcentajeNuevo)}
+                      anticipoPorcentaje={Number(anticipoPorcentajeNuevo)}
+                    />
+                  ) : (
                   <div>
                     <label className="block font-code-sm text-code-sm text-on-surface-variant uppercase mb-2">Valor</label>
                     <input
@@ -3110,6 +3194,7 @@ export default function GestionCotizaciones({
                       step="0.01"
                     />
                   </div>
+                  )}
                   <div>
                     <label className="block font-code-sm text-code-sm text-on-surface-variant uppercase mb-2">
                       Descripción (opcional)
